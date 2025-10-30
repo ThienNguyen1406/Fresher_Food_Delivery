@@ -39,9 +39,9 @@ class _HomePageState extends State<HomePage> {
   Set<String> favoriteProductIds = {};
 
   List<String> banners = [
-    "https://picsum.photos/id/1011/800/300",
-    "https://picsum.photos/id/1015/800/300",
-    "https://picsum.photos/id/1020/800/300",
+    "lib/assets/img/anh1.png",
+    "lib/assets/img/anh2.png",
+    "lib/assets/img/anh3.png",
   ];
 
   @override
@@ -608,7 +608,7 @@ class _HomePageState extends State<HomePage> {
                                 });
                               },
                               itemBuilder: (context, index) {
-                                return Image.network(
+                                return Image.asset(
                                   banners[index],
                                   width: double.infinity,
                                   fit: BoxFit.cover,

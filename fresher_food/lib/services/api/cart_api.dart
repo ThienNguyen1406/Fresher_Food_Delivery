@@ -139,6 +139,7 @@ class CartApi {
       }
     } catch (e) {
       throw Exception('Error clearing cart: $e');
+      return false;
     }
   }
 }

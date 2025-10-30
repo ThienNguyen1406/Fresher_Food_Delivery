@@ -39,6 +39,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
           key: _formKey,
           child: Column(
             children: [
+              Image(
+                image:AssetImage("lib/assets/img/loginImg.png"),
+                width: MediaQuery.of(context).size.width,
+                height: 150,
+              ),
+              SizedBox(height: 20,),
               // Tên đăng nhập
               TextFormField(
                 controller: _usernameController,

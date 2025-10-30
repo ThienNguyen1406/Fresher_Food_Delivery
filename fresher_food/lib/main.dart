@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/splash/splash_screen.dart';
+import 'package:fresher_food/services/api/coupon_api.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:provider/provider.dart';
 
@@ -27,6 +28,8 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         Provider(create: (context) => ApiService()),
+        Provider<CouponApi>(create: (context) => CouponApi(),
+        ),
       ],
       child: MaterialApp(
         title: 'FreshFood App',

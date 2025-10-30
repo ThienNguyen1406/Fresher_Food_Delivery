@@ -23,7 +23,6 @@ class _VoucherPageState extends State<VoucherPage> {
   void initState() {
     super.initState();
     _searchController.addListener(_onSearchChanged);
-    // Đợi đến khi widget được build xong rồi mới gọi API
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadCoupons();
     });
@@ -38,7 +37,7 @@ class _VoucherPageState extends State<VoucherPage> {
   Future<void> _loadCoupons() async {
     try {
       if (!mounted) return;
-      
+
       setState(() {
         _isLoading = true;
         _hasError = false;
@@ -46,15 +45,14 @@ class _VoucherPageState extends State<VoucherPage> {
       });
 
       print('🔄 Bắt đầu tải danh sách mã giảm giá...');
-      
-      // Sử dụng Provider để lấy ApiService
+
       final couponApi = Provider.of<CouponApi>(context, listen: false);
       final coupons = await couponApi.getAllCoupons();
-      
+
       if (!mounted) return;
-      
+
       print('✅ Tải thành công ${coupons.length} mã giảm giá');
-      
+
       setState(() {
         _allCoupons = coupons;
         _displayedCoupons = coupons;
@@ -64,7 +62,7 @@ class _VoucherPageState extends State<VoucherPage> {
     } catch (e) {
       print('❌ Lỗi tải mã giảm giá: $e');
       if (!mounted) return;
-      
+
       setState(() {
         _isLoading = false;
         _hasError = true;
@@ -72,8 +70,7 @@ class _VoucherPageState extends State<VoucherPage> {
         _allCoupons = [];
         _displayedCoupons = [];
       });
-      
-      // Hiển thị SnackBar an toàn
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -128,15 +125,15 @@ class _VoucherPageState extends State<VoucherPage> {
       });
 
       print('🔍 Tìm kiếm mã giảm giá với từ khóa: $query');
-      
+
       final apiService = Provider.of<CouponApi>(context, listen: false);
       final searchResults = await apiService.searchCoupons(query);
-      
+
       setState(() {
         _displayedCoupons = searchResults;
         _isLoading = false;
       });
-      
+
       print('✅ Tìm thấy ${searchResults.length} kết quả');
     } catch (e) {
       print('❌ Lỗi tìm kiếm mã giảm giá: $e');
@@ -169,13 +166,13 @@ class _VoucherPageState extends State<VoucherPage> {
 
   Color _getVoucherColor(double giaTri) {
     if (giaTri >= 100000) {
-      return const Color(0xFFFF6B6B); // Red for high value
+      return const Color(0xFFFF6B6B);
     } else if (giaTri >= 50000) {
-      return const Color(0xFFFFA726); // Orange for medium value
+      return const Color(0xFFFFA726);
     } else if (giaTri >= 20000) {
-      return const Color(0xFF667EEA); // Blue for percentage
+      return const Color(0xFF667EEA);
     } else {
-      return const Color(0xFF00C896); // Green for low value
+      return const Color(0xFF00C896);
     }
   }
 
@@ -199,12 +196,32 @@ class _VoucherPageState extends State<VoucherPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFD),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Mã giảm giá',
+          style: TextStyle(
+            color: Colors.black,
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: Column(
         children: [
-          // Header với Search
-          _buildHeaderSection(),
-          
+          // Search Section
+          _buildSearchSection(),
+
+          // Stats Info
+          _buildStatsInfo(),
+
           // Vouchers List
           Expanded(
             child: _buildVouchersList(),
@@ -214,72 +231,47 @@ class _VoucherPageState extends State<VoucherPage> {
     );
   }
 
-  Widget _buildHeaderSection() {
+  Widget _buildSearchSection() {
     return Container(
+      padding: const EdgeInsets.all(16),
       color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 50, 16, 16),
-      child: Column(
-        children: [
-          // App Bar
-          Row(
-            children: [
+      child: Container(
+        height: 50,
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 16),
+            Icon(Icons.search, color: Colors.grey.shade600, size: 20),
+            const SizedBox(width: 12),
+            Expanded(
+              child: TextField(
+                controller: _searchController,
+                decoration: InputDecoration(
+                  hintText: 'Tìm kiếm mã giảm giá...',
+                  hintStyle: TextStyle(color: Colors.grey.shade500),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onSubmitted: _searchCoupons,
+              ),
+            ),
+            if (_searchQuery.isNotEmpty)
               IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                },
+                icon: Icon(Icons.clear, color: Colors.grey.shade500, size: 18),
+                onPressed: _clearSearch,
               ),
-              const SizedBox(width: 8),
-              const Text(
-                'Mã giảm giá',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 20,
-                  color: Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          
-          // Search Bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.grey.shade50,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Tìm kiếm mã giảm giá...',
-                hintStyle: TextStyle(color: Colors.grey.shade500),
-                prefixIcon: Icon(
-                  Icons.search_rounded,
-                  color: Colors.grey.shade500,
-                ),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: Icon(Icons.clear, color: Colors.grey.shade500),
-                        onPressed: _clearSearch,
-                      )
-                    : null,
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              ),
-              onSubmitted: _searchCoupons,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Stats Card
-          _buildStatCard(),
-        ],
+            const SizedBox(width: 8),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildStatCard() {
+  Widget _buildStatsInfo() {
     String statusText;
     Color statusColor = Colors.grey.shade600;
 
@@ -287,57 +279,32 @@ class _VoucherPageState extends State<VoucherPage> {
       statusText = 'Đã xảy ra lỗi';
       statusColor = Colors.red;
     } else if (_searchQuery.isEmpty) {
-      statusText = 'Tất cả mã giảm giá có sẵn';
+      statusText = 'Tất cả mã giảm giá';
     } else {
       statusText = 'Kết quả tìm kiếm cho "$_searchQuery"';
     }
 
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00C896).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFF00C896).withOpacity(0.2)),
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
+          Text(
+            '${_displayedCoupons.length} mã giảm giá',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
               color: _hasError ? Colors.red : const Color(0xFF00C896),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              _hasError ? Icons.error_outline : Icons.card_giftcard_rounded,
-              color: Colors.white,
-              size: 20,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_displayedCoupons.length} mã giảm giá',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: _hasError ? Colors.red : const Color(0xFF00C896),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  statusText,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: statusColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+            child: Text(
+              statusText,
+              style: TextStyle(
+                fontSize: 12,
+                color: statusColor,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -359,7 +326,7 @@ class _VoucherPageState extends State<VoucherPage> {
               'Đang tải mã giảm giá...',
               style: TextStyle(
                 color: Colors.grey,
-                fontSize: 16,
+                fontSize: 14,
               ),
             ),
           ],
@@ -376,14 +343,14 @@ class _VoucherPageState extends State<VoucherPage> {
             children: [
               Icon(
                 Icons.error_outline,
-                size: 60,
+                size: 50,
                 color: Colors.red.shade400,
               ),
               const SizedBox(height: 16),
               Text(
                 'Đã xảy ra lỗi',
                 style: TextStyle(
-                  fontSize: 18,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color: Colors.red.shade600,
                 ),
@@ -392,7 +359,7 @@ class _VoucherPageState extends State<VoucherPage> {
               Text(
                 _errorMessage,
                 style: const TextStyle(
-                  fontSize: 14,
+                  fontSize: 12,
                   color: Colors.grey,
                 ),
                 textAlign: TextAlign.center,
@@ -404,6 +371,9 @@ class _VoucherPageState extends State<VoucherPage> {
                   backgroundColor: const Color(0xFF00C896),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text('Thử lại'),
               ),
@@ -420,7 +390,7 @@ class _VoucherPageState extends State<VoucherPage> {
           children: [
             Icon(
               Icons.card_giftcard_rounded,
-              size: 80,
+              size: 60,
               color: Colors.grey.shade400,
             ),
             const SizedBox(height: 16),
@@ -429,7 +399,7 @@ class _VoucherPageState extends State<VoucherPage> {
                   ? 'Chưa có mã giảm giá nào'
                   : 'Không tìm thấy mã giảm giá phù hợp',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 color: Colors.grey.shade600,
               ),
             ),
@@ -440,6 +410,9 @@ class _VoucherPageState extends State<VoucherPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00C896),
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: const Text('Hiển thị tất cả'),
               ),
@@ -450,7 +423,7 @@ class _VoucherPageState extends State<VoucherPage> {
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.all(16),
       itemCount: _displayedCoupons.length,
       itemBuilder: (context, index) {
         final voucher = _displayedCoupons[index];
@@ -464,84 +437,75 @@ class _VoucherPageState extends State<VoucherPage> {
 
   Widget _buildVoucherCard(PhieuGiamGia voucher) {
     final color = _getVoucherColor(voucher.giaTri);
-    
+
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
+        border: Border.all(color: Colors.grey.shade200),
       ),
-      child: Column(
+      child: Row(
         children: [
-          // Voucher Content
+          // Discount Badge
           Container(
-            padding: const EdgeInsets.all(16),
+            width: 80,
+            height: 100,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.centerLeft,
-                end: Alignment.centerRight,
-                colors: [
-                  color.withOpacity(0.9),
-                  color.withOpacity(0.7),
-                ],
-              ),
+              color: color,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(16),
-                topRight: Radius.circular(16),
+                topLeft: Radius.circular(12),
+                bottomLeft: Radius.circular(12),
               ),
             ),
-            child: Row(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Discount Info
-                Container(
-                  width: 80,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _getDiscountText(voucher),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w800,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        'GIẢM GIÁ',
-                        style: TextStyle(
-                          fontSize: 8,
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+                Text(
+                  _getDiscountText(voucher),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
                 ),
-                const SizedBox(width: 12),
-                
-                // Voucher Details
-                Expanded(
-                  child: Column(
+                const SizedBox(height: 4),
+                Text(
+                  'GIẢM GIÁ',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.white.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Voucher Info
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              height: 100,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         voucher.code,
                         style: const TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -549,81 +513,38 @@ class _VoucherPageState extends State<VoucherPage> {
                         voucher.moTa.isNotEmpty ? voucher.moTa : 'Mã giảm giá đặc biệt',
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.white.withOpacity(0.9),
+                          color: Colors.grey.shade600,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.confirmation_num_rounded,
-                            size: 12,
-                            color: Colors.white.withOpacity(0.9),
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Giá trị: ${voucher.giaTri}${voucher.giaTri <= 100 ? '%' : 'đ'}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.white.withOpacity(0.9),
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
                     ],
                   ),
-                ),
-              ],
-            ),
-          ),
-          
-          // Copy Section
-          Container(
-            height: 50,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(16),
-                bottomRight: Radius.circular(16),
+
+                  // Copy Button
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: GestureDetector(
+                      onTap: () => _copyVoucherCode(voucher.code),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: color,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Sao chép',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  voucher.code,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                TextButton(
-                  onPressed: () {
-                    _copyVoucherCode(voucher.code);
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: color,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Sao chép',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
         ],

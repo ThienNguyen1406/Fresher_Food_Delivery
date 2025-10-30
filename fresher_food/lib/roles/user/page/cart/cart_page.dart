@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fresher_food/roles/user/home/page/home_page.dart';
 import 'package:fresher_food/roles/user/page/checkout/checkout_page.dart';
 import 'package:fresher_food/services/api/cart_api.dart';
 import 'package:fresher_food/services/api/user_api.dart';
@@ -612,7 +613,7 @@ class _CartPageState extends State<CartPage> {
             ElevatedButton(
               onPressed: () {
                 // Navigate to shop
-                Navigator.of(context).pop();
+                Navigator.of(context).push(HomePage() as Route<Object?>);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade600,
