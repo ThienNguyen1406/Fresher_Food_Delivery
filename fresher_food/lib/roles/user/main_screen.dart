@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:fresher_food/roles/user/page/account/account_screen.dart';
-import 'package:fresher_food/roles/user/page/cart/cart_page.dart';
-import 'package:fresher_food/roles/user/page/favorite/favorite_page.dart';
+import 'package:fresher_food/roles/user/home/page/home_page.dart';
+import 'package:fresher_food/roles/user/page/account/page/account_page.dart';
+import 'package:fresher_food/roles/user/page/cart/page/cart_page.dart';
+import 'package:fresher_food/roles/user/page/favorite/page/favorite_page.dart';
 import 'package:fresher_food/roles/user/page/voucher/voucher_page.dart';
 
-import 'home_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});

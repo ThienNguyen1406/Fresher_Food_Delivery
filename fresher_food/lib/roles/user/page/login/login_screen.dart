@@ -3,7 +3,7 @@ import 'package:fresher_food/roles/admin/dashboard/admin_dashboard_scren.dart';
 import 'package:fresher_food/roles/user/page/register/register_screen.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 
-import '../../home/page/main_screen.dart';
+import '../../main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});

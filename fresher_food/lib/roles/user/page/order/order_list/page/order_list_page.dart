@@ -1,98 +1,24 @@
+// pages/orderlist_page.dart
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
-import 'package:fresher_food/roles/user/page/order/order_detail_screen.dart';
-import 'package:fresher_food/services/api/order_api.dart';
+import 'package:fresher_food/roles/user/page/order/order_list/provider/order_list_provider.dart';
+import 'package:provider/provider.dart';
+import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
 
-class OrderListScreen extends StatefulWidget {
-  const OrderListScreen({super.key});
+class OrderListPage extends StatefulWidget {
+  const OrderListPage({super.key});
 
   @override
-  State<OrderListScreen> createState() => _OrderListScreenState();
+  State<OrderListPage> createState() => _OrderListPageState();
 }
 
-class _OrderListScreenState extends State<OrderListScreen> {
-  List<Order> _orders = [];
-  bool _isLoading = true;
-  String _errorMessage = '';
-
+class _OrderListPageState extends State<OrderListPage> {
   @override
   void initState() {
     super.initState();
-    _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    try {
-      final orders = await OrderApi().getOrdersByUser();
-      setState(() {
-        _orders = orders;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Lỗi khi tải danh sách đơn hàng: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  String _getStatusText(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Chờ xác nhận';
-      case 'confirmed':
-        return 'Đã xác nhận';
-      case 'shipping':
-        return 'Đang giao hàng';
-      case 'delivered':
-        return 'Đã giao hàng';
-      case 'cancelled':
-        return 'Đã hủy';
-      default:
-        return status;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return const Color(0xFFFFA726); // Orange
-      case 'confirmed':
-        return const Color(0xFF42A5F5); // Blue
-      case 'shipping':
-        return const Color(0xFF7E57C2); // Purple
-      case 'delivered':
-        return const Color(0xFF66BB6A); // Green
-      case 'cancelled':
-        return const Color(0xFFEF5350); // Red
-      default:
-        return const Color(0xFF78909C); // Grey
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Icons.access_time_rounded;
-      case 'confirmed':
-        return Icons.check_circle_outline_rounded;
-      case 'shipping':
-        return Icons.local_shipping_rounded;
-      case 'delivered':
-        return Icons.verified_rounded;
-      case 'cancelled':
-        return Icons.cancel_rounded;
-      default:
-        return Icons.shopping_bag_rounded;
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day} Th${date.month}, ${date.year}';
-  }
-
-  String _formatTime(DateTime date) {
-    return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<OrderListProvider>().loadOrders();
+    });
   }
 
   @override
@@ -101,7 +27,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
       backgroundColor: const Color(0xFFF8FAFD),
       body: CustomScrollView(
         slivers: [
-          // AppBar với hiệu ứng cuộn
           SliverAppBar(
             expandedHeight: 120.0,
             floating: false,
@@ -143,14 +68,19 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
           ),
 
-          // Nội dung chính
-          _isLoading
-              ? _buildLoadingSliver()
-              : _errorMessage.isNotEmpty
-                  ? _buildErrorSliver()
-                  : _orders.isEmpty
-                      ? _buildEmptySliver()
-                      : _buildOrderListSliver(),
+          Consumer<OrderListProvider>(
+            builder: (context, orderListProvider, child) {
+              if (orderListProvider.isLoading) {
+                return _buildLoadingSliver();
+              } else if (orderListProvider.errorMessage.isNotEmpty) {
+                return _buildErrorSliver(orderListProvider);
+              } else if (orderListProvider.orders.isEmpty) {
+                return _buildEmptySliver();
+              } else {
+                return _buildOrderListSliver(orderListProvider);
+              }
+            },
+          ),
         ],
       ),
     );
@@ -176,7 +106,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  Widget _buildErrorSliver() {
+  Widget _buildErrorSliver(OrderListProvider orderListProvider) {
     return SliverFillRemaining(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -207,7 +137,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              _errorMessage,
+              orderListProvider.errorMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey.shade600,
@@ -217,7 +147,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: _loadOrders,
+              onPressed: orderListProvider.retryLoading,
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 foregroundColor: Colors.white,
@@ -266,7 +196,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   colors: [
                     const Color(0xFFE8F5E8),
                     const Color(0xFFC8E6C9),
-                ],
+                  ],
                 ),
                 shape: BoxShape.circle,
               ),
@@ -331,22 +261,22 @@ class _OrderListScreenState extends State<OrderListScreen> {
     );
   }
 
-  Widget _buildOrderListSliver() {
+  Widget _buildOrderListSliver(OrderListProvider orderListProvider) {
     return SliverPadding(
       padding: const EdgeInsets.all(16),
       sliver: SliverList(
         delegate: SliverChildBuilderDelegate(
           (context, index) {
-            final order = _orders[index];
-            return _buildOrderCard(order, index);
+            final order = orderListProvider.orders[index];
+            return _buildOrderCard(orderListProvider, order, index);
           },
-          childCount: _orders.length,
+          childCount: orderListProvider.orders.length,
         ),
       ),
     );
   }
 
-  Widget _buildOrderCard(Order order, int index) {
+  Widget _buildOrderCard(OrderListProvider orderListProvider, Order order, int index) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Material(
@@ -359,7 +289,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => OrderDetailScreen(orderId: order.maDonHang),
+                builder: (context) => OrderDetailPage(orderId: order.maDonHang),
               ),
             );
           },
@@ -377,7 +307,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Header với mã đơn hàng và trạng thái
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -412,14 +341,14 @@ class _OrderListScreenState extends State<OrderListScreen> {
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                             colors: [
-                              _getStatusColor(order.trangThai).withOpacity(0.9),
-                              _getStatusColor(order.trangThai).withOpacity(0.7),
+                              orderListProvider.getStatusColor(order.trangThai).withOpacity(0.9),
+                              orderListProvider.getStatusColor(order.trangThai).withOpacity(0.7),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(12),
                           boxShadow: [
                             BoxShadow(
-                              color: _getStatusColor(order.trangThai).withOpacity(0.3),
+                              color: orderListProvider.getStatusColor(order.trangThai).withOpacity(0.3),
                               blurRadius: 8,
                               offset: const Offset(0, 2),
                             ),
@@ -429,13 +358,13 @@ class _OrderListScreenState extends State<OrderListScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              _getStatusIcon(order.trangThai),
+                              orderListProvider.getStatusIcon(order.trangThai),
                               size: 14,
                               color: Colors.white,
                             ),
                             const SizedBox(width: 6),
                             Text(
-                              _getStatusText(order.trangThai),
+                              orderListProvider.getStatusText(order.trangThai),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 12,
@@ -450,16 +379,17 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   
                   const SizedBox(height: 16),
                   
-                  // Thông tin đơn hàng
                   _buildInfoRow(
+                    provider: orderListProvider,
                     icon: Icons.calendar_today_rounded,
                     title: 'Ngày đặt',
-                    value: _formatDate(order.ngayDat),
-                    subValue: _formatTime(order.ngayDat),
+                    value: orderListProvider.formatDate(order.ngayDat),
+                    subValue: orderListProvider.formatTime(order.ngayDat),
                   ),
                   
                   if (order.phuongThucThanhToan != null && order.phuongThucThanhToan!.isNotEmpty)
                     _buildInfoRow(
+                      provider: orderListProvider,
                       icon: Icons.payment_rounded,
                       title: 'Phương thức thanh toán',
                       value: order.phuongThucThanhToan!,
@@ -467,6 +397,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   
                   if (order.diaChiGiaoHang != null && order.diaChiGiaoHang!.isNotEmpty)
                     _buildInfoRow(
+                      provider: orderListProvider,
                       icon: Icons.location_on_rounded,
                       title: 'Địa chỉ giao hàng',
                       value: order.diaChiGiaoHang!,
@@ -475,7 +406,6 @@ class _OrderListScreenState extends State<OrderListScreen> {
                   
                   const SizedBox(height: 16),
                   
-                  // Nút xem chi tiết
                   Container(
                     width: double.infinity,
                     height: 48,
@@ -527,6 +457,7 @@ class _OrderListScreenState extends State<OrderListScreen> {
   }
 
   Widget _buildInfoRow({
+    required OrderListProvider provider,
     required IconData icon,
     required String title,
     required String value,

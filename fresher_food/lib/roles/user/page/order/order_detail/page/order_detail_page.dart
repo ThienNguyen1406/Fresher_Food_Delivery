@@ -1,120 +1,26 @@
+// pages/orderdetail_page.dart
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
-import 'package:fresher_food/services/api/order_api.dart';
+import 'package:fresher_food/roles/user/page/order/order_detail/provider/order_detail_provider.dart';
+import 'package:provider/provider.dart';
 
-class OrderDetailScreen extends StatefulWidget {
+
+class OrderDetailPage extends StatefulWidget {
   final String orderId;
 
-  const OrderDetailScreen({super.key, required this.orderId});
+  const OrderDetailPage({super.key, required this.orderId});
 
   @override
-  State<OrderDetailScreen> createState() => _OrderDetailScreenState();
+  State<OrderDetailPage> createState() => _OrderDetailPageState();
 }
 
-class _OrderDetailScreenState extends State<OrderDetailScreen> {
-
-  Order? _order;
-  List<OrderDetail> _orderDetails = [];
-  bool _isLoading = true;
-  String _errorMessage = '';
-  double _totalAmount = 0.0;
-
+class _OrderDetailPageState extends State<OrderDetailPage> {
   @override
   void initState() {
     super.initState();
-    _loadOrderDetail();
-  }
-
-  Future<void> _loadOrderDetail() async {
-    try {
-      final data = await OrderApi().getOrderDetail(widget.orderId);
-      
-      setState(() {
-        _order = Order.fromJson(data['order']);
-        _orderDetails = (data['orderDetails'] as List)
-            .map((e) => OrderDetail.fromJson(e))
-            .toList();
-        
-        _totalAmount = _calculateTotalAmount();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Lỗi khi tải chi tiết đơn hàng: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  double _calculateTotalAmount() {
-    double total = 0.0;
-    for (var detail in _orderDetails) {
-      total += detail.giaBan * detail.soLuong;
-    }
-    return total;
-  }
-
-  String _getStatusText(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return 'Chờ xác nhận';
-      case 'confirmed':
-        return 'Đã xác nhận';
-      case 'shipping':
-        return 'Đang giao hàng';
-      case 'delivered':
-        return 'Đã giao hàng';
-      case 'cancelled':
-        return 'Đã hủy';
-      default:
-        return status;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return const Color(0xFFFFA726);
-      case 'confirmed':
-        return const Color(0xFF42A5F5);
-      case 'shipping':
-        return const Color(0xFF7E57C2);
-      case 'delivered':
-        return const Color(0xFF66BB6A);
-      case 'cancelled':
-        return const Color(0xFFEF5350);
-      default:
-        return const Color(0xFF78909C);
-    }
-  }
-
-  IconData _getStatusIcon(String status) {
-    switch (status.toLowerCase()) {
-      case 'pending':
-        return Icons.access_time_rounded;
-      case 'confirmed':
-        return Icons.check_circle_outline_rounded;
-      case 'shipping':
-        return Icons.local_shipping_rounded;
-      case 'delivered':
-        return Icons.verified_rounded;
-      case 'cancelled':
-        return Icons.cancel_rounded;
-      default:
-        return Icons.shopping_bag_rounded;
-    }
-  }
-
-  String _formatCurrency(double amount) {
-    return '${amount.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}₫';
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day} Th${date.month}, ${date.year}';
-  }
-
-  String _formatTime(DateTime date) {
-    return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<OrderDetailProvider>().loadOrderDetail(widget.orderId);
+    });
   }
 
   @override
@@ -123,7 +29,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
       backgroundColor: const Color(0xFFF8FAFD),
       body: CustomScrollView(
         slivers: [
-          // AppBar với background gradient
           SliverAppBar(
             expandedHeight: 140.0,
             floating: false,
@@ -164,15 +69,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
           ),
-
-          // Nội dung chính
-          _isLoading
-              ? _buildLoadingSliver()
-              : _errorMessage.isNotEmpty
-                  ? _buildErrorSliver()
-                  : _order == null
-                      ? _buildEmptySliver()
-                      : _buildOrderDetailSliver(),
+          Consumer<OrderDetailProvider>(
+            builder: (context, orderDetailProvider, child) {
+              if (orderDetailProvider.isLoading) {
+                return _buildLoadingSliver();
+              } else if (orderDetailProvider.errorMessage.isNotEmpty) {
+                return _buildErrorSliver(orderDetailProvider);
+              } else if (orderDetailProvider.order == null) {
+                return _buildEmptySliver();
+              } else {
+                return _buildOrderDetailSliver(orderDetailProvider);
+              }
+            },
+          ),
         ],
       ),
     );
@@ -198,7 +107,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildErrorSliver() {
+  Widget _buildErrorSliver(OrderDetailProvider orderDetailProvider) {
     return SliverFillRemaining(
       child: Padding(
         padding: const EdgeInsets.all(24),
@@ -229,7 +138,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              _errorMessage,
+              orderDetailProvider.errorMessage,
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Colors.grey.shade600,
@@ -239,11 +148,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
             ),
             const SizedBox(height: 32),
             ElevatedButton(
-              onPressed: _loadOrderDetail,
+              onPressed: () => orderDetailProvider.retryLoading(widget.orderId),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF4CAF50),
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
@@ -323,29 +233,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildOrderDetailSliver() {
+  Widget _buildOrderDetailSliver(OrderDetailProvider orderDetailProvider) {
     return SliverPadding(
       padding: const EdgeInsets.all(16),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
-          // Thông tin đơn hàng
-          _buildOrderInfoCard(),
+          _buildOrderInfoCard(orderDetailProvider),
           const SizedBox(height: 20),
-          
-          // Danh sách sản phẩm
-          _buildProductListCard(),
+          _buildProductListCard(orderDetailProvider),
           const SizedBox(height: 20),
-          
-          // Thông tin thanh toán
-          _buildPaymentInfoCard(),
-          
+          _buildPaymentInfoCard(orderDetailProvider),
           const SizedBox(height: 20),
         ]),
       ),
     );
   }
 
-  Widget _buildOrderInfoCard() {
+  Widget _buildOrderInfoCard(OrderDetailProvider orderDetailProvider) {
+    final order = orderDetailProvider.order!;
+
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
@@ -364,7 +270,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header với mã đơn hàng
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -382,7 +287,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          _order!.maDonHang,
+                          order.maDonHang,
                           style: const TextStyle(
                             fontWeight: FontWeight.w700,
                             fontSize: 18,
@@ -393,20 +298,27 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                         colors: [
-                          _getStatusColor(_order!.trangThai).withOpacity(0.9),
-                          _getStatusColor(_order!.trangThai).withOpacity(0.7),
+                          orderDetailProvider
+                              .getStatusColor(order.trangThai)
+                              .withOpacity(0.9),
+                          orderDetailProvider
+                              .getStatusColor(order.trangThai)
+                              .withOpacity(0.7),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(12),
                       boxShadow: [
                         BoxShadow(
-                          color: _getStatusColor(_order!.trangThai).withOpacity(0.3),
+                          color: orderDetailProvider
+                              .getStatusColor(order.trangThai)
+                              .withOpacity(0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -416,13 +328,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          _getStatusIcon(_order!.trangThai),
+                          orderDetailProvider.getStatusIcon(order.trangThai),
                           size: 16,
                           color: Colors.white,
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          _getStatusText(_order!.trangThai),
+                          orderDetailProvider.getStatusText(order.trangThai),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13,
@@ -434,55 +346,55 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
-              
-              // Thông tin chi tiết
               _buildDetailInfoRow(
+                provider: orderDetailProvider,
                 icon: Icons.calendar_today_rounded,
                 title: 'Ngày đặt hàng',
-                value: _formatDate(_order!.ngayDat),
-                subValue: _formatTime(_order!.ngayDat),
+                value: orderDetailProvider.formatDate(order.ngayDat),
+                subValue: orderDetailProvider.formatTime(order.ngayDat),
               ),
-              
-              if (_order!.phuongThucThanhToan != null && _order!.phuongThucThanhToan!.isNotEmpty)
+              if (order.phuongThucThanhToan != null &&
+                  order.phuongThucThanhToan!.isNotEmpty)
                 _buildDetailInfoRow(
+                  provider: orderDetailProvider,
                   icon: Icons.payment_rounded,
                   title: 'Phương thức thanh toán',
-                  value: _order!.phuongThucThanhToan!,
+                  value: order.phuongThucThanhToan!,
                 ),
-              
               _buildDetailInfoRow(
+                provider: orderDetailProvider,
                 icon: Icons.credit_card_rounded,
                 title: 'Trạng thái thanh toán',
-                value: _order!.trangThaiThanhToan,
-                valueColor: _order!.trangThaiThanhToan.toLowerCase() == 'paid' 
+                value: order.trangThaiThanhToan,
+                valueColor: order.trangThaiThanhToan.toLowerCase() == 'paid'
                     ? const Color(0xFF66BB6A)
                     : Colors.orange,
               ),
-              
-              if (_order!.soDienThoai != null && _order!.soDienThoai!.isNotEmpty)
+              if (order.soDienThoai != null && order.soDienThoai!.isNotEmpty)
                 _buildDetailInfoRow(
+                  provider: orderDetailProvider,
                   icon: Icons.phone_rounded,
                   title: 'Số điện thoại',
-                  value: _order!.soDienThoai!,
+                  value: order.soDienThoai!,
                 ),
-              
-              if (_order!.diaChiGiaoHang != null && _order!.diaChiGiaoHang!.isNotEmpty)
+              if (order.diaChiGiaoHang != null &&
+                  order.diaChiGiaoHang!.isNotEmpty)
                 _buildDetailInfoRow(
+                  provider: orderDetailProvider,
                   icon: Icons.location_on_rounded,
                   title: 'Địa chỉ giao hàng',
-                  value: _order!.diaChiGiaoHang!,
+                  value: order.diaChiGiaoHang!,
                   isMultiLine: true,
                 ),
-              
-              if (_order!.ghiChu != null && _order!.ghiChu!.isNotEmpty)
+              if (order.ghiChu != null && order.ghiChu!.isNotEmpty)
                 _buildDetailInfoRow(
+                  provider: orderDetailProvider,
                   icon: Icons.note_rounded,
                   title: 'Ghi chú',
-                  value: _order!.ghiChu!,
+                  value: order.ghiChu!,
                   isMultiLine: true,
                 ),
             ],
@@ -492,7 +404,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildProductListCard() {
+  Widget _buildProductListCard(OrderDetailProvider orderDetailProvider) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
@@ -537,16 +449,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 16),
               const Divider(height: 1),
               const SizedBox(height: 20),
-              
-              // Danh sách sản phẩm
-              ..._orderDetails.asMap().entries.map((entry) {
+              ...orderDetailProvider.orderDetails.asMap().entries.map((entry) {
                 final index = entry.key;
                 final detail = entry.value;
-                return _buildProductItem(detail, index);
+                return _buildProductItem(orderDetailProvider, detail, index);
               }),
             ],
           ),
@@ -555,15 +464,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildProductItem(OrderDetail detail, int index) {
+  Widget _buildProductItem(
+      OrderDetailProvider orderDetailProvider, OrderDetail detail, int index) {
     final subtotal = detail.giaBan * detail.soLuong;
-    
+
     return Container(
-      margin: EdgeInsets.only(bottom: index == _orderDetails.length - 1 ? 0 : 16),
+      margin: EdgeInsets.only(
+          bottom:
+              index == orderDetailProvider.orderDetails.length - 1 ? 0 : 16),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Hình ảnh sản phẩm
           Container(
             width: 70,
             height: 70,
@@ -579,16 +490,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               ),
             ),
             child: Icon(
-              
               Icons.image_rounded,
               size: 28,
               color: const Color(0xFF4CAF50),
             ),
           ),
-          
           const SizedBox(width: 16),
-          
-          // Thông tin sản phẩm
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -603,13 +510,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-                
                 const SizedBox(height: 6),
-                
                 Row(
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(6),
@@ -625,23 +531,20 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                     ),
                   ],
                 ),
-                
                 const SizedBox(height: 8),
-                
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      _formatCurrency(detail.giaBan),
+                      orderDetailProvider.formatCurrency(detail.giaBan),
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF4CAF50),
                       ),
                     ),
-                    
                     Text(
-                      _formatCurrency(subtotal),
+                      orderDetailProvider.formatCurrency(subtotal),
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
@@ -658,7 +561,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     );
   }
 
-  Widget _buildPaymentInfoCard() {
+  Widget _buildPaymentInfoCard(OrderDetailProvider orderDetailProvider) {
     return Material(
       color: Colors.white,
       borderRadius: BorderRadius.circular(20),
@@ -703,25 +606,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 20),
               const Divider(height: 1),
               const SizedBox(height: 20),
-              
-              // Chi tiết thanh toán
               _buildPaymentRow(
+                provider: orderDetailProvider,
                 label: 'Tổng tiền hàng',
-                value: _formatCurrency(_totalAmount),
+                value: orderDetailProvider
+                    .formatCurrency(orderDetailProvider.totalAmount),
               ),
-              
               const SizedBox(height: 12),
-              
               _buildPaymentRow(
+                provider: orderDetailProvider,
                 label: 'Phí vận chuyển',
                 value: 'Miễn phí',
                 valueColor: const Color(0xFF66BB6A),
               ),
-              
               const SizedBox(height: 20),
               Container(
                 height: 1,
@@ -736,10 +636,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
               _buildPaymentRow(
+                provider: orderDetailProvider,
                 label: 'Tổng thanh toán',
-                value: _formatCurrency(_totalAmount),
+                value: orderDetailProvider
+                    .formatCurrency(orderDetailProvider.totalAmount),
                 isTotal: true,
               ),
             ],
@@ -750,6 +651,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildDetailInfoRow({
+    required OrderDetailProvider provider,
     required IconData icon,
     required String title,
     required String value,
@@ -760,7 +662,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       child: Row(
-        crossAxisAlignment: isMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
+        crossAxisAlignment:
+            isMultiLine ? CrossAxisAlignment.start : CrossAxisAlignment.center,
         children: [
           Container(
             width: 40,
@@ -812,7 +715,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
                       if (subValue != null) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.grey.shade100,
                             borderRadius: BorderRadius.circular(6),
@@ -838,6 +742,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
   }
 
   Widget _buildPaymentRow({
+    required OrderDetailProvider provider,
     required String label,
     required String value,
     bool isTotal = false,
@@ -858,7 +763,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
           value,
           style: TextStyle(
             fontSize: isTotal ? 18 : 15,
-            color: valueColor ?? (isTotal ? const Color(0xFF4CAF50) : Colors.black87),
+            color: valueColor ??
+                (isTotal ? const Color(0xFF4CAF50) : Colors.black87),
             fontWeight: isTotal ? FontWeight.w800 : FontWeight.w700,
           ),
         ),
@@ -893,7 +799,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> {
               height: 80,
               child: CircularProgressIndicator(
                 strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(const Color(0xFF4CAF50)),
+                valueColor:
+                    AlwaysStoppedAnimation<Color>(const Color(0xFF4CAF50)),
                 backgroundColor: const Color(0xFF4CAF50).withOpacity(0.2),
               ),
             ),

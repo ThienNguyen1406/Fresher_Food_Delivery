@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
-import 'package:fresher_food/roles/user/page/order/order_detail_screen.dart';
+import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
 import 'package:fresher_food/services/api/order_api.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:iconsax/iconsax.dart';
@@ -661,7 +661,7 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => OrderDetailScreen(orderId: order.maDonHang),
+        builder: (context) => OrderDetailPage(orderId: order.maDonHang),
       ),
     );
   }

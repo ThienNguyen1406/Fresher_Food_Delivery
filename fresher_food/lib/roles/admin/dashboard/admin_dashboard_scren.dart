@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fresher_food/roles/admin/page/category_manger/quanlydanhmuc_screen.dart' show QuanLyDanhMucScreen;
+import 'package:fresher_food/roles/admin/page/category_manger/quanlydanhmuc_screen.dart';
 import 'package:fresher_food/roles/admin/page/coupon_manger/quanlyphieugiamgia.dart';
 import 'package:fresher_food/roles/admin/page/order_manager/quanlydonhang.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/quanlysanpham.dart';
@@ -18,7 +18,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedIndex = 0;
-  Map<String, dynamic>? _userInfo; 
+  Map<String, dynamic>? _userInfo;
 
   // Danh sách màn hình quản lý
   late final List<Map<String, dynamic>> _screens = [
@@ -52,10 +52,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       'screen': const QuanLyPhieuGiamGiaScreen(),
       'icon': Iconsax.discount_shape
     },
-    {
-      'title': 'Quản lý khuyến mãi',
-      'icon': Iconsax.magicpen
-    },
+    {'title': 'Quản lý khuyến mãi', 'icon': Iconsax.magicpen},
     {
       'title': 'Cài đặt',
       'screen': const CaiDatScreen(),
@@ -109,7 +106,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           icon: const Icon(Iconsax.notification),
           onPressed: () {},
         ),
-
       ],
     );
   }
@@ -230,6 +226,7 @@ class DonHangManagementScreen extends StatelessWidget {
     return const QuanLyDonHangScreen();
   }
 }
+
 class ProductManagementScreen extends StatelessWidget {
   const ProductManagementScreen({super.key});
 

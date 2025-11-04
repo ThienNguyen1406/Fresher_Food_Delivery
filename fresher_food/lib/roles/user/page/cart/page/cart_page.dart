@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/home/page/home_page.dart';
-import 'package:fresher_food/roles/user/page/checkout/checkout_page.dart';
-import 'package:fresher_food/services/api/cart_api.dart';
-import 'package:fresher_food/services/api/user_api.dart';
-
-import '../../../../models/Cart.dart';
+import 'package:fresher_food/roles/user/page/cart/provider/cart_provider.dart';
+import 'package:fresher_food/roles/user/page/checkout/page/checkout_page.dart';
+import 'package:provider/provider.dart';
+import 'package:fresher_food/models/Cart.dart';
+import 'package:fresher_food/roles/user/page/login/login_screen.dart';
 
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
@@ -14,95 +14,13 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
-  List<CartItem> _cartItems = [];
-  List<CartItem> _selectedItems = [];
-  double tongTien = 0;
-  double _selectedTotal = 0;
-  int tongSoLuong = 0;
-  bool _isLoading = true;
-  bool _isLoggedIn = false;
-  bool _selectAll = false;
-
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
-  }
-
-  Future<void> _checkLoginStatus() async {
-    final isLoggedIn = await UserApi().isLoggedIn();
-    setState(() {
-      _isLoggedIn = isLoggedIn;
+    // Initialize data from provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<CartProvider>().initialize();
     });
-    
-    if (isLoggedIn) {
-      _loadCart();
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loadCart() async {
-    try {
-      final cartResponse = await CartApi().getCart();
-      setState(() {
-        _cartItems = cartResponse.sanPham;
-        tongTien = cartResponse.tongTien;
-        tongSoLuong = cartResponse.tongSoLuong;
-        _isLoading = false;
-        _updateSelectedItems();
-      });
-    } catch (e) {
-      print('Error loading cart: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _updateSelectedItems() {
-    setState(() {
-      _selectedItems = _cartItems.where((item) => item.isSelected).toList();
-      _selectedTotal = _selectedItems.fold(0, (total, item) => total + item.thanhTien);
-      _selectAll = _cartItems.isNotEmpty && _cartItems.every((item) => item.isSelected);
-    });
-  }
-
-  void _toggleSelectAll(bool? value) {
-    if (value == null) return;
-    
-    setState(() {
-      _selectAll = value;
-      for (var item in _cartItems) {
-        item.isSelected = value;
-      }
-      _updateSelectedItems();
-    });
-  }
-
-  void _toggleItemSelection(CartItem cartItem, bool? value) {
-    if (value == null) return;
-    
-    setState(() {
-      final index = _cartItems.indexWhere((item) => item.maSanPham == cartItem.maSanPham);
-      if (index != -1) {
-        _cartItems[index].isSelected = value;
-        _updateSelectedItems();
-      }
-    });
-  }
-
-  // Kiểm tra số lượng tồn kho trước khi thanh toán
-  bool _checkStockBeforeCheckout() {
-    for (var item in _selectedItems) {
-      if (item.soLuong > item.soLuongTon) {
-        _showStockWarning(item);
-        return false;
-      }
-    }
-    return true;
   }
 
   void _showStockWarning(CartItem item) {
@@ -166,7 +84,6 @@ class _CartPageState extends State<CartPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Icon xác nhận
                 Container(
                   width: 60,
                   height: 60,
@@ -239,30 +156,24 @@ class _CartPageState extends State<CartPage> {
       },
     ).then((confirmed) {
       if (confirmed == true) {
-        _removeFromCart(cartItem.maSanPham, cartItem.tenSanPham);
+        _removeFromCart(cartItem);
       }
     });
   }
 
-  Future<void> _removeFromCart(String productId, String productName) async {
-    try {
-      final success = await CartApi().removeFromCart(productId);
-      if (success) {
-        setState(() {
-          _cartItems.removeWhere((item) => item.maSanPham == productId);
-          tongTien = _cartItems.fold(0, (total, item) => total + item.thanhTien);
-          tongSoLuong = _cartItems.fold(0, (total, item) => total + item.soLuong);
-          _updateSelectedItems();
-        });
-        
-        _showSuccessSnackBar('Đã xóa "$productName" khỏi giỏ hàng');
-      }
-    } catch (e) {
-      _showErrorSnackBar('Lỗi khi xóa: $e');
+  Future<void> _removeFromCart(CartItem cartItem) async {
+    final provider = context.read<CartProvider>();
+    final success = await provider.removeFromCart(cartItem.maSanPham, cartItem.tenSanPham);
+    if (success) {
+      _showSuccessSnackBar('Đã xóa "${cartItem.tenSanPham}" khỏi giỏ hàng');
+    } else {
+      _showErrorSnackBar('Lỗi khi xóa sản phẩm');
     }
   }
 
   Future<void> _updateQuantity(CartItem cartItem, int newQuantity) async {
+    final provider = context.read<CartProvider>();
+    
     if (newQuantity <= 0) {
       final confirm = await showDialog<bool>(
         context: context,
@@ -329,7 +240,7 @@ class _CartPageState extends State<CartPage> {
       );
       
       if (confirm == true) {
-        _removeFromCart(cartItem.maSanPham, cartItem.tenSanPham);
+        await _removeFromCart(cartItem);
       }
       return;
     }
@@ -340,25 +251,9 @@ class _CartPageState extends State<CartPage> {
       return;
     }
 
-    try {
-      final success = await CartApi().updateCartItem(cartItem.maSanPham, newQuantity);
-      if (success) {
-        setState(() {
-          final index = _cartItems.indexWhere((item) => item.maSanPham == cartItem.maSanPham);
-          if (index != -1) {
-            final updatedItem = cartItem.copyWith(
-              soLuong: newQuantity,
-              thanhTien: cartItem.giaBan * newQuantity,
-            );
-            _cartItems[index] = updatedItem;
-            tongTien = _cartItems.fold(0, (total, item) => total + item.thanhTien);
-            tongSoLuong = _cartItems.fold(0, (total, item) => total + item.soLuong);
-            _updateSelectedItems();
-          }
-        });
-      }
-    } catch (e) {
-      _showErrorSnackBar('Lỗi khi cập nhật số lượng: $e');
+    final success = await provider.updateQuantity(cartItem, newQuantity);
+    if (!success) {
+      _showErrorSnackBar('Lỗi khi cập nhật số lượng');
     }
   }
 
@@ -429,14 +324,18 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  void _handleCheckout() {
-    if (_selectedItems.isEmpty) {
+  void _handleCheckout(CartProvider provider) {
+    if (provider.state.selectedItems.isEmpty) {
       _showErrorSnackBar('Vui lòng chọn ít nhất một sản phẩm để thanh toán');
       return;
     }
 
     // Kiểm tra số lượng tồn kho trước khi chuyển trang
-    if (!_checkStockBeforeCheckout()) {
+    if (!provider.checkStockBeforeCheckout()) {
+      final problematicItems = provider.getProblematicItems();
+      if (problematicItems.isNotEmpty) {
+        _showStockWarning(problematicItems.first);
+      }
       return;
     }
 
@@ -444,12 +343,12 @@ class _CartPageState extends State<CartPage> {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => CheckoutPage(
-          selectedItems: _selectedItems,
-          totalAmount: _selectedTotal,
+          selectedItems: provider.state.selectedItems,
+          totalAmount: provider.state.selectedTotal,
         ),
       ),
     ).then((_) {
-      _loadCart();
+      provider.refresh();
     });
   }
 
@@ -472,11 +371,17 @@ class _CartPageState extends State<CartPage> {
         centerTitle: true,
         iconTheme: const IconThemeData(color: Colors.black87),
       ),
-      body: _isLoading
-          ? _buildLoadingScreen()
-          : _isLoggedIn
-              ? _buildCartContent()
-              : _buildLoginRequired(),
+      body: Consumer<CartProvider>(
+        builder: (context, provider, child) {
+          final state = provider.state;
+          
+          return state.isLoading
+              ? _buildLoadingScreen()
+              : state.isLoggedIn
+                  ? _buildCartContent(provider)
+                  : _buildLoginRequired();
+        },
+      ),
     );
   }
 
@@ -553,8 +458,10 @@ class _CartPageState extends State<CartPage> {
           const SizedBox(height: 24),
           ElevatedButton(
             onPressed: () {
-              // Navigate to login screen
-              // Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+              Navigator.push(
+                context, 
+                MaterialPageRoute(builder: (context) => const LoginScreen())
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green.shade600,
@@ -573,8 +480,10 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  Widget _buildCartContent() {
-    if (_cartItems.isEmpty) {
+  Widget _buildCartContent(CartProvider provider) {
+    final state = provider.state;
+    
+    if (state.cartItems.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -612,8 +521,9 @@ class _CartPageState extends State<CartPage> {
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: () {
-                // Navigate to shop
-                Navigator.of(context).push(HomePage() as Route<Object?>);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const HomePage())
+                );
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green.shade600,
@@ -637,11 +547,11 @@ class _CartPageState extends State<CartPage> {
         Expanded(
           child: ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: _cartItems.length,
+            itemCount: state.cartItems.length,
             separatorBuilder: (_, __) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
-              final cartItem = _cartItems[index];
-              return _buildCartItem(cartItem);
+              final cartItem = state.cartItems[index];
+              return _buildCartItem(cartItem, provider);
             },
           ),
         ),
@@ -672,7 +582,7 @@ class _CartPageState extends State<CartPage> {
                   Container(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      boxShadow: _selectAll ? [
+                      boxShadow: state.selectAll ? [
                         BoxShadow(
                           color: Colors.green.withOpacity(0.3),
                           blurRadius: 8,
@@ -683,8 +593,8 @@ class _CartPageState extends State<CartPage> {
                     child: Transform.scale(
                       scale: 1.2,
                       child: Checkbox(
-                        value: _selectAll,
-                        onChanged: _toggleSelectAll,
+                        value: state.selectAll,
+                        onChanged: (value) => provider.toggleSelectAll(value),
                         activeColor: Colors.green.shade600,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
@@ -717,7 +627,7 @@ class _CartPageState extends State<CartPage> {
                       border: Border.all(color: Colors.green.shade200),
                     ),
                     child: Text(
-                      '${_formatPrice(_selectedTotal)}đ',
+                      '${_formatPrice(state.selectedTotal)}đ',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -728,15 +638,15 @@ class _CartPageState extends State<CartPage> {
                   const SizedBox(width: 12),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: _selectedTotal > 0 
+                      backgroundColor: state.selectedTotal > 0 
                           ? Colors.green.shade600 
                           : Colors.grey.shade400,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: _selectedTotal > 0 ? 3 : 0,
+                      elevation: state.selectedTotal > 0 ? 3 : 0,
                     ),
-                    onPressed: _selectedTotal > 0 ? _handleCheckout : null,
+                    onPressed: state.selectedTotal > 0 ? () => _handleCheckout(provider) : null,
                     child: const Text(
                       'Thanh toán',
                       style: TextStyle(
@@ -754,7 +664,7 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
-  Widget _buildCartItem(CartItem cartItem) {
+  Widget _buildCartItem(CartItem cartItem, CartProvider provider) {
     final isOutOfStock = cartItem.soLuongTon == 0;
     final isLowStock = cartItem.soLuong > cartItem.soLuongTon;
     
@@ -797,7 +707,7 @@ class _CartPageState extends State<CartPage> {
                   ),
                   child: Checkbox(
                     value: cartItem.isSelected && !isOutOfStock,
-                    onChanged: isOutOfStock ? null : (value) => _toggleItemSelection(cartItem, value),
+                    onChanged: isOutOfStock ? null : (value) => provider.toggleItemSelection(cartItem.maSanPham, value),
                     activeColor: Colors.green.shade600,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                   ),

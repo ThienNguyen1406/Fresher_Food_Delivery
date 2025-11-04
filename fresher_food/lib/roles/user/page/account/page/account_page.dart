@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:fresher_food/roles/user/page/account/provider/account_provider.dart';
+import 'package:fresher_food/roles/user/page/order/order_list/page/order_list_page.dart';
+import 'package:fresher_food/roles/user/page/product/product_review/page/product_review_page.dart';
+import 'package:provider/provider.dart';
 import 'package:fresher_food/roles/user/page/login/login_screen.dart';
-import 'package:fresher_food/roles/user/page/order/order_list_screen.dart';
-import 'package:fresher_food/roles/user/page/product/product_review_page.dart';
-import 'package:fresher_food/services/api/favorite_api.dart';
-import 'package:fresher_food/services/api/order_api.dart';
-import 'package:fresher_food/services/api/user_api.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -14,67 +13,121 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
-  Map<String, dynamic>? _userInfo;
-  bool _isLoading = true;
-  bool _isLoggedIn = false;
-  int _orderCount = 0;
-  int _favoriteCount = 0;
-
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
-  }
-
-  Future<void> _checkLoginStatus() async {
-    final isLoggedIn = await UserApi().isLoggedIn();
-    setState(() {
-      _isLoggedIn = isLoggedIn;
+    // Initialize data from provider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AccountProvider>().initialize();
     });
-    
-    if (isLoggedIn) {
-      await _loadUserInfo();
-      await _loadStatistics();
-    } else {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
-  Future<void> _loadUserInfo() async {
-    try {
-      final userInfo = await UserApi().getUserInfo();
-      setState(() {
-        _userInfo = userInfo;
-      });
-    } catch (e) {
-      print('Error loading user info: $e');
-    }
+  // Hàm hiển thị dialog chọn sản phẩm để đánh giá
+  void _showProductReviewDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.star_outline, color: const Color(0xFFFFA726)),
+              const SizedBox(width: 8),
+              const Text('Chọn sản phẩm đánh giá'),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: FutureBuilder<List<Map<String, dynamic>>>(
+              future: context.read<AccountProvider>().getPurchasedProducts(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: CircularProgressIndicator(),
+                  );
+                }
+
+                if (snapshot.hasError || snapshot.data == null) {
+                  return const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.grey, size: 40),
+                      SizedBox(height: 8),
+                      Text('Không thể tải sản phẩm'),
+                    ],
+                  );
+                }
+
+                final products = snapshot.data!;
+
+                if (products.isEmpty) {
+                  return const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.shopping_bag_outlined,
+                          color: Colors.grey, size: 40),
+                      SizedBox(height: 8),
+                      Text('Chưa có sản phẩm nào để đánh giá'),
+                    ],
+                  );
+                }
+
+                return ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: products.length,
+                  itemBuilder: (context, index) {
+                    final product = products[index];
+                    return ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage:
+                            product['anh'] != null && product['anh'].isNotEmpty
+                                ? NetworkImage(product['anh'])
+                                : null,
+                        child: product['anh'] == null || product['anh'].isEmpty
+                            ? const Icon(Icons.shopping_bag_outlined)
+                            : null,
+                      ),
+                      title: Text(
+                        product['tenSanPham'] ?? 'Sản phẩm',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      subtitle: Text('Mã: ${product['maSanPham']}'),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () {
+                        Navigator.of(context).pop();
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ProductReviewPage(
+                              productId: product['maSanPham'],
+                            
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('ĐÓNG'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  Future<void> _loadStatistics() async {
-    try {
-      // Load số lượng đơn hàng
-      final orderCount = await OrderApi().getOrderCount();
-      
-      // Load số lượng sản phẩm yêu thích
-      final favoriteCount = await FavoriteApi().getFavoriteCount();
+  Future<void> _logout(BuildContext context) async {
+    final provider = context.read<AccountProvider>();
 
-      setState(() {
-        _orderCount = orderCount;
-        _favoriteCount = favoriteCount;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('Error loading statistics: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _logout() async {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -151,25 +204,22 @@ class _AccountPageState extends State<AccountPage> {
                           onPressed: () async {
                             Navigator.of(context).pop();
                             try {
-                              final success = await UserApi().logout();
+                              final success = await provider.logout();
                               if (success) {
                                 Navigator.pushAndRemoveUntil(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                  MaterialPageRoute(
+                                      builder: (context) =>
+                                          const LoginScreen()),
                                   (route) => false,
                                 );
+                              } else {
+                                _showErrorSnackbar(
+                                    context, 'Lỗi khi đăng xuất');
                               }
                             } catch (e) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Lỗi khi đăng xuất: $e'),
-                                  backgroundColor: Colors.red.shade600,
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                              );
+                              _showErrorSnackbar(
+                                  context, 'Lỗi khi đăng xuất: $e');
                             }
                           },
                           style: ElevatedButton.styleFrom(
@@ -196,140 +246,48 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  // Hàm hiển thị dialog chọn sản phẩm để đánh giá
-  void _showProductReviewDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              Icon(Icons.star_outline, color: const Color(0xFFFFA726)),
-              const SizedBox(width: 8),
-              const Text('Chọn sản phẩm đánh giá'),
-            ],
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _loadPurchasedProducts(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(
-                    child: CircularProgressIndicator(),
-                  );
-                }
-                
-                if (snapshot.hasError || snapshot.data == null) {
-                  return const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.error_outline, color: Colors.grey, size: 40),
-                      SizedBox(height: 8),
-                      Text('Không thể tải sản phẩm'),
-                    ],
-                  );
-                }
-                
-                final products = snapshot.data!;
-                
-                if (products.isEmpty) {
-                  return const Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.shopping_bag_outlined, color: Colors.grey, size: 40),
-                      SizedBox(height: 8),
-                      Text('Chưa có sản phẩm nào để đánh giá'),
-                    ],
-                  );
-                }
-                
-                return ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final product = products[index];
-                    return ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Colors.grey.shade200,
-                        backgroundImage: product['anh'] != null && product['anh'].isNotEmpty 
-                            ? NetworkImage(product['anh'])
-                            : null,
-                        child: product['anh'] == null || product['anh'].isEmpty
-                            ? const Icon(Icons.shopping_bag_outlined)
-                            : null,
-                      ),
-                      title: Text(
-                        product['tenSanPham'] ?? 'Sản phẩm',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      subtitle: Text('Mã: ${product['maSanPham']}'),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () {
-                        Navigator.of(context).pop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ProductReviewPage(
-                              productId: product['maSanPham'],
-                              productName: product['tenSanPham'],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('ĐÓNG'),
-            ),
-          ],
-        );
-      },
+  void _showErrorSnackbar(BuildContext context, String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
     );
   }
 
-  // Hàm tạm thời để load sản phẩm đã mua
-  Future<List<Map<String, dynamic>>> _loadPurchasedProducts() async {
-    // TODO: Thay thế bằng API thực tế để lấy sản phẩm đã mua
-    await Future.delayed(const Duration(seconds: 1)); // Giả lập delay
-    
-    // Dữ liệu mẫu - thay thế bằng API call thực tế
-    return [
-      {
-        'maSanPham': 'SP001',
-        'tenSanPham': 'iPhone 14 Pro Max',
-        'anh': 'https://example.com/iphone14.jpg'
-      },
-      {
-        'maSanPham': 'SP002', 
-        'tenSanPham': 'Samsung Galaxy S23',
-        'anh': 'https://example.com/galaxy-s23.jpg'
-      },
-      {
-        'maSanPham': 'SP003',
-        'tenSanPham': 'MacBook Air M2',
-        'anh': 'https://example.com/macbook-air.jpg'
-      },
-    ];
+  void _showComingSoonSnackbar(BuildContext context, String featureName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$featureName - Tính năng đang phát triển'),
+        backgroundColor: const Color(0xFF00C896),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
-      body: _isLoading
-          ? _buildLoadingShimmer()
-          : _isLoggedIn
-              ? _buildUserProfile()
-              : _buildLoginRequired(),
+      body: Consumer<AccountProvider>(
+        builder: (context, provider, child) {
+          final state = provider.state;
+
+          return state.isLoading
+              ? _buildLoadingShimmer()
+              : state.isLoggedIn
+                  ? _buildUserProfile(context, provider)
+                  : _buildLoginRequired();
+        },
+      ),
     );
   }
 
@@ -535,7 +493,9 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  Widget _buildUserProfile() {
+  Widget _buildUserProfile(BuildContext context, AccountProvider provider) {
+    final state = provider.state;
+
     return SingleChildScrollView(
       physics: const BouncingScrollPhysics(),
       padding: const EdgeInsets.all(16),
@@ -618,7 +578,8 @@ class _AccountPageState extends State<AccountPage> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _userInfo?['tenTaiKhoan'] ?? 'Người dùng',
+                                    state.userInfo?['tenTaiKhoan'] ??
+                                        'Người dùng',
                                     style: const TextStyle(
                                       fontSize: 20,
                                       fontWeight: FontWeight.w700,
@@ -629,7 +590,7 @@ class _AccountPageState extends State<AccountPage> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    _userInfo?['email'] ?? 'Chưa có email',
+                                    state.userInfo?['email'] ?? 'Chưa có email',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: Colors.white.withOpacity(0.8),
@@ -638,7 +599,8 @@ class _AccountPageState extends State<AccountPage> {
                                   ),
                                   const SizedBox(height: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 4),
                                     decoration: BoxDecoration(
                                       color: Colors.white.withOpacity(0.2),
                                       borderRadius: BorderRadius.circular(12),
@@ -664,16 +626,16 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 24),
-          
-          // Quick Stats - ĐÃ CẬP NHẬT VỚI DỮ LIỆU THỰC
+
+          // Quick Stats
           Row(
             children: [
               Expanded(
                 child: _buildStatCard(
                   title: 'Đơn hàng',
-                  value: _orderCount.toString(),
+                  value: state.orderCount.toString(),
                   icon: Icons.shopping_bag_rounded,
                   color: const Color(0xFF00C896),
                 ),
@@ -682,16 +644,16 @@ class _AccountPageState extends State<AccountPage> {
               Expanded(
                 child: _buildStatCard(
                   title: 'Yêu thích',
-                  value: _favoriteCount.toString(),
+                  value: state.favoriteCount.toString(),
                   icon: Icons.favorite_rounded,
                   color: const Color(0xFFFF6B6B),
                 ),
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Menu Options
           Column(
             children: [
@@ -703,19 +665,19 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Thông tin cá nhân',
                     color: const Color(0xFF667EEA),
                     onTap: () {
-                      _showComingSoonSnackbar('Thông tin cá nhân');
+                      _showComingSoonSnackbar(context, 'Thông tin cá nhân');
                     },
                   ),
                   _buildModernMenuOption(
                     icon: Icons.shopping_bag_outlined,
                     title: 'Đơn hàng của tôi',
                     color: const Color(0xFF00C896),
-                    badgeCount: _orderCount,
+                    badgeCount: state.orderCount,
                     onTap: () {
-                      // Điều hướng đến màn hình danh sách đơn hàng
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => OrderListScreen()),
+                        MaterialPageRoute(
+                            builder: (context) => OrderListPage()),
                       );
                     },
                   ),
@@ -727,9 +689,7 @@ class _AccountPageState extends State<AccountPage> {
                   ),
                 ],
               ),
-              
               const SizedBox(height: 16),
-              
               _buildModernMenuSection(
                 title: 'Khác',
                 options: [
@@ -737,9 +697,9 @@ class _AccountPageState extends State<AccountPage> {
                     icon: Icons.favorite_outline_rounded,
                     title: 'Sản phẩm yêu thích',
                     color: const Color(0xFFFF6B6B),
-                    badgeCount: _favoriteCount,
+                    badgeCount: state.favoriteCount,
                     onTap: () {
-                      _showComingSoonSnackbar('Sản phẩm yêu thích');
+                      _showComingSoonSnackbar(context, 'Sản phẩm yêu thích');
                     },
                   ),
                   _buildModernMenuOption(
@@ -747,7 +707,7 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Cài đặt',
                     color: const Color(0xFF78909C),
                     onTap: () {
-                      _showComingSoonSnackbar('Cài đặt');
+                      _showComingSoonSnackbar(context, 'Cài đặt');
                     },
                   ),
                   _buildModernMenuOption(
@@ -755,7 +715,7 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Trung tâm hỗ trợ',
                     color: const Color(0xFFAB47BC),
                     onTap: () {
-                      _showComingSoonSnackbar('Trung tâm hỗ trợ');
+                      _showComingSoonSnackbar(context, 'Trung tâm hỗ trợ');
                     },
                   ),
                   _buildModernMenuOption(
@@ -763,23 +723,23 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Liên hệ hỗ trợ',
                     color: const Color(0xFF26C6DA),
                     onTap: () {
-                      _showComingSoonSnackbar('Liên hệ hỗ trợ');
+                      _showComingSoonSnackbar(context, 'Liên hệ hỗ trợ');
                     },
                   ),
                 ],
               ),
             ],
           ),
-          
+
           const SizedBox(height: 24),
-          
+
           // Logout Button
           MouseRegion(
             cursor: SystemMouseCursors.click,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               child: OutlinedButton(
-                onPressed: _logout,
+                onPressed: () => _logout(context),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.red.shade600,
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -811,23 +771,9 @@ class _AccountPageState extends State<AccountPage> {
               ),
             ),
           ),
-          
+
           const SizedBox(height: 20),
         ],
-      ),
-    );
-  }
-
-  void _showComingSoonSnackbar(String featureName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$featureName - Tính năng đang phát triển'),
-        backgroundColor: const Color(0xFF00C896),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -971,10 +917,10 @@ class _AccountPageState extends State<AccountPage> {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Hiển thị badge nếu có số lượng
               if (badgeCount > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: color,
                     borderRadius: BorderRadius.circular(12),
@@ -1005,7 +951,8 @@ class _AccountPageState extends State<AccountPage> {
             ],
           ),
           onTap: onTap,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
