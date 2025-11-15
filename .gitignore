@@ -6,3 +6,21 @@
 **/*.ldf
 **/*.mdf
 
+# Visual Studio files
+**/.vs/
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.vsidx
+**/*.cache
+**/slnx.sqlite
+
+# Configuration files with secrets
+**/appsettings.json
+**/appsettings.*.json
+!**/appsettings.example.json
+
