@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:fresher_food/roles/admin/dashboard/admin_dashboard_scren.dart';
 import 'package:fresher_food/roles/user/page/register/register_screen.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/services/api/user_api.dart';
-
-import '../../main_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,8 +21,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -33,12 +32,12 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                const Text(
+                Text(
                   'Đăng nhập',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.green,
+                    color: theme.primaryColor,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -47,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   'Chào mừng bạn trở lại!',
                   style: TextStyle(
                     fontSize: 16,
-                    color: Colors.grey.shade600,
+                    color: theme.textTheme.bodyMedium?.color,
                   ),
                 ),
                 const SizedBox(height: 40),
@@ -121,30 +120,41 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _login,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
+                      backgroundColor: theme.brightness == Brightness.dark
+                          ? Colors.green.shade400
+                          : theme.primaryColor,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      elevation: 2,
+                      elevation: theme.brightness == Brightness.dark ? 6 : 2,
+                      shadowColor: theme.brightness == Brightness.dark
+                          ? Colors.green.shade400.withOpacity(0.5)
+                          : null,
                     ),
                     child: _isLoading
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 20,
                             height: 20,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : theme.colorScheme.onPrimary,
+                              ),
                             ),
                           )
                         : Container(
                             padding: EdgeInsets.symmetric(vertical: 16),
-                            child: const Text(
+                            child: Text(
                               'Đăng nhập',
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
+                                color: theme.brightness == Brightness.dark
+                                    ? Colors.white
+                                    : theme.colorScheme.onPrimary,
                               ),
                             ),
                           ),
@@ -159,7 +169,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Text(
                       'Chưa có tài khoản? ',
                       style: TextStyle(
-                        color: Colors.grey.shade600,
+                        color: theme.textTheme.bodyMedium?.color,
                       ),
                     ),
                     GestureDetector(
@@ -171,10 +181,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         );
                       },
-                      child: const Text(
+                      child: Text(
                         'Đăng ký ngay',
                         style: TextStyle(
-                          color: Colors.green,
+                          color: Colors.green.withOpacity(0.4),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -205,19 +215,10 @@ class _LoginScreenState extends State<LoginScreen> {
           // Phân quyền dựa trên vai trò
           if (user.vaiTro.toLowerCase() == 'admin') {
             // Chuyển đến Admin Dashboard
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => const AdminDashboardScreen()),
-              (route) => false,
-            );
+            AppRoute.toAdminDashboard(context);
           } else {
             // Chuyển đến Main Screen cho user thông thường
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-              (route) => false,
-            );
+            AppRoute.toMain(context);
           }
         }
       } catch (e) {

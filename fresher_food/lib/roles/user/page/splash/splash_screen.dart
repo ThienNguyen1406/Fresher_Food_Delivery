@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:fresher_food/roles/admin/dashboard/admin_dashboard_scren.dart';
-import 'package:fresher_food/roles/user/page/login/login_screen.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/services/api/user_api.dart';
-
-import '../../main_screen.dart';
 
 
 class SplashScreen extends StatefulWidget {
@@ -31,31 +28,18 @@ class _SplashScreenState extends State<SplashScreen> {
       if (isLoggedIn) {
         final isAdmin = await UserApi().isAdmin();
         if (isAdmin) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const AdminDashboardScreen()),
-          );
+          AppRoute.pushReplacement(context, AppRoute.adminDashboard);
         } else {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainScreen()),
-          );
+          AppRoute.pushReplacement(context, AppRoute.main);
         }
       } else {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
+        AppRoute.pushReplacement(context, AppRoute.login);
       }
     } catch (e) {
       print('Error in splash screen: $e');
       // Nếu có lỗi, chuyển đến login screen
       if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const LoginScreen()),
-      );
+      AppRoute.pushReplacement(context, AppRoute.login);
     }
   }
 

@@ -9,40 +9,60 @@ import 'package:http/http.dart' as http;
 class OrderApi {
   // ==================== ORDER ====================
   Future<List<Order>> getOrders() async {
-    final res = await http.get(Uri.parse('${Constant().baseUrl}/Orders'));
-    if (res.statusCode == 200) {
-      final dynamic data = jsonDecode(res.body);
+    try {
+      print('📦 Fetching all orders from API...');
+      final res = await http
+          .get(Uri.parse('${Constant().baseUrl}/Orders'))
+          .timeout(const Duration(seconds: 30));
 
-      // Kiểm tra nếu data là Map và có key chứa danh sách orders
-      if (data is Map<String, dynamic>) {
-        // Tìm key chứa danh sách orders (có thể là 'data', 'orders', 'items', v.v.)
-        if (data.containsKey('data') && data['data'] is List) {
-          final List<dynamic> orderList = data['data'];
-          return orderList.map((e) => Order.fromJson(e)).toList();
-        } else if (data.containsKey('orders') && data['orders'] is List) {
-          final List<dynamic> orderList = data['orders'];
-          return orderList.map((e) => Order.fromJson(e)).toList();
-        } else if (data.containsKey('items') && data['items'] is List) {
-          final List<dynamic> orderList = data['items'];
-          return orderList.map((e) => Order.fromJson(e)).toList();
-        } else {
-          // Nếu không tìm thấy key nào phù hợp, thử lấy giá trị đầu tiên là List
-          final dynamic firstValue = data.values.first;
-          if (firstValue is List) {
-            return firstValue.map((e) => Order.fromJson(e)).toList();
+      print('📦 Orders API Response: ${res.statusCode}');
+      print('📦 Orders API Body: ${res.body}');
+
+      if (res.statusCode == 200) {
+        final dynamic data = jsonDecode(res.body);
+
+        // Kiểm tra nếu data là Map và có key chứa danh sách orders
+        if (data is Map<String, dynamic>) {
+          // Tìm key chứa danh sách orders (có thể là 'data', 'orders', 'items', v.v.)
+          if (data.containsKey('data') && data['data'] is List) {
+            final List<dynamic> orderList = data['data'];
+            print('✅ Found ${orderList.length} orders in data key');
+            return orderList.map((e) => Order.fromJson(e)).toList();
+          } else if (data.containsKey('orders') && data['orders'] is List) {
+            final List<dynamic> orderList = data['orders'];
+            print('✅ Found ${orderList.length} orders in orders key');
+            return orderList.map((e) => Order.fromJson(e)).toList();
+          } else if (data.containsKey('items') && data['items'] is List) {
+            final List<dynamic> orderList = data['items'];
+            print('✅ Found ${orderList.length} orders in items key');
+            return orderList.map((e) => Order.fromJson(e)).toList();
           } else {
+            // Nếu không tìm thấy key nào phù hợp, thử lấy giá trị đầu tiên là List
+            if (data.isNotEmpty) {
+              final dynamic firstValue = data.values.first;
+              if (firstValue is List) {
+                print('✅ Found ${firstValue.length} orders in first value');
+                return firstValue.map((e) => Order.fromJson(e)).toList();
+              }
+            }
             throw Exception('Cấu trúc dữ liệu không hợp lệ: $data');
           }
         }
-      }
-      // Nếu data là List thì xử lý bình thường
-      else if (data is List) {
-        return data.map((e) => Order.fromJson(e)).toList();
+        // Nếu data là List thì xử lý bình thường
+        else if (data is List) {
+          print('✅ Found ${data.length} orders in list format');
+          return data.map((e) => Order.fromJson(e)).toList();
+        } else {
+          throw Exception(
+              'Định dạng dữ liệu không hợp lệ: ${data.runtimeType}');
+        }
       } else {
-        throw Exception('Định dạng dữ liệu không hợp lệ: ${data.runtimeType}');
+        throw Exception(
+            'Không thể tải danh sách đơn hàng: ${res.statusCode} - ${res.body}');
       }
-    } else {
-      throw Exception('Không thể tải danh sách đơn hàng: ${res.statusCode}');
+    } catch (e) {
+      print('❌ Error getting orders: $e');
+      throw Exception('Lỗi tải danh sách đơn hàng: $e');
     }
   }
 
@@ -216,4 +236,103 @@ class OrderApi {
     }
   }
 
+  // Lấy thống kê doanh thu theo khoảng thời gian
+  Future<Map<String, dynamic>> getRevenueStatistics({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      print('📊 Fetching revenue statistics...');
+
+      // Xây dựng URL với query parameters
+      final uri =
+          Uri.parse('${Constant().baseUrl}/Orders/revenue/statistics').replace(
+        queryParameters: {
+          if (startDate != null)
+            'startDate': startDate.toIso8601String().split('T')[0],
+          if (endDate != null)
+            'endDate': endDate.toIso8601String().split('T')[0],
+        },
+      );
+
+      print('📊 Revenue Statistics URL: $uri');
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+
+      print('📊 Revenue Statistics API Response: ${response.statusCode}');
+      print('📊 Revenue Statistics API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('📊 Revenue Statistics Data: $data');
+
+        // Kiểm tra cấu trúc response
+        if (data is Map && data.containsKey('data')) {
+          return data['data'] as Map<String, dynamic>;
+        } else {
+          print('Unexpected revenue statistics response structure: $data');
+          throw Exception('Unexpected response structure');
+        }
+      } else {
+        throw Exception(
+            'Failed to load revenue statistics: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error getting revenue statistics: $e');
+      throw Exception('Error getting revenue statistics: $e');
+    }
+  }
+
+  // Lấy thống kê doanh thu theo tháng
+  Future<List<Map<String, dynamic>>> getMonthlyRevenue({int? year}) async {
+    try {
+      print('📊 Fetching monthly revenue statistics...');
+
+      final headers = await ApiService().getHeaders();
+
+      // Xây dựng URL với query parameters
+      final uri = Uri.parse('${Constant().baseUrl}/Orders/monthly-revenue')
+          .replace(
+        queryParameters: {
+          if (year != null) 'year': year.toString(),
+        },
+      );
+
+      print('📊 Monthly Revenue URL: $uri');
+
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 30));
+
+      print('📊 Monthly Revenue API Response: ${response.statusCode}');
+      print('📊 Monthly Revenue API Body: ${response.body}');
+      print('📊 Monthly Revenue Headers: $headers');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        print('📊 Monthly Revenue Data: $data');
+
+        // Kiểm tra cấu trúc response
+        if (data is Map && data.containsKey('data')) {
+          final List<dynamic> monthlyData = data['data'];
+          return monthlyData
+              .map((item) => {
+                    'thang': item['thang'] as int,
+                    'doanhThu': (item['doanhThu'] as num).toDouble(),
+                  })
+              .toList()
+              .cast<Map<String, dynamic>>();
+        } else {
+          print('Unexpected monthly revenue response structure: $data');
+          throw Exception('Unexpected response structure');
+        }
+      } else {
+        throw Exception(
+            'Failed to load monthly revenue: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error getting monthly revenue: $e');
+      throw Exception('Error getting monthly revenue: $e');
+    }
+  }
 }

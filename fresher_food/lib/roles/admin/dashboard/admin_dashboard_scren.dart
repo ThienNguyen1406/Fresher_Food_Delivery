@@ -79,11 +79,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screen = _screens[_selectedIndex]['screen'];
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
       appBar: _buildAppBar(),
       drawer: _buildDrawer(),
-      body: _screens[_selectedIndex]['screen'],
+      body: screen ?? _buildComingSoonScreen(),
+    );
+  }
+
+  Widget _buildComingSoonScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Iconsax.magicpen,
+            size: 64,
+            color: Colors.grey.shade400,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Tính năng đang phát triển',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

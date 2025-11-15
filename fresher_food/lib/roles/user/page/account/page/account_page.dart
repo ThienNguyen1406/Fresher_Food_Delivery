@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/account/provider/account_provider.dart';
-import 'package:fresher_food/roles/user/page/order/order_list/page/order_list_page.dart';
-import 'package:fresher_food/roles/user/page/product/product_review/page/product_review_page.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:provider/provider.dart';
-import 'package:fresher_food/roles/user/page/login/login_screen.dart';
 
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
@@ -98,15 +96,7 @@ class _AccountPageState extends State<AccountPage> {
                       trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                       onTap: () {
                         Navigator.of(context).pop();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ProductReviewPage(
-                              productId: product['maSanPham'],
-                            
-                            ),
-                          ),
-                        );
+                        AppRoute.toProductReview(context, product['maSanPham']);
                       },
                     );
                   },
@@ -131,15 +121,17 @@ class _AccountPageState extends State<AccountPage> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
+        final theme = Theme.of(context);
         return Dialog(
           backgroundColor: Colors.transparent,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: theme.cardColor,
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withOpacity(
+                      theme.brightness == Brightness.dark ? 0.4 : 0.2),
                   blurRadius: 20,
                   offset: const Offset(0, 10),
                 ),
@@ -164,20 +156,20 @@ class _AccountPageState extends State<AccountPage> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
+                  Text(
                     'Đăng xuất',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: theme.textTheme.titleLarge?.color,
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Bạn có chắc muốn đăng xuất?',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey,
+                      color: theme.textTheme.bodyMedium?.color,
                     ),
                     textAlign: TextAlign.center,
                   ),
@@ -188,12 +180,16 @@ class _AccountPageState extends State<AccountPage> {
                         child: OutlinedButton(
                           onPressed: () => Navigator.of(context).pop(),
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: Colors.grey,
+                            foregroundColor: theme.textTheme.bodyMedium?.color,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            side: BorderSide(color: Colors.grey.shade300),
+                            side: BorderSide(
+                              color: theme.brightness == Brightness.dark
+                                  ? Colors.grey.shade600
+                                  : Colors.grey.shade300,
+                            ),
                           ),
                           child: const Text('Hủy'),
                         ),
@@ -206,13 +202,7 @@ class _AccountPageState extends State<AccountPage> {
                             try {
                               final success = await provider.logout();
                               if (success) {
-                                Navigator.pushAndRemoveUntil(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (context) =>
-                                          const LoginScreen()),
-                                  (route) => false,
-                                );
+                                AppRoute.toLogin(context);
                               } else {
                                 _showErrorSnackbar(
                                     context, 'Lỗi khi đăng xuất');
@@ -223,14 +213,19 @@ class _AccountPageState extends State<AccountPage> {
                             }
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red.shade600,
+                            backgroundColor: theme.brightness == Brightness.dark
+                                ? Colors.red.shade400
+                                : Colors.red.shade600,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            elevation: 0,
-                            shadowColor: Colors.transparent,
+                            elevation:
+                                theme.brightness == Brightness.dark ? 6 : 2,
+                            shadowColor: theme.brightness == Brightness.dark
+                                ? Colors.red.shade400.withOpacity(0.5)
+                                : null,
                           ),
                           child: const Text('Đăng xuất'),
                         ),
@@ -259,24 +254,11 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
-  void _showComingSoonSnackbar(BuildContext context, String featureName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('$featureName - Tính năng đang phát triển'),
-        backgroundColor: const Color(0xFF00C896),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFD),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Consumer<AccountProvider>(
         builder: (context, provider, child) {
           final state = provider.state;
@@ -664,8 +646,11 @@ class _AccountPageState extends State<AccountPage> {
                     icon: Icons.person_outline_rounded,
                     title: 'Thông tin cá nhân',
                     color: const Color(0xFF667EEA),
-                    onTap: () {
-                      _showComingSoonSnackbar(context, 'Thông tin cá nhân');
+                    onTap: () async {
+                      final result = await AppRoute.toProfileEdit(context);
+                      if (result == true) {
+                        provider.refresh();
+                      }
                     },
                   ),
                   _buildModernMenuOption(
@@ -674,11 +659,7 @@ class _AccountPageState extends State<AccountPage> {
                     color: const Color(0xFF00C896),
                     badgeCount: state.orderCount,
                     onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => OrderListPage()),
-                      );
+                      AppRoute.toOrderList(context);
                     },
                   ),
                   _buildModernMenuOption(
@@ -699,7 +680,7 @@ class _AccountPageState extends State<AccountPage> {
                     color: const Color(0xFFFF6B6B),
                     badgeCount: state.favoriteCount,
                     onTap: () {
-                      _showComingSoonSnackbar(context, 'Sản phẩm yêu thích');
+                      AppRoute.toFavorite(context);
                     },
                   ),
                   _buildModernMenuOption(
@@ -707,7 +688,7 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Cài đặt',
                     color: const Color(0xFF78909C),
                     onTap: () {
-                      _showComingSoonSnackbar(context, 'Cài đặt');
+                      AppRoute.toSettings(context);
                     },
                   ),
                   _buildModernMenuOption(
@@ -715,7 +696,7 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Trung tâm hỗ trợ',
                     color: const Color(0xFFAB47BC),
                     onTap: () {
-                      _showComingSoonSnackbar(context, 'Trung tâm hỗ trợ');
+                      AppRoute.toSupportCenter(context);
                     },
                   ),
                   _buildModernMenuOption(
@@ -723,7 +704,7 @@ class _AccountPageState extends State<AccountPage> {
                     title: 'Liên hệ hỗ trợ',
                     color: const Color(0xFF26C6DA),
                     onTap: () {
-                      _showComingSoonSnackbar(context, 'Liên hệ hỗ trợ');
+                      AppRoute.toContactSupport(context);
                     },
                   ),
                 ],

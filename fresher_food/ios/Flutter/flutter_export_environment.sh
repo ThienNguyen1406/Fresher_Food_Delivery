@@ -1,7 +1,7 @@
 #!/bin/sh
 # This is a generated file; do not edit or check into version control.
 export "FLUTTER_ROOT=C:\Users\nvt14\flutter"
-export "FLUTTER_APPLICATION_PATH=D:\Flutter_App\dacn_nhom9\fresher_food"
+export "FLUTTER_APPLICATION_PATH=D:\Fresher_Food_Delivery\fresher_food"
 export "COCOAPODS_PARALLEL_CODE_SIGN=true"
 export "FLUTTER_TARGET=lib\main.dart"
 export "FLUTTER_BUILD_DIR=build"

@@ -24,11 +24,26 @@ class UserApi {
       print('Login API Response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final user = User.fromJson(data['user']);
-        // Lưu thông tin user vào SharedPreferences
-        await _saveUserInfo(user);
-        return user;
+        try {
+          final data = jsonDecode(response.body);
+          print('Login data parsed: $data');
+
+          if (data['user'] == null) {
+            throw Exception('Response không chứa thông tin user');
+          }
+
+          final user = User.fromJson(data['user']);
+          print('User object created: ${user.maTaiKhoan}');
+
+          // Lưu thông tin user vào SharedPreferences
+          await _saveUserInfo(user);
+          print('User info saved to SharedPreferences');
+
+          return user;
+        } catch (e) {
+          print('Error parsing login response: $e');
+          throw Exception('Lỗi xử lý dữ liệu đăng nhập: $e');
+        }
       } else {
         throw Exception(
             'Đăng nhập thất bại: ${response.statusCode} - ${response.body}');
@@ -74,15 +89,21 @@ class UserApi {
 
   // Lưu thông tin user
   Future<void> _saveUserInfo(User user) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('maTaiKhoan', user.maTaiKhoan);
-    await prefs.setString('tenNguoiDung', user.tenNguoiDung);
-    await prefs.setString('email', user.email);
-    await prefs.setString('hoTen', user.hoTen);
-    await prefs.setString('sdt', user.sdt);
-    await prefs.setString('diaChi', user.diaChi);
-    await prefs.setString('vaiTro', user.vaiTro);
-    await prefs.setBool('isLoggedIn', true);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('maTaiKhoan', user.maTaiKhoan);
+      await prefs.setString('tenNguoiDung', user.tenNguoiDung);
+      await prefs.setString('email', user.email);
+      await prefs.setString('hoTen', user.hoTen);
+      await prefs.setString('sdt', user.sdt);
+      await prefs.setString('diaChi', user.diaChi);
+      await prefs.setString('vaiTro', user.vaiTro);
+      await prefs.setBool('isLoggedIn', true);
+      print('User info saved successfully');
+    } catch (e) {
+      print('Error saving user info: $e');
+      throw Exception('Lỗi lưu thông tin user: $e');
+    }
   }
 
   // Lấy thông tin user từ SharedPreferences
@@ -109,35 +130,43 @@ class UserApi {
   // Lấy thông tin chi tiết người dùng từ API
   Future<Map<String, dynamic>> getUserInfo() async {
     try {
-      final headers = await ApiService().getHeaders();
       final user = await getCurrentUser();
-
       if (user == null) throw Exception('User not logged in');
 
-      final response = await http
-          .get(
-            Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}'),
-            headers: headers,
-          )
-          .timeout(const Duration(seconds: 30));
+      final response = await http.get(
+        Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 30));
 
       print('User Info API Response: ${response.statusCode}');
       print('User Info API Body: ${response.body}');
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        print('User info data: $data');
+        final data = jsonDecode(response.body);
+        // Backend có thể trả về User object trực tiếp hoặc trong wrapper
+        final userData =
+            data is Map<String, dynamic> && data.containsKey('user')
+                ? data['user']
+                : data;
+
+        print('User info data: $userData');
 
         return {
-          'maTaiKhoan': data['maTaiKhoan'] ?? '',
-          'tenTaiKhoan': data['tenNguoiDung'] ?? data['hoTen'] ?? 'Người dùng',
-          'email': data['email'] ?? '',
-          'hoTen': data['hoTen'] ?? '',
-          'sdt': data['sdt'] ?? '',
-          'diaChi': data['diaChi'] ?? '',
-          'vaiTro': data['vaiTro'] ?? 'user',
+          'maTaiKhoan': userData['maTaiKhoan']?.toString() ?? user.maTaiKhoan,
+          'tenTaiKhoan': userData['tenNguoiDung']?.toString() ??
+              userData['hoTen']?.toString() ??
+              user.tenNguoiDung,
+          'email': userData['email']?.toString() ?? user.email,
+          'hoTen': userData['hoTen']?.toString() ?? user.hoTen,
+          'sdt': userData['sdt']?.toString() ?? user.sdt,
+          'diaChi': userData['diaChi']?.toString() ?? user.diaChi,
+          'vaiTro': userData['vaiTro']?.toString() ?? user.vaiTro,
         };
       } else {
+        // Nếu API lỗi, lấy từ SharedPreferences
+        print('API failed, using cached data');
         final prefs = await SharedPreferences.getInstance();
         return {
           'maTaiKhoan': prefs.getString('maTaiKhoan') ?? '',
@@ -153,6 +182,7 @@ class UserApi {
       }
     } catch (e) {
       print('Error getting user info: $e');
+      // Fallback về SharedPreferences
       final prefs = await SharedPreferences.getInstance();
       return {
         'maTaiKhoan': prefs.getString('maTaiKhoan') ?? '',
@@ -171,20 +201,38 @@ class UserApi {
   // Cập nhật thông tin người dùng
   Future<bool> updateUserInfo(Map<String, dynamic> userData) async {
     try {
-      final headers = await ApiService().getHeaders();
       final user = await getCurrentUser();
-
       if (user == null) throw Exception('User not logged in');
+
+      // Chuẩn bị data để gửi lên backend
+      // Backend cần đầy đủ thông tin User object
+      final updateData = {
+        'maTaiKhoan': user.maTaiKhoan,
+        'tenNguoiDung': userData['tenNguoiDung'] ?? user.tenNguoiDung,
+        'matKhau': '', // Không gửi mật khẩu, backend sẽ giữ nguyên mật khẩu cũ
+        'email': userData['email'] ?? user.email,
+        'hoTen': userData['hoTen'] ?? user.hoTen,
+        'sdt': userData['sdt'] ?? user.sdt,
+        'diaChi': userData['diaChi'] ?? user.diaChi,
+        'vaiTro': user.vaiTro, // Giữ nguyên vai trò
+      };
+
+      print('Updating user info: $updateData');
 
       final response = await http
           .put(
             Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}'),
-            headers: headers,
-            body: jsonEncode(userData),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode(updateData),
           )
           .timeout(const Duration(seconds: 30));
 
+      print('Update response: ${response.statusCode} - ${response.body}');
+
       if (response.statusCode == 200) {
+        // Cập nhật SharedPreferences với dữ liệu mới
         final prefs = await SharedPreferences.getInstance();
         if (userData.containsKey('tenNguoiDung')) {
           await prefs.setString('tenNguoiDung', userData['tenNguoiDung']);
@@ -201,13 +249,17 @@ class UserApi {
         if (userData.containsKey('email')) {
           await prefs.setString('email', userData['email']);
         }
-
+        print('User info updated successfully');
         return true;
       } else {
-        throw Exception('Failed to update user info: ${response.statusCode}');
+        final errorBody = response.body;
+        print('Update failed: $errorBody');
+        throw Exception(
+            'Cập nhật thất bại: ${response.statusCode} - $errorBody');
       }
     } catch (e) {
-      throw Exception('Error updating user info: $e');
+      print('Error updating user info: $e');
+      throw Exception('Lỗi cập nhật thông tin: $e');
     }
   }
 

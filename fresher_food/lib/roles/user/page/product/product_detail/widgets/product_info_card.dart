@@ -1,0 +1,234 @@
+import 'package:flutter/material.dart';
+import 'package:fresher_food/models/Product.dart';
+import 'package:fresher_food/roles/user/page/product/product_detail/provider/product_detail_provider.dart';
+
+class ProductInfoCard extends StatelessWidget {
+  final Product product;
+  final ProductDetailProvider provider;
+
+  const ProductInfoCard({
+    super.key,
+    required this.product,
+    required this.provider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.tenSanPham,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (provider.isOutOfStock)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.red.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.red.shade200),
+                        ),
+                        child: Text(
+                          'Hết hàng',
+                          style: TextStyle(
+                            color: Colors.red.shade600,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      )
+                    else if (provider.isLowStock)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Text(
+                          'Chỉ còn ${product.soLuongTon} sản phẩm',
+                          style: TextStyle(
+                            color: Colors.orange.shade700,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              GestureDetector(
+                onTap: () => _toggleFavorite(context),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: provider.isFavorite
+                        ? Colors.red.withOpacity(0.1)
+                        : Colors.grey.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: provider.isFavorite
+                          ? Colors.red.withOpacity(0.3)
+                          : Colors.grey.withOpacity(0.3),
+                    ),
+                  ),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      provider.isFavorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                      color: provider.isFavorite ? Colors.red : Colors.grey,
+                      size: 20,
+                      key: ValueKey(provider.isFavorite),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildInfoChip(
+                icon: Icons.location_on_outlined,
+                text: product.xuatXu,
+              ),
+              const SizedBox(width: 12),
+              _buildInfoChip(
+                icon: Icons.inventory_2_outlined,
+                text: '${product.soLuongTon} ${product.donViTinh}',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${product.giaBan.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}đ',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: provider.isOutOfStock
+                      ? Colors.grey.shade400
+                      : Colors.green.shade600,
+                ),
+              ),
+              _buildRatingWidget(),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip({required IconData icon, required String text}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 14,
+            color: Colors.grey.shade600,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingWidget() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.amber.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.amber.shade200),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.star_rounded,
+            color: Colors.amber,
+            size: 16,
+          ),
+          const SizedBox(width: 4),
+          Text(
+            provider.ratingStats.averageRating.toStringAsFixed(1),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.amber.shade800,
+            ),
+          ),
+          const SizedBox(width: 2),
+          Text(
+            '(${provider.ratingStats.totalRatings})',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _toggleFavorite(BuildContext context) async {
+    try {
+      await provider.toggleFavorite(product.maSanPham);
+    } catch (e) {
+      // Handle error if needed
+    }
+  }
+}

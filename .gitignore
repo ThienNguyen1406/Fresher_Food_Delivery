@@ -1,0 +1,8 @@
+# SQL Server database files
+*.ldf
+*.mdf
+
+# Database log files
+**/*.ldf
+**/*.mdf
+

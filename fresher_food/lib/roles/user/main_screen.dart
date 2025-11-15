@@ -5,7 +5,6 @@ import 'package:fresher_food/roles/user/page/cart/page/cart_page.dart';
 import 'package:fresher_food/roles/user/page/favorite/page/favorite_page.dart';
 import 'package:fresher_food/roles/user/page/voucher/voucher_page.dart';
 
-
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -30,18 +29,19 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
-
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: _selectedIndex == 4 ? _buildAccountAppBar() : null,
+      appBar: _selectedIndex == 4 ? _buildAccountAppBar(context) : null,
       body: _pages[_selectedIndex],
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withOpacity(isDark ? 0.3 : 0.1),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -56,9 +56,10 @@ class _MainScreenState extends State<MainScreen> {
             currentIndex: _selectedIndex,
             onTap: _onItemTapped,
             type: BottomNavigationBarType.fixed,
-            backgroundColor: Colors.white,
-            selectedItemColor: Colors.green,
-            unselectedItemColor: Colors.grey.shade600,
+            backgroundColor: theme.bottomNavigationBarTheme.backgroundColor ??
+                theme.cardColor,
+            selectedItemColor: theme.primaryColor,
+            unselectedItemColor: theme.unselectedWidgetColor,
             selectedLabelStyle: const TextStyle(
               fontWeight: FontWeight.w600,
               fontSize: 12,
@@ -66,152 +67,212 @@ class _MainScreenState extends State<MainScreen> {
             unselectedLabelStyle: TextStyle(
               fontWeight: FontWeight.w500,
               fontSize: 12,
-              color: Colors.grey.shade600,
+              color: theme.unselectedWidgetColor,
             ),
             elevation: 0,
             items: [
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _selectedIndex == 0 
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    Icons.store_outlined,
-                    size: 24,
-                    color: _selectedIndex == 0 ? Colors.green : Colors.grey.shade600,
-                  ),
+                icon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _selectedIndex == 0
+                            ? theme.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: Icon(
+                        Icons.store_outlined,
+                        size: 24,
+                        color: _selectedIndex == 0
+                            ? theme.primaryColor
+                            : theme.unselectedWidgetColor,
+                      ),
+                    );
+                  },
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                    Icons.store,
-                    size: 24,
-                    color: Colors.green,
-                  ),
+                activeIcon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.primaryColor.withOpacity(0.15),
+                      ),
+                      child: Icon(
+                        Icons.store,
+                        size: 24,
+                        color: theme.primaryColor,
+                      ),
+                    );
+                  },
                 ),
                 label: 'Shop',
               ),
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _selectedIndex == 1 
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    Icons.explore_outlined,
-                    size: 24,
-                    color: _selectedIndex == 1 ? Colors.green : Colors.grey.shade600,
-                  ),
+                icon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _selectedIndex == 1
+                            ? theme.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: Icon(
+                        Icons.explore_outlined,
+                        size: 24,
+                        color: _selectedIndex == 1
+                            ? theme.primaryColor
+                            : theme.unselectedWidgetColor,
+                      ),
+                    );
+                  },
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                    Icons.explore,
-                    size: 24,
-                    color: Colors.green,
-                  ),
+                activeIcon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.primaryColor.withOpacity(0.15),
+                      ),
+                      child: Icon(
+                        Icons.explore,
+                        size: 24,
+                        color: theme.primaryColor,
+                      ),
+                    );
+                  },
                 ),
                 label: 'Vouchers',
               ),
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _selectedIndex == 2 
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    Icons.shopping_cart_outlined,
-                    size: 24,
-                    color: _selectedIndex == 2 ? Colors.green : Colors.grey.shade600,
-                  ),
+                icon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _selectedIndex == 2
+                            ? theme.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: Icon(
+                        Icons.shopping_cart_outlined,
+                        size: 24,
+                        color: _selectedIndex == 2
+                            ? theme.primaryColor
+                            : theme.unselectedWidgetColor,
+                      ),
+                    );
+                  },
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                    Icons.shopping_cart,
-                    size: 24,
-                    color: Colors.green,
-                  ),
+                activeIcon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.primaryColor.withOpacity(0.15),
+                      ),
+                      child: Icon(
+                        Icons.shopping_cart,
+                        size: 24,
+                        color: theme.primaryColor,
+                      ),
+                    );
+                  },
                 ),
                 label: 'Cart',
               ),
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _selectedIndex == 3 
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    Icons.favorite_outline,
-                    size: 24,
-                    color: _selectedIndex == 3 ? Colors.green : Colors.grey.shade600,
-                  ),
+                icon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _selectedIndex == 3
+                            ? theme.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: Icon(
+                        Icons.favorite_outline,
+                        size: 24,
+                        color: _selectedIndex == 3
+                            ? theme.primaryColor
+                            : theme.unselectedWidgetColor,
+                      ),
+                    );
+                  },
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                    Icons.favorite,
-                    size: 24,
-                    color: Colors.green,
-                  ),
+                activeIcon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.primaryColor.withOpacity(0.15),
+                      ),
+                      child: Icon(
+                        Icons.favorite,
+                        size: 24,
+                        color: theme.primaryColor,
+                      ),
+                    );
+                  },
                 ),
                 label: 'Favorite',
               ),
               BottomNavigationBarItem(
-                icon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _selectedIndex == 4 
-                        ? Colors.green.withOpacity(0.15)
-                        : Colors.transparent,
-                  ),
-                  child: Icon(
-                    Icons.person_outline,
-                    size: 24,
-                    color: _selectedIndex == 4 ? Colors.green : Colors.grey.shade600,
-                  ),
+                icon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _selectedIndex == 4
+                            ? theme.primaryColor.withOpacity(0.15)
+                            : Colors.transparent,
+                      ),
+                      child: Icon(
+                        Icons.person_outline,
+                        size: 24,
+                        color: _selectedIndex == 4
+                            ? theme.primaryColor
+                            : theme.unselectedWidgetColor,
+                      ),
+                    );
+                  },
                 ),
-                activeIcon: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.green.withOpacity(0.15),
-                  ),
-                  child: const Icon(
-                    Icons.person,
-                    size: 24,
-                    color: Colors.green,
-                  ),
+                activeIcon: Builder(
+                  builder: (context) {
+                    final theme = Theme.of(context);
+                    return Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: theme.primaryColor.withOpacity(0.15),
+                      ),
+                      child: Icon(
+                        Icons.person,
+                        size: 24,
+                        color: theme.primaryColor,
+                      ),
+                    );
+                  },
                 ),
                 label: 'Account',
               ),
@@ -222,16 +283,18 @@ class _MainScreenState extends State<MainScreen> {
     );
   }
 
-  AppBar _buildAccountAppBar() {
+  AppBar _buildAccountAppBar(BuildContext context) {
+    final theme = Theme.of(context);
     return AppBar(
-      title: const Text(
+      title: Text(
         'Tài khoản',
         style: TextStyle(
           fontWeight: FontWeight.bold,
-          color: Colors.black87,
+          color: theme.textTheme.titleLarge?.color,
         ),
       ),
-      backgroundColor: Colors.white,
+      backgroundColor:
+          theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
       elevation: 0,
     );
   }

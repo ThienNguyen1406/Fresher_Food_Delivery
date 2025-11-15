@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
 import 'package:fresher_food/services/api/order_api.dart';
-import 'package:fresher_food/services/api_service.dart';
 import 'package:iconsax/iconsax.dart';
-import 'package:provider/provider.dart';
 
 class QuanLyDonHangScreen extends StatefulWidget {
   const QuanLyDonHangScreen({super.key});
@@ -15,15 +13,22 @@ class QuanLyDonHangScreen extends StatefulWidget {
 
 class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
   int _selectedTab = 0;
-  final List<String> _tabs = ['Tất cả', 'Chờ xác nhận', 'Đang xử lý', 'Đang giao', 'Hoàn thành', 'Đã hủy'];
-  
+  final List<String> _tabs = [
+    'Tất cả',
+    'Chờ xác nhận',
+    'Đang xử lý',
+    'Đang giao',
+    'Hoàn thành',
+    'Đã hủy'
+  ];
+
   // Biến quản lý state
   List<Order> _orders = [];
   bool _isLoading = true;
   String _searchQuery = '';
   DateTime? _startDate;
   DateTime? _endDate;
-  
+
   // Màu sắc mới - chủ đạo xanh lá
   final Color _primaryColor = const Color(0xFF10B981); // Xanh lá tươi sáng
   final Color _secondaryColor = const Color(0xFF059669); // Xanh lá đậm
@@ -32,7 +37,7 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
   final Color _surfaceColor = Colors.white;
   final Color _textColor = const Color(0xFF212529);
   final Color _textLightColor = const Color(0xFF6C757D);
-  
+
   // Status mapping với màu sắc mới
   final Map<String, String> _statusMap = {
     'pending': 'Chờ xác nhận',
@@ -61,10 +66,10 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
       setState(() {
         _isLoading = true;
       });
-      
-      final apiService = Provider.of<OrderApi>(context, listen: false);
+
+      final apiService = OrderApi();
       final orders = await apiService.getOrders();
-      
+
       setState(() {
         _orders = orders;
         _isLoading = false;
@@ -79,12 +84,13 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
 
   Future<void> _updateOrderStatus(String orderId, String newStatus) async {
     try {
-      final apiService = Provider.of<OrderApi>(context, listen: false);
+      final apiService = OrderApi();
       final success = await apiService.updateOrderStatus(orderId, newStatus);
-      
+
       if (success) {
         setState(() {
-          final index = _orders.indexWhere((order) => order.maDonHang == orderId);
+          final index =
+              _orders.indexWhere((order) => order.maDonHang == orderId);
           if (index != -1) {
             final oldOrder = _orders[index];
             final updatedOrder = Order(
@@ -167,19 +173,27 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     if (_selectedTab > 0) {
       final statusKeys = _statusMap.keys.toList();
       final status = statusKeys[_selectedTab - 1];
-      filteredOrders = filteredOrders.where((order) => order.trangThai == status).toList();
+      filteredOrders =
+          filteredOrders.where((order) => order.trangThai == status).toList();
     }
 
     if (_searchQuery.isNotEmpty) {
-      filteredOrders = filteredOrders.where((order) =>
-          order.maDonHang.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-          (order.soDienThoai ?? '').contains(_searchQuery) ||
-          order.maTaiKhoan.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+      filteredOrders = filteredOrders
+          .where((order) =>
+              order.maDonHang
+                  .toLowerCase()
+                  .contains(_searchQuery.toLowerCase()) ||
+              (order.soDienThoai ?? '').contains(_searchQuery) ||
+              order.maTaiKhoan
+                  .toLowerCase()
+                  .contains(_searchQuery.toLowerCase()))
+          .toList();
     }
 
     if (_startDate != null) {
       filteredOrders = filteredOrders.where((order) {
-        return order.ngayDat.isAfter(_startDate!.subtract(const Duration(days: 1)));
+        return order.ngayDat
+            .isAfter(_startDate!.subtract(const Duration(days: 1)));
       }).toList();
     }
 
@@ -216,18 +230,19 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final filteredOrders = _getFilteredOrders();
 
     return Scaffold(
-      backgroundColor: _backgroundColor,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
           // Header với search và filter (đã bỏ title)
           _buildHeader(),
-          
+
           // Tab bar
           _buildTabBar(),
-          
+
           // Danh sách đơn hàng
           Expanded(
             child: _isLoading
@@ -287,7 +302,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                     decoration: InputDecoration(
                       hintText: 'Tìm kiếm theo mã đơn, số ĐT...',
                       hintStyle: TextStyle(color: _textLightColor),
-                      prefixIcon: Icon(Iconsax.search_normal, color: _textLightColor),
+                      prefixIcon:
+                          Icon(Iconsax.search_normal, color: _textLightColor),
                       border: InputBorder.none,
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -342,12 +358,10 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                 });
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _selectedTab == index
-                    ? _primaryColor
-                    : _surfaceColor,
-                foregroundColor: _selectedTab == index
-                    ? Colors.white
-                    : _textLightColor,
+                backgroundColor:
+                    _selectedTab == index ? _primaryColor : _surfaceColor,
+                foregroundColor:
+                    _selectedTab == index ? Colors.white : _textLightColor,
                 elevation: 0,
                 shadowColor: Colors.transparent,
                 shape: RoundedRectangleBorder(
@@ -359,7 +373,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                     width: 1.5,
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
               ),
               child: Text(
                 _tabs[index],
@@ -445,7 +460,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -462,9 +478,9 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 16),
-            
+
             // Thông tin khách hàng
             Row(
               children: [
@@ -472,7 +488,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                 const SizedBox(width: 8),
                 Text(
                   'Mã TK: ${order.maTaiKhoan}',
-                  style: TextStyle(color: _textColor, fontWeight: FontWeight.w500),
+                  style:
+                      TextStyle(color: _textColor, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 16),
                 Icon(Iconsax.call, size: 16, color: _textLightColor),
@@ -483,9 +500,9 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                 ),
               ],
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Thông tin đơn hàng
             Row(
               children: [
@@ -499,7 +516,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
             ),
 
             // Địa chỉ giao hàng
-            if (order.diaChiGiaoHang != null && order.diaChiGiaoHang!.isNotEmpty) ...[
+            if (order.diaChiGiaoHang != null &&
+                order.diaChiGiaoHang!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,9 +536,9 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                 ],
               ),
             ],
-            
+
             const SizedBox(height: 16),
-            
+
             // Tổng tiền và actions
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -567,7 +585,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon: Icon(Iconsax.edit, size: 20, color: _primaryColor),
+                        icon:
+                            Icon(Iconsax.edit, size: 20, color: _primaryColor),
                         onPressed: () => _showStatusUpdateDialog(order),
                       ),
                     ),
@@ -673,7 +692,8 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
         builder: (context, setState) {
           return Dialog(
             backgroundColor: _surfaceColor,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             child: Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -723,15 +743,16 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                           child: AbsorbPointer(
                             child: TextField(
                               controller: TextEditingController(
-                                text: _startDate != null 
-                                  ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
-                                  : '',
+                                text: _startDate != null
+                                    ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                                    : '',
                               ),
                               decoration: InputDecoration(
                                 hintText: 'Từ ngày',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
@@ -761,15 +782,16 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                           child: AbsorbPointer(
                             child: TextField(
                               controller: TextEditingController(
-                                text: _endDate != null 
-                                  ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
-                                  : '',
+                                text: _endDate != null
+                                    ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
+                                    : '',
                               ),
                               decoration: InputDecoration(
                                 hintText: 'Đến ngày',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),
-                                  borderSide: BorderSide(color: Colors.grey.shade300),
+                                  borderSide:
+                                      BorderSide(color: Colors.grey.shade300),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(12),

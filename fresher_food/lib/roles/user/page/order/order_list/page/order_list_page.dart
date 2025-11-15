@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/roles/user/page/order/order_list/provider/order_list_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
 
 class OrderListPage extends StatefulWidget {
   const OrderListPage({super.key});
@@ -146,32 +146,42 @@ class _OrderListPageState extends State<OrderListPage> {
               ),
             ),
             const SizedBox(height: 32),
-            ElevatedButton(
-              onPressed: orderListProvider.retryLoading,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF4CAF50),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 2,
-                shadowColor: const Color(0xFF4CAF50).withOpacity(0.3),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.refresh_rounded, size: 20),
-                  SizedBox(width: 8),
-                  Text(
-                    'Thử lại',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
+            Builder(
+              builder: (context) {
+                final theme = Theme.of(context);
+                final isDark = theme.brightness == Brightness.dark;
+                return ElevatedButton(
+                  onPressed: orderListProvider.retryLoading,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? Colors.green.shade400
+                        : const Color(0xFF4CAF50),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
+                    elevation: isDark ? 6 : 2,
+                    shadowColor: isDark
+                        ? Colors.green.shade400.withOpacity(0.5)
+                        : const Color(0xFF4CAF50).withOpacity(0.3),
                   ),
-                ],
-              ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.refresh_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Thử lại',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ],
         ),
@@ -286,12 +296,7 @@ class _OrderListPageState extends State<OrderListPage> {
         shadowColor: Colors.black.withOpacity(0.1),
         child: InkWell(
           onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => OrderDetailPage(orderId: order.maDonHang),
-              ),
-            );
+            AppRoute.toOrderDetail(context, order.maDonHang);
           },
           borderRadius: BorderRadius.circular(20),
           child: Container(
