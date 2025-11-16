@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
+import 'package:fresher_food/roles/user/widgets/avatar_with_menu_widget.dart';
 import 'package:provider/provider.dart';
 
 class HomeAppBar extends StatelessWidget {
@@ -61,18 +62,17 @@ class HomeAppBar extends StatelessWidget {
                 ],
               ),
             ),
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.green.shade100,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.person,
-                color: Colors.green,
-                size: 20,
-              ),
+            FutureBuilder<Map<String, dynamic>>(
+              future: context.read<HomeProvider>().getUserInfo(),
+              builder: (context, snapshot) {
+                final avatarUrl = snapshot.data?['avatar'];
+                final userName = snapshot.data?['tenTaiKhoan'] ?? 'Người dùng';
+                return AvatarWithMenuWidget(
+                  avatarUrl: avatarUrl,
+                  userName: userName,
+                  size: 40,
+                );
+              },
             ),
           ],
         ),

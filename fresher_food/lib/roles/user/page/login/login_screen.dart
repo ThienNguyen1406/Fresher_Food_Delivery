@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/register/register_screen.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/services/api/user_api.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -22,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
@@ -33,7 +36,7 @@ class _LoginScreenState extends State<LoginScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Text(
-                  'Đăng nhập',
+                  localizations.login,
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -43,7 +46,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 8),
 
                 Text(
-                  'Chào mừng bạn trở lại!',
+                  localizations.welcomeBack,
                   style: TextStyle(
                     fontSize: 16,
                     color: theme.textTheme.bodyMedium?.color,
@@ -61,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(
-                    labelText: 'Email',
+                    labelText: localizations.email,
                     prefixIcon: const Icon(Icons.email),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -70,22 +73,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Vui lòng nhập email';
+                      return localizations.pleaseEnterEmail;
                     }
                     if (!value.contains('@')) {
-                      return 'Email không hợp lệ';
+                      return localizations.invalidEmail;
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
 
-                // Mật khẩu
+                // Password
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Mật khẩu',
+                    labelText: localizations.password,
                     prefixIcon: const Icon(Icons.lock),
                     suffixIcon: IconButton(
                       icon: Icon(
@@ -105,10 +108,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Vui lòng nhập mật khẩu';
+                      return localizations.pleaseEnterPassword;
                     }
                     if (value.length < 6) {
-                      return 'Mật khẩu phải có ít nhất 6 ký tự';
+                      return localizations.passwordMinLength;
                     }
                     return null;
                   },
@@ -148,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         : Container(
                             padding: EdgeInsets.symmetric(vertical: 16),
                             child: Text(
-                              'Đăng nhập',
+                              localizations.login,
                               style: TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
@@ -162,12 +165,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                // Đăng ký
+                // Register
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      'Chưa có tài khoản? ',
+                      localizations.noAccount,
                       style: TextStyle(
                         color: theme.textTheme.bodyMedium?.color,
                       ),
@@ -182,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         );
                       },
                       child: Text(
-                        'Đăng ký ngay',
+                        localizations.registerNow,
                         style: TextStyle(
                           color: Colors.green.withOpacity(0.4),
                           fontWeight: FontWeight.bold,
@@ -222,9 +225,10 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } catch (e) {
+        final localizations = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đăng nhập thất bại: $e'),
+            content: Text('${localizations.loginFailed}: $e'),
             backgroundColor: Colors.red,
           ),
         );

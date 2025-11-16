@@ -98,6 +98,9 @@ class UserApi {
       await prefs.setString('sdt', user.sdt);
       await prefs.setString('diaChi', user.diaChi);
       await prefs.setString('vaiTro', user.vaiTro);
+      if (user.avatar != null) {
+        await prefs.setString('avatar', user.avatar!);
+      }
       await prefs.setBool('isLoggedIn', true);
       print('User info saved successfully');
     } catch (e) {
@@ -113,7 +116,7 @@ class UserApi {
 
     if (!isLoggedIn) return null;
 
-    return User(
+      return User(
       maTaiKhoan: prefs.getString('maTaiKhoan') ?? '',
       tenNguoiDung: prefs.getString('tenNguoiDung') ?? '',
       matKhau: '', // Không lưu mật khẩu
@@ -122,6 +125,7 @@ class UserApi {
       sdt: prefs.getString('sdt') ?? '',
       diaChi: prefs.getString('diaChi') ?? '',
       vaiTro: prefs.getString('vaiTro') ?? '',
+      avatar: prefs.getString('avatar'),
     );
   }
 
@@ -163,6 +167,7 @@ class UserApi {
           'sdt': userData['sdt']?.toString() ?? user.sdt,
           'diaChi': userData['diaChi']?.toString() ?? user.diaChi,
           'vaiTro': userData['vaiTro']?.toString() ?? user.vaiTro,
+          'avatar': userData['avatar']?.toString() ?? user.avatar,
         };
       } else {
         // Nếu API lỗi, lấy từ SharedPreferences
@@ -178,6 +183,7 @@ class UserApi {
           'sdt': prefs.getString('sdt') ?? '',
           'diaChi': prefs.getString('diaChi') ?? '',
           'vaiTro': prefs.getString('vaiTro') ?? 'user',
+          'avatar': prefs.getString('avatar'),
         };
       }
     } catch (e) {
@@ -194,6 +200,7 @@ class UserApi {
         'sdt': prefs.getString('sdt') ?? '',
         'diaChi': prefs.getString('diaChi') ?? '',
         'vaiTro': prefs.getString('vaiTro') ?? 'user',
+        'avatar': prefs.getString('avatar'),
       };
     }
   }
@@ -297,4 +304,61 @@ class UserApi {
   }
 
   Future isAdmin() async {}
+
+  // Upload/Update Avatar
+  Future<bool> updateAvatar(String avatarUrl) async {
+    try {
+      final user = await getCurrentUser();
+      if (user == null) throw Exception('User not logged in');
+
+      final response = await http
+          .put(
+            Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}/avatar'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'avatarUrl': avatarUrl}),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('avatar', avatarUrl);
+        return true;
+      } else {
+        throw Exception('Cập nhật avatar thất bại: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error updating avatar: $e');
+      throw Exception('Lỗi cập nhật avatar: $e');
+    }
+  }
+
+  // Delete Avatar
+  Future<bool> deleteAvatar() async {
+    try {
+      final user = await getCurrentUser();
+      if (user == null) throw Exception('User not logged in');
+
+      final response = await http
+          .delete(
+            Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}/avatar'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('avatar');
+        return true;
+      } else {
+        throw Exception('Xóa avatar thất bại: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Error deleting avatar: $e');
+      throw Exception('Lỗi xóa avatar: $e');
+    }
+  }
 }

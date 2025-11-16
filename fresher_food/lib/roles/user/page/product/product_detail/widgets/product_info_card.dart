@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/roles/user/page/product/product_detail/provider/product_detail_provider.dart';
+import 'package:fresher_food/roles/user/page/product/product_detail/widgets/qr_code_dialog.dart';
+import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
 
 class ProductInfoCard extends StatelessWidget {
   final Product product;
@@ -87,6 +89,28 @@ class ProductInfoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
+              // QR Code button
+              GestureDetector(
+                onTap: () => _showQRCodeDialog(context),
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.qr_code_2,
+                    color: Colors.blue,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              // Favorite button
               GestureDetector(
                 onTap: () => _toggleFavorite(context),
                 child: AnimatedContainer(
@@ -138,15 +162,12 @@ class ProductInfoCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                '${product.giaBan.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}đ',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: provider.isOutOfStock
-                      ? Colors.grey.shade400
-                      : Colors.green.shade600,
-                ),
+              PriceWithSaleWidget(
+                product: product,
+                fontSize: 28,
+                priceColor: provider.isOutOfStock
+                    ? Colors.grey.shade400
+                    : Colors.green.shade600,
               ),
               _buildRatingWidget(),
             ],
@@ -230,5 +251,15 @@ class ProductInfoCard extends StatelessWidget {
     } catch (e) {
       // Handle error if needed
     }
+  }
+
+  void _showQRCodeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => QRCodeDialog(
+        productId: product.maSanPham,
+        productName: product.tenSanPham,
+      ),
+    );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/account/provider/account_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
+import 'package:fresher_food/roles/user/widgets/avatar_with_menu_widget.dart';
 import 'package:provider/provider.dart';
 
 class AccountPage extends StatefulWidget {
@@ -537,22 +538,10 @@ class _AccountPageState extends State<AccountPage> {
                       children: [
                         Row(
                           children: [
-                            Container(
-                              width: 70,
-                              height: 70,
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.3),
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(
-                                Icons.person_rounded,
-                                size: 35,
-                                color: Colors.white,
-                              ),
+                            AvatarWithMenuWidget(
+                              avatarUrl: state.userInfo?['avatar'],
+                              userName: state.userInfo?['tenTaiKhoan'] ?? 'Người dùng',
+                              size: 70,
                             ),
                             const SizedBox(width: 16),
                             Expanded(

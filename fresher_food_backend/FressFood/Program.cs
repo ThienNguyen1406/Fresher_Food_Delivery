@@ -21,6 +21,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
 
+// Đăng ký BlockchainService
+builder.Services.AddScoped<FressFood.Services.IBlockchainService, FressFood.Services.BlockchainService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

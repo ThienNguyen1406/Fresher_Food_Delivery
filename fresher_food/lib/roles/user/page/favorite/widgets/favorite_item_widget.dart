@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/roles/user/page/favorite/provider/favorite_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
+import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
 
 class FavoriteItemWidget extends StatelessWidget {
   final FavoriteProvider provider;
@@ -186,13 +187,10 @@ class FavoriteItemWidget extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(
-                        '${provider.formatPrice(product.giaBan)}đ',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFFF6B6B),
-                        ),
+                      PriceWithSaleWidget(
+                        product: product,
+                        fontSize: 18,
+                        priceColor: const Color(0xFFFF6B6B),
                       ),
                     ],
                   ),

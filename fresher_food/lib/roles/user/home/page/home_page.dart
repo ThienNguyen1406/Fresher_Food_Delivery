@@ -81,9 +81,9 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
-      body: CustomScrollView(
+    return Container(
+      color: Colors.grey.shade50,
+      child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
           // Header

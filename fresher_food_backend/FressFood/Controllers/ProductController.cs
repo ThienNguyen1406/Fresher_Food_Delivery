@@ -28,7 +28,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT MaSanPham, TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc FROM SanPham";
+                    string query = "SELECT MaSanPham, TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc, NgaySanXuat, NgayHetHan FROM SanPham";
 
                     using (var command = new SqlCommand(query, connection))
                     using (var reader = await command.ExecuteReaderAsync())
@@ -46,6 +46,12 @@ namespace FressFood.Controllers
                                 GiaBan = Convert.ToDecimal(reader["GiaBan"]),
                                 SoLuongTon = Convert.ToInt32(reader["SoLuongTon"]),
                                 MaDanhMuc = reader["MaDanhMuc"].ToString(),
+                                NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
+                                    ? null 
+                                    : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
+                                NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
+                                    ? null 
+                                    : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
                                 // Ghép thành URL để client load ảnh trực tiếp
                                 Anh = string.IsNullOrEmpty(fileName) ? null :
                                       $"{Request.Scheme}://{Request.Host}/images/products/{fileName}"
@@ -75,7 +81,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT MaSanPham, TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc FROM SanPham WHERE MaSanPham = @MaSanPham";
+                    string query = "SELECT MaSanPham, TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc, NgaySanXuat, NgayHetHan FROM SanPham WHERE MaSanPham = @MaSanPham";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -97,6 +103,12 @@ namespace FressFood.Controllers
                                     GiaBan = Convert.ToDecimal(reader["GiaBan"]),
                                     SoLuongTon = Convert.ToInt32(reader["SoLuongTon"]),
                                     MaDanhMuc = reader["MaDanhMuc"].ToString(),
+                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
+                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
                                     // Ghép thành URL để client load ảnh trực tiếp
                                     Anh = string.IsNullOrEmpty(fileName) ? null :
                                           $"{Request.Scheme}://{Request.Host}/images/products/{fileName}"
@@ -193,9 +205,9 @@ namespace FressFood.Controllers
 
                     // Câu lệnh INSERT kèm OUTPUT để lấy dữ liệu vừa thêm
                     string query = @"INSERT INTO SanPham 
-                (TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc) 
+                (TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc, NgaySanXuat, NgayHetHan) 
                 OUTPUT INSERTED.*
-                VALUES (@TenSanPham, @MoTa, @GiaBan, @Anh, @SoLuongTon, @XuatXu, @DonViTinh, @MaDanhMuc)";
+                VALUES (@TenSanPham, @MoTa, @GiaBan, @Anh, @SoLuongTon, @XuatXu, @DonViTinh, @MaDanhMuc, @NgaySanXuat, @NgayHetHan)";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -207,6 +219,12 @@ namespace FressFood.Controllers
                         command.Parameters.AddWithValue("@XuatXu", request.XuatXu ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@DonViTinh", request.DonViTinh ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@MaDanhMuc", request.MaDanhMuc);
+                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue 
+                            ? (object)request.NgaySanXuat.Value 
+                            : DBNull.Value);
+                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue 
+                            ? (object)request.NgayHetHan.Value 
+                            : DBNull.Value);
 
                         using (var reader = await command.ExecuteReaderAsync())
                         {
@@ -222,7 +240,13 @@ namespace FressFood.Controllers
                                     SoLuongTon = reader.GetInt32(reader.GetOrdinal("SoLuongTon")),
                                     XuatXu = reader.IsDBNull(reader.GetOrdinal("XuatXu")) ? null : reader.GetString(reader.GetOrdinal("XuatXu")),
                                     DonViTinh = reader.IsDBNull(reader.GetOrdinal("DonViTinh")) ? null : reader.GetString(reader.GetOrdinal("DonViTinh")),
-                                    MaDanhMuc = reader.GetString(reader.GetOrdinal("MaDanhMuc"))
+                                    MaDanhMuc = reader.GetString(reader.GetOrdinal("MaDanhMuc")),
+                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
+                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgayHetHan"))
                                 };
 
                                 // Tạo URL đầy đủ nếu có ảnh
@@ -278,7 +302,9 @@ namespace FressFood.Controllers
                                  SoLuongTon = @SoLuongTon,
                                  XuatXu = @XuatXu,
                                  DonViTinh = @DonViTinh,
-                                 MaDanhMuc = @MaDanhMuc
+                                 MaDanhMuc = @MaDanhMuc,
+                                 NgaySanXuat = @NgaySanXuat,
+                                 NgayHetHan = @NgayHetHan
                              {0}
                              WHERE MaSanPham = @MaSanPham";
 
@@ -302,6 +328,12 @@ namespace FressFood.Controllers
                         command.Parameters.AddWithValue("@XuatXu", (object?)request.XuatXu ?? DBNull.Value);
                         command.Parameters.AddWithValue("@DonViTinh", (object?)request.DonViTinh ?? DBNull.Value);
                         command.Parameters.AddWithValue("@MaDanhMuc", request.MaDanhMuc);
+                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue 
+                            ? (object)request.NgaySanXuat.Value 
+                            : DBNull.Value);
+                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue 
+                            ? (object)request.NgayHetHan.Value 
+                            : DBNull.Value);
 
                         if (!string.IsNullOrEmpty(anhFileName))
                         {
@@ -335,7 +367,13 @@ namespace FressFood.Controllers
                                     SoLuongTon = reader.GetInt32(reader.GetOrdinal("SoLuongTon")),
                                     XuatXu = reader["XuatXu"] as string,
                                     DonViTinh = reader["DonViTinh"] as string,
-                                    MaDanhMuc = reader["MaDanhMuc"].ToString()
+                                    MaDanhMuc = reader["MaDanhMuc"].ToString(),
+                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
+                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
+                                        ? null 
+                                        : reader.GetDateTime(reader.GetOrdinal("NgayHetHan"))
                                 };
 
                                 return Ok(new
@@ -420,6 +458,8 @@ namespace FressFood.Controllers
         public string? XuatXu { get; set; }
         public string? DonViTinh { get; set; }
         public string MaDanhMuc { get; set; }
+        public DateTime? NgaySanXuat { get; set; } // Ngày sản xuất
+        public DateTime? NgayHetHan { get; set; } // Ngày hết hạn
     }
 
     // Model cho request cập nhật sản phẩm
@@ -433,5 +473,7 @@ namespace FressFood.Controllers
         public string? XuatXu { get; set; }
         public string? DonViTinh { get; set; }
         public string MaDanhMuc { get; set; }
+        public DateTime? NgaySanXuat { get; set; } // Ngày sản xuất
+        public DateTime? NgayHetHan { get; set; } // Ngày hết hạn
     }
 }

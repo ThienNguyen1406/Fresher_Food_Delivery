@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Cart.dart';
 import 'package:fresher_food/roles/user/page/cart/provider/cart_provider.dart';
+import 'package:fresher_food/roles/user/widgets/cart_price_with_sale_widget.dart';
 
 class CartItemWidget extends StatelessWidget {
   final CartItem cartItem;
@@ -121,13 +122,10 @@ class CartItemWidget extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 6),
-                      Text(
-                        '${_formatPrice(cartItem.giaBan)}đ',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.green.shade600,
-                        ),
+                      CartPriceWithSaleWidget(
+                        cartItem: cartItem,
+                        fontSize: 14,
+                        priceColor: Colors.green.shade600,
                       ),
                       // Hiển thị cảnh báo số lượng tồn kho
                       if (isOutOfStock)

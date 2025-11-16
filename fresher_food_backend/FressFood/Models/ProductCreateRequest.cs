@@ -10,5 +10,7 @@
         public string XuatXu { get; set; }
         public string DonViTinh { get; set; }
         public string MaDanhMuc { get; set; }
+        public DateTime? NgaySanXuat { get; set; } // Ngày sản xuất
+        public DateTime? NgayHetHan { get; set; } // Ngày hết hạn
     }
 }

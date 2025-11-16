@@ -1,3 +1,6 @@
+import 'config.dart';
+
 class Constant {
-  final String baseUrl="https://10.0.2.2:7240/api";
+  // Sử dụng AppConfig để dễ dàng thay đổi khi deploy
+  final String baseUrl = AppConfig.baseUrl;
 }

@@ -8,6 +8,8 @@ class Product {
   final String donViTinh;
   final String xuatXu;
   final String maDanhMuc;
+  final DateTime? ngaySanXuat; // Ngày sản xuất
+  final DateTime? ngayHetHan; // Ngày hết hạn
 
   Product({
     required this.maSanPham,
@@ -19,6 +21,8 @@ class Product {
     required this.donViTinh,
     required this.xuatXu,
     required this.maDanhMuc,
+    this.ngaySanXuat,
+    this.ngayHetHan,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) {
@@ -32,6 +36,12 @@ class Product {
       donViTinh: json['donViTinh']?.toString() ?? '',
       xuatXu: json['xuatXu']?.toString() ?? '',
       maDanhMuc: json['maDanhMuc']?.toString() ?? '',
+      ngaySanXuat: json['ngaySanXuat'] != null
+          ? DateTime.parse(json['ngaySanXuat'])
+          : null,
+      ngayHetHan: json['ngayHetHan'] != null
+          ? DateTime.parse(json['ngayHetHan'])
+          : null,
     );
   }
 
@@ -46,6 +56,8 @@ class Product {
       'donViTinh': donViTinh,
       'xuatXu': xuatXu,
       'maDanhMuc': maDanhMuc,
+      'ngaySanXuat': ngaySanXuat?.toIso8601String(),
+      'ngayHetHan': ngayHetHan?.toIso8601String(),
     };
   }
 
@@ -60,6 +72,8 @@ class Product {
       donViTinh: donViTinh,
       xuatXu: xuatXu,
       maDanhMuc: maDanhMuc,
+      ngaySanXuat: ngaySanXuat,
+      ngayHetHan: ngayHetHan,
     );
   }
 }

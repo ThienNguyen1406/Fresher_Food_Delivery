@@ -93,18 +93,26 @@ class MyApp extends StatelessWidget {
             title: 'FreshFood App',
             theme: ThemeData(
               primarySwatch: Colors.green,
+              primaryColor: const Color(0xFF4CAF50), // Xanh lá Material Green 500
               useMaterial3: true,
               brightness: Brightness.light,
               scaffoldBackgroundColor: const Color(0xFFF8FAFD),
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF4CAF50), // Xanh lá
+                secondary: Color(0xFF66BB6A), // Xanh lá nhạt hơn
+                tertiary: Color(0xFF2E7D32), // Xanh lá đậm
+              ),
             ),
             darkTheme: ThemeData(
               primarySwatch: Colors.green,
+              primaryColor: const Color(0xFF4CAF50), // Xanh lá Material Green 500
               useMaterial3: true,
               brightness: Brightness.dark,
               scaffoldBackgroundColor: const Color(0xFF121212),
               colorScheme: const ColorScheme.dark(
-                primary: Colors.green,
-                secondary: Colors.greenAccent,
+                primary: Color(0xFF66BB6A), // Xanh lá sáng hơn cho dark mode
+                secondary: Color(0xFF4CAF50),
+                tertiary: Color(0xFF2E7D32),
               ),
             ),
             themeMode: themeProvider.themeMode,

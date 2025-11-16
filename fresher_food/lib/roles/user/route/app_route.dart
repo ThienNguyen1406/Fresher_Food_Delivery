@@ -10,6 +10,7 @@ import 'package:fresher_food/roles/user/page/account/page/profile_edit_page.dart
 import 'package:fresher_food/roles/user/page/account/page/settings_page.dart';
 import 'package:fresher_food/roles/user/page/account/page/support_center_page.dart';
 import 'package:fresher_food/roles/user/page/account/page/contact_support_page.dart';
+import 'package:fresher_food/roles/user/page/chat/chat_list_page.dart';
 import 'package:fresher_food/roles/user/page/checkout/page/checkout_page.dart';
 import 'package:fresher_food/roles/user/page/order/order_list/page/order_list_page.dart';
 import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
@@ -31,6 +32,7 @@ class AppRoute {
   static const String settings = '/settings';
   static const String supportCenter = '/support-center';
   static const String contactSupport = '/contact-support';
+  static const String chatList = '/chat-list';
   static const String checkout = '/checkout';
   static const String orderList = '/order-list';
   static const String orderDetail = '/order-detail';
@@ -65,6 +67,8 @@ class AppRoute {
       return MaterialPageRoute(builder: (_) => const SupportCenterPage());
     } else if (routeName == contactSupport) {
       return MaterialPageRoute(builder: (_) => const ContactSupportPage());
+    } else if (routeName == chatList) {
+      return MaterialPageRoute(builder: (_) => const ChatListPage());
     } else if (routeName == checkout) {
       if (args is Map<String, dynamic>) {
         return MaterialPageRoute(
@@ -205,12 +209,20 @@ class AppRoute {
     await push(context, contactSupport);
   }
 
+  static Future<void> toChatList(BuildContext context) async {
+    await push(context, chatList);
+  }
+
   static Future<void> toOrderList(BuildContext context) async {
     await push(context, orderList);
   }
 
   static Future<void> toFavorite(BuildContext context) async {
     await push(context, favorite);
+  }
+
+  static Future<void> toCart(BuildContext context) async {
+    await push(context, cart);
   }
 
   static Future<void> toLogin(BuildContext context) async {

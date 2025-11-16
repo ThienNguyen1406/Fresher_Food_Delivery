@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
+import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
 
 class ProductCardWidget extends StatelessWidget {
   final Product product;
@@ -177,29 +178,10 @@ class ProductCardWidget extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      "${product.giaBan.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}đ",
-                                      style: const TextStyle(
-                                        color: Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 14,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    if (product.giaBan != product.giaBan)
-                                      Text(
-                                        "${product.giaBan.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}đ",
-                                        style: TextStyle(
-                                          color: Colors.grey.shade500,
-                                          fontSize: 11,
-                                          decoration:
-                                              TextDecoration.lineThrough,
-                                        ),
-                                      ),
-                                  ],
+                                child: PriceWithSaleWidget(
+                                  product: product,
+                                  fontSize: 14,
+                                  priceColor: Colors.green,
                                 ),
                               ),
                               const SizedBox(width: 8),

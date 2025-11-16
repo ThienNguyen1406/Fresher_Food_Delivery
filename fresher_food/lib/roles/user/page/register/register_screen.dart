@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/User.dart';
 import 'package:fresher_food/services/api/user_api.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -26,10 +27,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
+    
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Đăng ký'),
+        title: Text(localizations.register),
         backgroundColor: Colors.green,
         foregroundColor: Colors.white,
       ),
@@ -45,11 +48,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 height: 150,
               ),
               SizedBox(height: 20,),
-              // Tên đăng nhập
+              // Username
               TextFormField(
                 controller: _usernameController,
                 decoration: InputDecoration(
-                  labelText: 'Tên đăng nhập',
+                  labelText: localizations.username,
                   prefixIcon: const Icon(Icons.person),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -57,7 +60,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Vui lòng nhập tên đăng nhập';
+                    return localizations.pleaseEnterUsername;
                   }
                   return null;
                 },
@@ -68,7 +71,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               TextFormField(
                 controller: _emailController,
                 decoration: InputDecoration(
-                  labelText: 'Email',
+                  labelText: localizations.email,
                   prefixIcon: const Icon(Icons.email),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -76,21 +79,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Vui lòng nhập email';
+                    return localizations.pleaseEnterEmail;
                   }
                   if (!value.contains('@')) {
-                    return 'Email không hợp lệ';
+                    return localizations.invalidEmail;
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Họ và tên
+              // Full Name
               TextFormField(
                 controller: _fullNameController,
                 decoration: InputDecoration(
-                  labelText: 'Họ và tên',
+                  labelText: localizations.fullName,
                   prefixIcon: const Icon(Icons.person_outline),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -98,18 +101,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Vui lòng nhập họ tên';
+                    return localizations.pleaseEnterFullName;
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Số điện thoại
+              // Phone
               TextFormField(
                 controller: _phoneController,
                 decoration: InputDecoration(
-                  labelText: 'Số điện thoại',
+                  labelText: localizations.phone,
                   prefixIcon: const Icon(Icons.phone),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -119,11 +122,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Địa chỉ
+              // Address
               TextFormField(
                 controller: _addressController,
                 decoration: InputDecoration(
-                  labelText: 'Địa chỉ',
+                  labelText: localizations.address,
                   prefixIcon: const Icon(Icons.location_on),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -132,12 +135,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Mật khẩu
+              // Password
               TextFormField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
-                  labelText: 'Mật khẩu',
+                  labelText: localizations.password,
                   prefixIcon: const Icon(Icons.lock),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -155,22 +158,22 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Vui lòng nhập mật khẩu';
+                    return localizations.pleaseEnterPassword;
                   }
                   if (value.length < 6) {
-                    return 'Mật khẩu phải có ít nhất 6 ký tự';
+                    return localizations.passwordMinLength;
                   }
                   return null;
                 },
               ),
               const SizedBox(height: 16),
 
-              // Xác nhận mật khẩu
+              // Confirm Password
               TextFormField(
                 controller: _confirmPasswordController,
                 obscureText: _obscureConfirmPassword,
                 decoration: InputDecoration(
-                  labelText: 'Xác nhận mật khẩu',
+                  labelText: localizations.confirmPassword,
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -188,10 +191,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.isEmpty) {
-                    return 'Vui lòng xác nhận mật khẩu';
+                    return localizations.pleaseConfirmPassword;
                   }
                   if (value != _passwordController.text) {
-                    return 'Mật khẩu xác nhận không khớp';
+                    return localizations.passwordMismatch;
                   }
                   return null;
                 },
@@ -220,9 +223,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                           ),
                         )
-                      : const Text(
-                          'Đăng ký',
-                          style: TextStyle(
+                      : Text(
+                          localizations.register,
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
@@ -257,18 +260,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
         final success = await UserApi().register(user);
         
         if (success) {
+          final localizations = AppLocalizations.of(context)!;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Đăng ký thành công!'),
+            SnackBar(
+              content: Text(localizations.registerSuccess),
               backgroundColor: Colors.green,
             ),
           );
           Navigator.pop(context);
         }
       } catch (e) {
+        final localizations = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đăng ký thất bại: $e'),
+            content: Text('${localizations.registerFailed}: $e'),
             backgroundColor: Colors.red,
           ),
         );

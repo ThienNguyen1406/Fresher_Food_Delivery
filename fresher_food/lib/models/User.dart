@@ -7,6 +7,7 @@ class User {
   final String sdt;
   final String diaChi;
   final String vaiTro;
+  final String? avatar;
 
   User({
     required this.maTaiKhoan,
@@ -17,6 +18,7 @@ class User {
     required this.sdt,
     required this.diaChi,
     required this.vaiTro,
+    this.avatar,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class User {
       sdt: json['sdt']?.toString() ?? '',
       diaChi: json['diaChi']?.toString() ?? '',
       vaiTro: json['vaiTro']?.toString() ?? '',
+      avatar: json['avatar']?.toString(),
     );
   }
 
@@ -42,6 +45,7 @@ class User {
       'sdt': sdt,
       'diaChi': diaChi,
       'vaiTro': vaiTro,
+      'avatar': avatar,
     };
   }
 }
