@@ -1,5 +1,3 @@
-/// Cấu hình cho ứng dụng
-/// Thay đổi baseUrl khi deploy lên server
 class AppConfig {
   // Development URL (localhost)
   static const String devBaseUrl = "https://10.0.2.2:7240/api";

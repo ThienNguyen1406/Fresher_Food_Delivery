@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:fresher_food/services/api/traceability_api.dart';
-import 'package:fresher_food/models/ProductTraceability.dart';
 import 'package:fresher_food/roles/user/page/traceability/traceability_detail_page.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
 

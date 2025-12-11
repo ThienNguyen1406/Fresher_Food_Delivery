@@ -152,7 +152,32 @@ namespace FoodShop.Controllers
         {
             try
             {
+                // Validate input
+                if (rating == null)
+                {
+                    return BadRequest(new { error = "Dữ liệu đánh giá không hợp lệ" });
+                }
+
+                if (string.IsNullOrWhiteSpace(rating.MaSanPham))
+                {
+                    return BadRequest(new { error = "Mã sản phẩm không được để trống" });
+                }
+
+                if (string.IsNullOrWhiteSpace(rating.MaTaiKhoan))
+                {
+                    return BadRequest(new { error = "Mã tài khoản không được để trống" });
+                }
+
+                if (rating.SoSao < 1 || rating.SoSao > 5)
+                {
+                    return BadRequest(new { error = "Số sao phải từ 1 đến 5" });
+                }
+
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return StatusCode(500, new { error = "Không thể kết nối đến database" });
+                }
 
                 using (var connection = new SqlConnection(connectionString))
                 {
@@ -204,7 +229,8 @@ namespace FoodShop.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                // Log general errors for debugging
+                return StatusCode(500, new { error = $"Lỗi: {ex.Message}", stackTrace = ex.StackTrace });
             }
         }
 

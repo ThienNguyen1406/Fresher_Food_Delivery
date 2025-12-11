@@ -43,6 +43,15 @@ flutter {
     source = "../.."
 }
 
+// Force specific versions for Stripe Android SDK to avoid resolution issues
+// Using 21.26.0 (latest stable version) which satisfies the plugin's requirement (21.6.+)
+configurations.all {
+    resolutionStrategy {
+        force("com.stripe:stripe-android:21.26.0")
+        force("com.stripe:financial-connections:21.26.0")
+    }
+}
+
 dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.google.android.material:material:1.11.0")

@@ -1,7 +1,14 @@
 ﻿var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        // Cấu hình JSON để chấp nhận camelCase từ frontend
+        options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+        options.JsonSerializerOptions.WriteIndented = true;
+    });
 
 // Thêm CORS
 builder.Services.AddCors(options =>
@@ -41,9 +48,8 @@ app.UseCors("AllowAll");
 
 app.UseAuthorization();
 
-app.MapControllers();
+app.UseStaticFiles();// Ảnh
 
-app.UseStaticFiles();// ?nh
-app.MapControllers(); // hoặc app.MapDefaultControllerRoute();
+app.MapControllers();
 
 app.Run();

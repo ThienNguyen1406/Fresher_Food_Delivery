@@ -34,32 +34,32 @@ void main() async {
 
   // Khởi tạo Stripe - lấy publishable key từ backend
   try {
-    print('🔑 Initializing Stripe...');
+    print(' Initializing Stripe...');
     final stripeApi = StripeApi();
     final publishableKey = await stripeApi.getPublishableKey();
 
     if (publishableKey.isEmpty) {
-      print('⚠️ Warning: Publishable key is empty');
+      print(' Warning: Publishable key is empty');
     } else {
       Stripe.publishableKey = publishableKey;
       print(
-          '✅ Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
+          ' Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
       
       // Khởi tạo native SDK bằng cách gọi một method đơn giản
       try {
         // Gọi applySettings để đảm bảo native SDK được khởi tạo
         await Stripe.instance.applySettings();
-        print('✅ Stripe native SDK initialized via applySettings');
+        print(' Stripe native SDK initialized via applySettings');
       } catch (e) {
-        print('⚠️ Warning: Could not call applySettings: $e');
+        print(' Warning: Could not call applySettings: $e');
         // Đợi một chút để native SDK được khởi tạo tự động
         await Future.delayed(const Duration(milliseconds: 1000));
-        print('✅ Stripe native SDK should be ready now (after delay)');
+        print(' Stripe native SDK should be ready now (after delay)');
       }
     }
   } catch (e) {
-    print('⚠️ Warning: Could not initialize Stripe: $e');
-    print('⚠️ Stripe payment will not be available');
+    print(' Warning: Could not initialize Stripe: $e');
+    print('Stripe payment will not be available');
     // Vẫn chạy app nhưng Stripe sẽ không hoạt động
   }
 
