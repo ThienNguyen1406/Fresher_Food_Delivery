@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:fresher_food/models/Cart.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/checkout_section_header.dart';
@@ -21,6 +22,7 @@ import 'package:fresher_food/services/api/stripe_api.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+/// Màn hình thanh toán - xử lý đặt hàng và thanh toán
 class CheckoutPage extends StatefulWidget {
   final List<CartItem> selectedItems;
   final double totalAmount;
@@ -51,6 +53,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   final Color _textPrimary = const Color(0xFF1E293B);
   final Color _textSecondary = const Color(0xFF64748B);
 
+  /// Khối khởi tạo: Khởi tạo Stripe payment gateway
   @override
   void initState() {
     super.initState();
@@ -58,6 +61,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     _initializeStripe();
   }
 
+  /// Khối chức năng: Khởi tạo Stripe với publishable key
   Future<void> _initializeStripe() async {
     try {
       final publishableKey = await _stripeApi.getPublishableKey();
@@ -70,10 +74,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
+  /// Khối chức năng: Khởi tạo provider - load thông tin người dùng, phương thức thanh toán, mã giảm giá
   void _initializeProvider(CheckoutProvider provider) {
     provider.loadUserInfo();
     provider.loadPaymentMethods();
     provider.loadAvailableCoupons();
+  }
+
+  /// Khối chức năng: Tạo mã đơn hàng tạm thời cho VietQR
+  String _generateTempOrderId() {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    return 'DH-${timestamp.toString().substring(timestamp.toString().length - 8)}';
   }
 
   @override
@@ -83,6 +94,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     super.dispose();
   }
 
+  /// Khối giao diện chính: Hiển thị form thanh toán với các section
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
@@ -183,7 +195,6 @@ class _CheckoutPageState extends State<CheckoutPage> {
             textPrimary: _textPrimary,
           ),
           CouponSection(
-            provider: provider,
             surfaceColor: _surfaceColor,
             textPrimary: _textPrimary,
             textSecondary: _textSecondary,
@@ -222,7 +233,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
             ),
           ],
 
-          // Hiển thị QR code chuyển khoản khi chọn banking/transfer
+          // Hiển thị QR code chuyển khoản CHỈ KHI chọn banking/transfer
+          // KHÔNG hiển thị khi chọn COD (thanh toán khi nhận hàng)
           if (provider.paymentMethod == 'banking' ||
               provider.paymentMethod == 'transfer') ...[
             const SizedBox(height: 16),
@@ -233,6 +245,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
               primaryColor: _primaryColor,
               backgroundColor: _backgroundColor,
               onConfirmPayment: () => _processBankTransfer(provider),
+              maDonHang: _generateTempOrderId(), // Mã đơn hàng tạm thời
+              soTien: provider.finalAmount,
             ),
           ],
 
@@ -517,7 +531,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 backgroundColor: _primaryColor,
                 foregroundColor: Colors.white,
               ),
-              child: const Text('Xác nhận'),
+              child: Text(AppLocalizations.of(context)!.confirm),
             ),
           ],
         );

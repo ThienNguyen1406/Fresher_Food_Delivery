@@ -97,8 +97,8 @@ class HomeSnackbarWidgets {
           label: 'Đăng nhập',
           textColor: Colors.white,
           onPressed: () {
-            // Navigate to login screen
-            // Navigator.push(context, MaterialPageRoute(builder: (context) => LoginScreen()));
+            // Navigate to auth screen (login/register)
+            // AppRoute.toLogin(context);
           },
         ),
         duration: const Duration(seconds: 4),

@@ -283,6 +283,141 @@ class OrderApi {
     }
   }
 
+  // Lấy phân bố trạng thái đơn hàng (cho pie chart)
+  Future<List<Map<String, dynamic>>> getOrderStatusDistribution({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      final uri = Uri.parse('${Constant().baseUrl}/Orders/status-distribution').replace(
+        queryParameters: {
+          if (startDate != null)
+            'startDate': startDate.toIso8601String().split('T')[0],
+          if (endDate != null)
+            'endDate': endDate.toIso8601String().split('T')[0],
+        },
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data.containsKey('data')) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        throw Exception('Unexpected response structure');
+      } else {
+        throw Exception('Failed to load status distribution: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error getting status distribution: $e');
+      throw Exception('Error getting status distribution: $e');
+    }
+  }
+
+  // Lấy tăng trưởng đơn hàng theo tháng (cho line chart)
+  Future<List<Map<String, dynamic>>> getMonthlyOrderGrowth({int? year}) async {
+    try {
+      final uri = Uri.parse('${Constant().baseUrl}/Orders/monthly-growth').replace(
+        queryParameters: {
+          if (year != null) 'year': year.toString(),
+        },
+      );
+
+      final response = await http.get(uri).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data is Map && data.containsKey('data')) {
+          return List<Map<String, dynamic>>.from(data['data']);
+        }
+        throw Exception('Unexpected response structure');
+      } else {
+        throw Exception('Failed to load monthly growth: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error getting monthly growth: $e');
+      throw Exception('Error getting monthly growth: $e');
+    }
+  }
+
+  // Lấy danh sách sản phẩm từ đơn hàng đã hoàn thành để đánh giá
+  Future<List<Map<String, dynamic>>> getCompletedOrderProducts() async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final user = await UserApi().getCurrentUser();
+
+      if (user == null) throw Exception('User not logged in');
+
+      print('📦 Fetching completed order products for user: ${user.maTaiKhoan}');
+      final response = await http
+          .get(
+            Uri.parse('${Constant().baseUrl}/Orders/completed-products/${user.maTaiKhoan}'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('📦 Completed Products API Response: ${response.statusCode}');
+      print('📦 Completed Products API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        if (data is Map && data.containsKey('data')) {
+          final List<dynamic> productsData = data['data'];
+          print('✅ Found ${productsData.length} products from completed orders');
+          
+          return productsData.cast<Map<String, dynamic>>();
+        } else {
+          print('Unexpected response structure: $data');
+          return [];
+        }
+      } else if (response.statusCode == 404) {
+        print('No completed order products found');
+        return [];
+      } else {
+        throw Exception('Failed to load completed order products: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('❌ Error getting completed order products: $e');
+      throw Exception('Error getting completed order products: $e');
+    }
+  }
+
+  // Hủy đơn hàng
+  Future<bool> cancelOrder(String orderId) async {
+    try {
+      print('❌ Cancelling order: $orderId');
+      final success = await updateOrderStatus(orderId, 'Đã hủy');
+      if (success) {
+        print('✅ Order cancelled successfully');
+      }
+      return success;
+    } catch (e) {
+      print('❌ Error cancelling order: $e');
+      throw Exception('Lỗi hủy đơn hàng: $e');
+    }
+  }
+
+  // Kiểm tra xem đơn hàng có thể hủy không (chỉ khi chưa được xác nhận)
+  bool canCancelOrder(String status) {
+    final lowerStatus = status.toLowerCase();
+    // Chỉ cho phép hủy khi: pending, chờ xác nhận, hoặc các status chưa được xác nhận
+    return lowerStatus.contains('pending') ||
+           lowerStatus.contains('chờ') ||
+           lowerStatus.contains('waiting') ||
+           (!lowerStatus.contains('confirmed') &&
+            !lowerStatus.contains('đã xác nhận') &&
+            !lowerStatus.contains('shipping') &&
+            !lowerStatus.contains('đang giao') &&
+            !lowerStatus.contains('delivered') &&
+            !lowerStatus.contains('đã giao') &&
+            !lowerStatus.contains('hoàn thành') &&
+            !lowerStatus.contains('complete') &&
+            !lowerStatus.contains('cancelled') &&
+            !lowerStatus.contains('đã hủy'));
+  }
+
   // Lấy thống kê doanh thu theo tháng
   Future<List<Map<String, dynamic>>> getMonthlyRevenue({int? year}) async {
     try {

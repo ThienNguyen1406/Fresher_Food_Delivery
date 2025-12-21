@@ -3,6 +3,7 @@ import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/roles/user/page/product/product_detail/provider/product_detail_provider.dart';
 import 'package:fresher_food/roles/user/page/product/product_detail/widgets/qr_code_dialog.dart';
 import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
+import 'package:fresher_food/utils/date_formatter.dart';
 
 class ProductInfoCard extends StatelessWidget {
   final Product product;
@@ -49,42 +50,50 @@ class ProductInfoCard extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    if (provider.isOutOfStock)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.red.shade200),
-                        ),
-                        child: Text(
-                          'Hết hàng',
-                          style: TextStyle(
-                            color: Colors.red.shade600,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        if (provider.isOutOfStock)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Text(
+                              'Hết hàng',
+                              style: TextStyle(
+                                color: Colors.red.shade600,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
+                          )
+                        else if (provider.isLowStock)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.orange.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: Colors.orange.shade200),
+                            ),
+                            child: Text(
+                              'Chỉ còn ${product.soLuongTon} sản phẩm',
+                              style: TextStyle(
+                                color: Colors.orange.shade700,
+                                fontWeight: FontWeight.w500,
+                                fontSize: 12,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                    else if (provider.isLowStock)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.shade50,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.orange.shade200),
-                        ),
-                        child: Text(
-                          'Chỉ còn ${product.soLuongTon} sản phẩm',
-                          style: TextStyle(
-                            color: Colors.orange.shade700,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
+                        if (product.ngayHetHan != null)
+                          _buildExpiryBadge(product.ngayHetHan!),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -144,17 +153,28 @@ class ProductInfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildInfoChip(
                 icon: Icons.location_on_outlined,
                 text: product.xuatXu,
               ),
-              const SizedBox(width: 12),
               _buildInfoChip(
                 icon: Icons.inventory_2_outlined,
                 text: '${product.soLuongTon} ${product.donViTinh}',
               ),
+              if (product.ngaySanXuat != null)
+                _buildInfoChip(
+                  icon: Icons.calendar_today_outlined,
+                  text: 'SX: ${DateFormatter.formatDate(product.ngaySanXuat!)}',
+                ),
+              if (product.ngayHetHan != null)
+                _buildInfoChip(
+                  icon: Icons.event_outlined,
+                  text: 'HH: ${DateFormatter.formatDate(product.ngayHetHan!)}',
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -261,5 +281,64 @@ class ProductInfoCard extends StatelessWidget {
         productName: product.tenSanPham,
       ),
     );
+  }
+
+  Widget _buildExpiryBadge(DateTime expiryDate) {
+    final now = DateTime.now();
+    final daysUntilExpiry = expiryDate.difference(now).inDays;
+    final isExpired = expiryDate.isBefore(now);
+    final isNearExpiry = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+
+    if (isExpired) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Đã hết hạn',
+              style: TextStyle(
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (isNearExpiry) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.schedule, size: 14, color: Colors.orange.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Còn $daysUntilExpiry ngày',
+              style: TextStyle(
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return const SizedBox.shrink();
   }
 }

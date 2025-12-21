@@ -252,7 +252,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Shop',
+                label: 'Home',
               ),
               BottomNavigationBarItem(
                 icon: Builder(

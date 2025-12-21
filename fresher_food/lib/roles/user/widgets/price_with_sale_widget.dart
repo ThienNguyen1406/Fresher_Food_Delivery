@@ -88,6 +88,18 @@ class _PriceWithSaleWidgetState extends State<PriceWithSaleWidget> {
     );
   }
 
+  // Kiểm tra sản phẩm có gần hết hạn không (≤ 7 ngày)
+  bool _isNearExpiry(Product product) {
+    if (product.ngayHetHan == null) return false;
+    
+    final now = DateTime.now();
+    final expiryDate = product.ngayHetHan!;
+    final daysUntilExpiry = expiryDate.difference(now).inDays;
+    
+    // Gần hết hạn nếu còn từ 0 đến 7 ngày (chưa hết hạn)
+    return daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -106,16 +118,27 @@ class _PriceWithSaleWidgetState extends State<PriceWithSaleWidget> {
 
     final originalPrice = widget.product.giaBan;
     final hasSale = _activeSale != null;
-    final salePrice = hasSale
-        ? (originalPrice - _activeSale!.giaTriKhuyenMai).clamp(0.0, double.infinity)
-        : originalPrice;
+    
+    // Kiểm tra nếu sản phẩm gần hết hạn (≤ 7 ngày) thì tự động giảm 30%
+    final isNearExpiry = _isNearExpiry(widget.product);
+    final expiryDiscount = isNearExpiry ? originalPrice * 0.3 : 0.0;
+    
+    // Tính giá sau khuyến mãi (ưu tiên khuyến mãi từ Sale, sau đó mới đến giảm giá hết hạn)
+    double salePrice = originalPrice;
+    if (hasSale) {
+      salePrice = (originalPrice - _activeSale!.giaTriKhuyenMai).clamp(0.0, double.infinity);
+    } else if (isNearExpiry) {
+      salePrice = (originalPrice - expiryDiscount).clamp(0.0, double.infinity);
+    }
+    
+    final hasAnyDiscount = hasSale || isNearExpiry;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Giá cũ (gạch đỏ) - chỉ hiển thị khi có khuyến mãi
-        if (hasSale && widget.showOriginalPrice)
+        // Giá cũ (gạch đỏ) - hiển thị khi có khuyến mãi hoặc giảm giá hết hạn
+        if (hasAnyDiscount && widget.showOriginalPrice)
           Text(
             '${_formatPrice(originalPrice)}đ',
             style: TextStyle(
@@ -127,16 +150,39 @@ class _PriceWithSaleWidgetState extends State<PriceWithSaleWidget> {
             ),
           ),
         // Giá mới (giá sau khuyến mãi)
-        Text(
-          '${_formatPrice(salePrice)}đ',
-          style: TextStyle(
-            fontSize: widget.fontSize ?? 14,
-            fontWeight: FontWeight.bold,
-            color: widget.priceColor ?? Colors.green,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${_formatPrice(salePrice)}đ',
+              style: TextStyle(
+                fontSize: widget.fontSize ?? 14,
+                fontWeight: FontWeight.bold,
+                color: widget.priceColor ?? Colors.green,
+              ),
+            ),
+            // Badge giảm giá hết hạn
+            if (isNearExpiry && !hasSale)
+              Container(
+                margin: const EdgeInsets.only(left: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.orange.shade200, width: 0.5),
+                ),
+                child: Text(
+                  '-30%',
+                  style: TextStyle(
+                    fontSize: (widget.fontSize ?? 14) - 4,
+                    color: Colors.orange.shade700,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+          ],
         ),
       ],
     );
   }
 }
-

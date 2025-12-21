@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/admin/page/user_manager/chitietnguoidung.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 
+/// Màn hình quản lý người dùng - xem, tìm kiếm và xóa tài khoản người dùng
 class QuanLyNguoiDungScreen extends StatefulWidget {
   const QuanLyNguoiDungScreen({super.key});
 
@@ -24,12 +25,14 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
   final Color _secondaryTextColor = Color(0xFF64748B);
   final Color borderColor = Color(0xFFE2E8F0);
 
+  /// Khối khởi tạo: Load danh sách người dùng từ server
   @override
   void initState() {
     super.initState();
     _taiNguoiDung();
   }
 
+  /// Khối chức năng: Load tất cả người dùng từ API
   Future<void> _taiNguoiDung() async {
     setState(() => _dangTai = true);
     try {
@@ -43,6 +46,7 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
     }
   }
 
+  /// Khối chức năng: Lọc người dùng theo từ khóa (tên đăng nhập, họ tên, email)
   void _locNguoiDung() {
     setState(() {
       _nguoiDungHienThi = _tatCaNguoiDung.where((nd) {
@@ -56,6 +60,7 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
     });
   }
 
+  /// Khối chức năng: Lấy màu hiển thị theo vai trò (admin/user)
   Color _mauVaiTro(String vaiTro) {
     return vaiTro.toLowerCase() == 'admin' ? Color(0xFFFF6B6B) : _primaryColor;
   }
@@ -64,6 +69,7 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
     return vaiTro.toLowerCase() == 'admin' ? Icons.admin_panel_settings : Icons.person;
   }
 
+  /// Khối chức năng: Xóa người dùng với dialog xác nhận
   Future<void> _xoaNguoiDung(Map<String, dynamic> nd) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -300,6 +306,10 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
         ],
       ),
       child: TextField(
+        enableInteractiveSelection: true,
+        enableSuggestions: true,
+        autocorrect: true,
+        textInputAction: TextInputAction.search,
         decoration: InputDecoration(
           hintText: 'Tìm kiếm theo tên, email hoặc username...',
           hintStyle: TextStyle(color: _secondaryTextColor),

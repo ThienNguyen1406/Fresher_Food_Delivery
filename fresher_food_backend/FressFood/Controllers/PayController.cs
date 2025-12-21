@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -233,6 +233,50 @@ namespace FressFood.Controllers
                             return NotFound("Không tìm thấy phương thức thanh toán để xóa");
                     }
                 }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // POST: api/Pay/vietqr
+        /// <summary>
+        /// Tạo VietQR code cho đơn hàng
+        /// Format: Mã ngân hàng|Số tài khoản|Tên chủ TK|Số tiền|Nội dung (mã đơn hàng)
+        /// </summary>
+        [HttpPost("vietqr")]
+        public IActionResult GenerateVietQR([FromBody] VietQRRequest request)
+        {
+            try
+            {
+                // Lấy thông tin từ config
+                var soTaiKhoan = _configuration["VietQR:SoTaiKhoan"] ?? "1044703803";
+                var tenChuTaiKhoan = _configuration["VietQR:TenChuTaiKhoan"] ?? "NGUYEN VAN THIEN";
+                var tenNganHang = _configuration["VietQR:TenNganHang"] ?? "Vietcombank";
+                var maNganHang = _configuration["VietQR:MaNganHang"] ?? "970415";
+
+                // Tạo nội dung chuyển khoản (mã đơn hàng)
+                var noiDung = string.IsNullOrWhiteSpace(request.NoiDung) 
+                    ? request.MaDonHang 
+                    : $"{request.MaDonHang} {request.NoiDung}";
+
+                // Format VietQR đơn giản (cho app ngân hàng)
+                // Format: Mã ngân hàng|Số tài khoản|Tên chủ TK|Số tiền|Nội dung
+                var qrData = $"{maNganHang}|{soTaiKhoan}|{tenChuTaiKhoan}|{request.SoTien}|{noiDung}";
+
+                var response = new VietQRResponse
+                {
+                    QrData = qrData,
+                    SoTaiKhoan = soTaiKhoan,
+                    TenChuTaiKhoan = tenChuTaiKhoan,
+                    TenNganHang = tenNganHang,
+                    MaNganHang = maNganHang,
+                    SoTien = request.SoTien,
+                    NoiDung = noiDung
+                };
+
+                return Ok(response);
             }
             catch (Exception ex)
             {

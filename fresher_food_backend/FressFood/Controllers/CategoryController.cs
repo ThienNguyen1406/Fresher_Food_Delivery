@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -43,7 +43,7 @@ namespace FoodShop.Controllers
                     sp.MaDanhMuc
                 FROM SanPham sp
                 INNER JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
-                WHERE sp.MaDanhMuc = @MaDanhMuc
+                WHERE sp.MaDanhMuc = @MaDanhMuc AND (sp.IsDeleted = 0 OR sp.IsDeleted IS NULL)
                 ORDER BY sp.TenSanPham";
 
                     using (var command = new SqlCommand(query, connection))
@@ -345,8 +345,8 @@ namespace FoodShop.Controllers
                         iconPath = result?.ToString();
                     }
 
-                    // Kiểm tra xem danh mục có sản phẩm không trước khi xóa
-                    string checkQuery = "SELECT COUNT(*) FROM SanPham WHERE MaDanhMuc = @MaDanhMuc";
+                    // Kiểm tra xem danh mục có sản phẩm không trước khi xóa (chỉ đếm sản phẩm chưa bị xóa)
+                    string checkQuery = "SELECT COUNT(*) FROM SanPham WHERE MaDanhMuc = @MaDanhMuc AND (IsDeleted = 0 OR IsDeleted IS NULL)";
                     using (var checkCommand = new SqlCommand(checkQuery, connection))
                     {
                         checkCommand.Parameters.AddWithValue("@MaDanhMuc", id);

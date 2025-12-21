@@ -138,6 +138,10 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
               controller: controller,
               keyboardType: keyboardType,
               readOnly: readOnly,
+              enableInteractiveSelection: !readOnly,
+              enableSuggestions: !readOnly && keyboardType == TextInputType.text,
+              autocorrect: !readOnly && keyboardType == TextInputType.text,
+              textInputAction: TextInputAction.next,
               style: TextStyle(color: _textColor),
               decoration: InputDecoration(
                 filled: true,

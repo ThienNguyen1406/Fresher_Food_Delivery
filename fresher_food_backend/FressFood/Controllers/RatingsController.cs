@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 
@@ -183,6 +183,33 @@ namespace FoodShop.Controllers
                 {
                     connection.Open();
 
+                    // Kiểm tra xem user đã mua sản phẩm này chưa
+                    // Hỗ trợ nhiều format trạng thái
+                    string purchaseCheckQuery = @"SELECT COUNT(*) 
+                           FROM ChiTietDonHang ctdh
+                           INNER JOIN DonHang dh ON ctdh.MaDonHang = dh.MaDonHang
+                           WHERE ctdh.MaSanPham = @MaSanPham 
+                           AND dh.MaTaiKhoan = @MaTaiKhoan
+                           AND (
+                               dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                               OR dh.TrangThai LIKE '%complete%'
+                               OR dh.TrangThai LIKE '%Complete%'
+                               OR dh.TrangThai LIKE '%hoàn thành%'
+                               OR dh.TrangThai LIKE '%giao hàng%'
+                           )";
+
+                    using (var purchaseCheckCommand = new SqlCommand(purchaseCheckQuery, connection))
+                    {
+                        purchaseCheckCommand.Parameters.AddWithValue("@MaSanPham", rating.MaSanPham);
+                        purchaseCheckCommand.Parameters.AddWithValue("@MaTaiKhoan", rating.MaTaiKhoan);
+
+                        var purchaseCount = (int)purchaseCheckCommand.ExecuteScalar();
+                        if (purchaseCount == 0)
+                        {
+                            return BadRequest(new { error = "Bạn cần mua sản phẩm này trước khi đánh giá" });
+                        }
+                    }
+
                     // Kiểm tra xem đã đánh giá chưa
                     string checkQuery = @"SELECT COUNT(*) FROM DanhGia 
                                         WHERE MaSanPham = @MaSanPham AND MaTaiKhoan = @MaTaiKhoan";
@@ -240,17 +267,59 @@ namespace FoodShop.Controllers
         {
             try
             {
+                // Validate input
+                if (rating == null)
+                {
+                    return BadRequest(new { error = "Dữ liệu đánh giá không hợp lệ" });
+                }
+
+                if (string.IsNullOrWhiteSpace(rating.MaSanPham))
+                {
+                    return BadRequest(new { error = "Mã sản phẩm không được để trống" });
+                }
+
+                if (string.IsNullOrWhiteSpace(rating.MaTaiKhoan))
+                {
+                    return BadRequest(new { error = "Mã tài khoản không được để trống" });
+                }
+
+                if (rating.SoSao < 1 || rating.SoSao > 5)
+                {
+                    return BadRequest(new { error = "Số sao phải từ 1 đến 5" });
+                }
+
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return StatusCode(500, new { error = "Không thể kết nối đến database" });
+                }
 
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
 
-                    string query = @"UPDATE DanhGia 
-                                   SET NoiDung = @NoiDung, SoSao = @SoSao
-                                   WHERE MaSanPham = @MaSanPham AND MaTaiKhoan = @MaTaiKhoan";
+                    // Kiểm tra xem đánh giá có tồn tại không
+                    string checkQuery = @"SELECT COUNT(*) FROM DanhGia 
+                                        WHERE MaSanPham = @MaSanPham AND MaTaiKhoan = @MaTaiKhoan";
 
-                    using (var command = new SqlCommand(query, connection))
+                    using (var checkCommand = new SqlCommand(checkQuery, connection))
+                    {
+                        checkCommand.Parameters.AddWithValue("@MaSanPham", rating.MaSanPham);
+                        checkCommand.Parameters.AddWithValue("@MaTaiKhoan", rating.MaTaiKhoan);
+
+                        var existingCount = (int)checkCommand.ExecuteScalar();
+                        if (existingCount == 0)
+                        {
+                            return NotFound(new { error = "Không tìm thấy đánh giá để cập nhật" });
+                        }
+                    }
+
+                    // Cập nhật đánh giá
+                    string updateQuery = @"UPDATE DanhGia 
+                                         SET NoiDung = @NoiDung, SoSao = @SoSao
+                                         WHERE MaSanPham = @MaSanPham AND MaTaiKhoan = @MaTaiKhoan";
+
+                    using (var command = new SqlCommand(updateQuery, connection))
                     {
                         command.Parameters.AddWithValue("@MaSanPham", rating.MaSanPham);
                         command.Parameters.AddWithValue("@MaTaiKhoan", rating.MaTaiKhoan);
@@ -269,14 +338,14 @@ namespace FoodShop.Controllers
                         }
                         else
                         {
-                            return NotFound(new { error = "Không tìm thấy đánh giá để cập nhật" });
+                            return StatusCode(500, new { error = "Không thể cập nhật đánh giá" });
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                return StatusCode(500, new { error = $"Lỗi cập nhật đánh giá: {ex.Message}" });
             }
         }
 
@@ -368,6 +437,55 @@ namespace FoodShop.Controllers
                 else
                 {
                     return NotFound(new { error = "Không tìm thấy đánh giá" });
+                }
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // GET: api/ratings/check-purchase/{maTaiKhoan}/{maSanPham}
+        [HttpGet("check-purchase/{maTaiKhoan}/{maSanPham}")]
+        public IActionResult CheckUserPurchase(string maTaiKhoan, string maSanPham)
+        {
+            try
+            {
+                var connectionString = _configuration.GetConnectionString("DefaultConnection");
+
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+
+                    // Kiểm tra xem user đã mua sản phẩm này chưa (chỉ tính các đơn hàng đã hoàn thành/đã giao)
+                    // Hỗ trợ nhiều format trạng thái
+                    string query = @"SELECT COUNT(*) 
+                           FROM ChiTietDonHang ctdh
+                           INNER JOIN DonHang dh ON ctdh.MaDonHang = dh.MaDonHang
+                           WHERE ctdh.MaSanPham = @MaSanPham 
+                           AND dh.MaTaiKhoan = @MaTaiKhoan
+                           AND (
+                               dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                               OR dh.TrangThai LIKE '%complete%'
+                               OR dh.TrangThai LIKE '%Complete%'
+                               OR dh.TrangThai LIKE '%hoàn thành%'
+                               OR dh.TrangThai LIKE '%giao hàng%'
+                           )";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaSanPham", maSanPham);
+                        command.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoan);
+
+                        var purchaseCount = (int)command.ExecuteScalar();
+                        var hasPurchased = purchaseCount > 0;
+
+                        return Ok(new
+                        {
+                            hasPurchased = hasPurchased,
+                            purchaseCount = purchaseCount
+                        });
+                    }
                 }
             }
             catch (Exception ex)

@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -28,8 +28,8 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, MoTaChuongTrinh, 
-                                   NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
+                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, 
+                                   MoTaChuongTrinh, NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
                                    FROM KhuyenMai 
                                    ORDER BY NgayBatDau DESC";
 
@@ -42,6 +42,7 @@ namespace FressFood.Controllers
                             {
                                 Id_sale = reader["Id_sale"].ToString() ?? "",
                                 GiaTriKhuyenMai = Convert.ToDecimal(reader["GiaTriKhuyenMai"]),
+                                LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
                                 MoTaChuongTrinh = reader["MoTaChuongTrinh"] as string,
                                 NgayBatDau = Convert.ToDateTime(reader["NgayBatDau"]),
                                 NgayKetThuc = Convert.ToDateTime(reader["NgayKetThuc"]),
@@ -99,6 +100,7 @@ namespace FressFood.Controllers
                                 {
                                     Id_sale = reader["Id_sale"].ToString() ?? "",
                                     GiaTriKhuyenMai = Convert.ToDecimal(reader["GiaTriKhuyenMai"]),
+                                    LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
                                     MoTaChuongTrinh = reader["MoTaChuongTrinh"] as string,
                                     NgayBatDau = Convert.ToDateTime(reader["NgayBatDau"]),
                                     NgayKetThuc = Convert.ToDateTime(reader["NgayKetThuc"]),
@@ -159,12 +161,37 @@ namespace FressFood.Controllers
                     });
                 }
 
+                // Validate LoaiGiaTri
+                if (string.IsNullOrEmpty(sale.LoaiGiaTri))
+                {
+                    sale.LoaiGiaTri = "Amount"; // Default
+                }
+                else if (sale.LoaiGiaTri != "Amount" && sale.LoaiGiaTri != "Percent")
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        error = "LoaiGiaTri phải là 'Amount' hoặc 'Percent'"
+                    });
+                }
+
+                // Validate Percent: phải từ 0-100
+                if (sale.LoaiGiaTri == "Percent" && (sale.GiaTriKhuyenMai < 0 || sale.GiaTriKhuyenMai > 100))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        error = "Giá trị khuyến mãi theo phần trăm phải từ 0 đến 100"
+                    });
+                }
+
+                // MaSanPham có thể là 'ALL' để áp dụng cho toàn bộ sản phẩm
                 if (string.IsNullOrEmpty(sale.MaSanPham))
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        error = "Mã sản phẩm không được để trống"
+                        error = "Mã sản phẩm không được để trống (hoặc dùng 'ALL' để áp dụng cho toàn bộ sản phẩm)"
                     });
                 }
 
@@ -175,16 +202,17 @@ namespace FressFood.Controllers
                     connection.Open();
 
                     // Sử dụng NEWID() để tạo ID mới
-                    string query = @"INSERT INTO KhuyenMai (GiaTriKhuyenMai, MoTaChuongTrinh, 
+                    string query = @"INSERT INTO KhuyenMai (GiaTriKhuyenMai, LoaiGiaTri, MoTaChuongTrinh, 
                                    NgayBatDau, NgayKetThuc, TrangThai, MaSanPham) 
                                    OUTPUT INSERTED.id_sale
-                                   VALUES ( @GiaTriKhuyenMai, @MoTaChuongTrinh, 
+                                   VALUES ( @GiaTriKhuyenMai, @LoaiGiaTri, @MoTaChuongTrinh, 
                                    @NgayBatDau, @NgayKetThuc, @TrangThai, @MaSanPham);
                                    ";
 
                     using (var command = new SqlCommand(query, connection))
                     {
                         command.Parameters.AddWithValue("@GiaTriKhuyenMai", sale.GiaTriKhuyenMai);
+                        command.Parameters.AddWithValue("@LoaiGiaTri", sale.LoaiGiaTri ?? "Amount");
                         command.Parameters.AddWithValue("@MoTaChuongTrinh", sale.MoTaChuongTrinh ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@NgayBatDau", sale.NgayBatDau);
                         command.Parameters.AddWithValue("@NgayKetThuc", sale.NgayKetThuc);
@@ -238,12 +266,37 @@ namespace FressFood.Controllers
                     });
                 }
 
+                // Validate LoaiGiaTri
+                if (string.IsNullOrEmpty(sale.LoaiGiaTri))
+                {
+                    sale.LoaiGiaTri = "Amount"; // Default
+                }
+                else if (sale.LoaiGiaTri != "Amount" && sale.LoaiGiaTri != "Percent")
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        error = "LoaiGiaTri phải là 'Amount' hoặc 'Percent'"
+                    });
+                }
+
+                // Validate Percent: phải từ 0-100
+                if (sale.LoaiGiaTri == "Percent" && (sale.GiaTriKhuyenMai < 0 || sale.GiaTriKhuyenMai > 100))
+                {
+                    return BadRequest(new
+                    {
+                        success = false,
+                        error = "Giá trị khuyến mãi theo phần trăm phải từ 0 đến 100"
+                    });
+                }
+
+                // MaSanPham có thể là 'ALL' để áp dụng cho toàn bộ sản phẩm
                 if (string.IsNullOrEmpty(sale.MaSanPham))
                 {
                     return BadRequest(new
                     {
                         success = false,
-                        error = "Mã sản phẩm không được để trống"
+                        error = "Mã sản phẩm không được để trống (hoặc dùng 'ALL' để áp dụng cho toàn bộ sản phẩm)"
                     });
                 }
 
@@ -254,6 +307,7 @@ namespace FressFood.Controllers
                     connection.Open();
                     string query = @"UPDATE KhuyenMai 
                                    SET GiaTriKhuyenMai = @GiaTriKhuyenMai,
+                                       LoaiGiaTri = @LoaiGiaTri,
                                        MoTaChuongTrinh = @MoTaChuongTrinh,
                                        NgayBatDau = @NgayBatDau,
                                        NgayKetThuc = @NgayKetThuc,
@@ -265,6 +319,7 @@ namespace FressFood.Controllers
                     {
                         command.Parameters.AddWithValue("@Id_sale", id);
                         command.Parameters.AddWithValue("@GiaTriKhuyenMai", sale.GiaTriKhuyenMai);
+                        command.Parameters.AddWithValue("@LoaiGiaTri", sale.LoaiGiaTri ?? "Amount");
                         command.Parameters.AddWithValue("@MoTaChuongTrinh", sale.MoTaChuongTrinh ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@NgayBatDau", sale.NgayBatDau);
                         command.Parameters.AddWithValue("@NgayKetThuc", sale.NgayKetThuc);
@@ -356,10 +411,10 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, MoTaChuongTrinh, 
-                                   NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
+                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, 
+                                   MoTaChuongTrinh, NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
                                    FROM KhuyenMai 
-                                   WHERE MaSanPham = @MaSanPham
+                                   WHERE MaSanPham = @MaSanPham OR MaSanPham = 'ALL'
                                    ORDER BY NgayBatDau DESC";
 
                     using (var command = new SqlCommand(query, connection))
@@ -374,6 +429,7 @@ namespace FressFood.Controllers
                                 {
                                     Id_sale = reader["Id_sale"].ToString() ?? "",
                                     GiaTriKhuyenMai = Convert.ToDecimal(reader["GiaTriKhuyenMai"]),
+                                    LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
                                     MoTaChuongTrinh = reader["MoTaChuongTrinh"] as string,
                                     NgayBatDau = Convert.ToDateTime(reader["NgayBatDau"]),
                                     NgayKetThuc = Convert.ToDateTime(reader["NgayKetThuc"]),

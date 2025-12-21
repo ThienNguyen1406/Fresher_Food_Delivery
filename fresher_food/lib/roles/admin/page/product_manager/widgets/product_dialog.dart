@@ -9,6 +9,7 @@ import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_im
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_form_field.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_category_dropdown.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_image_source_dialog.dart';
+import 'package:intl/intl.dart';
 
 class ProductDialog extends StatefulWidget {
   final ProductApi apiService;
@@ -34,6 +35,8 @@ class _ProductDialogState extends State<ProductDialog> {
   File? _selectedImage;
   bool _isUploadingImage = false;
   String? _selectedCategoryId;
+  DateTime? _ngaySanXuat;
+  DateTime? _ngayHetHan;
 
   @override
   void initState() {
@@ -51,6 +54,22 @@ class _ProductDialogState extends State<ProductDialog> {
     _controllers['soLuongTon'] = TextEditingController(text: widget.product?.soLuongTon.toString() ?? '');
     _controllers['donViTinh'] = TextEditingController(text: widget.product?.donViTinh ?? '');
     _controllers['xuatXu'] = TextEditingController(text: widget.product?.xuatXu ?? '');
+    
+    // Khởi tạo ngày sản xuất và hạn sử dụng
+    _ngaySanXuat = widget.product?.ngaySanXuat;
+    _ngayHetHan = widget.product?.ngayHetHan;
+    
+    // Tạo controller cho hiển thị ngày (chỉ để hiển thị, không dùng để edit)
+    _controllers['ngaySanXuat'] = TextEditingController(
+      text: _ngaySanXuat != null 
+        ? '${_ngaySanXuat!.day}/${_ngaySanXuat!.month}/${_ngaySanXuat!.year}'
+        : ''
+    );
+    _controllers['ngayHetHan'] = TextEditingController(
+      text: _ngayHetHan != null 
+        ? '${_ngayHetHan!.day}/${_ngayHetHan!.month}/${_ngayHetHan!.year}'
+        : ''
+    );
   }
 
   @override
@@ -109,6 +128,8 @@ class _ProductDialogState extends State<ProductDialog> {
         xuatXu: _controllers['xuatXu']!.text,
         maDanhMuc: _selectedCategoryId ?? '',
         anh: widget.product?.anh ?? '',
+        ngaySanXuat: _ngaySanXuat,
+        ngayHetHan: _ngayHetHan,
       );
 
       final success = widget.product != null
@@ -166,6 +187,33 @@ class _ProductDialogState extends State<ProductDialog> {
         ],
       ),
     );
+  }
+
+  Future<void> _selectDate(BuildContext context, {required bool isProductionDate}) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: isProductionDate 
+        ? (_ngaySanXuat ?? DateTime.now())
+        : (_ngayHetHan ?? DateTime.now().add(const Duration(days: 30))),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      locale: const Locale('vi', 'VN'),
+      helpText: isProductionDate ? 'Chọn ngày sản xuất' : 'Chọn hạn sử dụng',
+      cancelText: 'Hủy',
+      confirmText: 'Chọn',
+    );
+    
+    if (picked != null) {
+      setState(() {
+        if (isProductionDate) {
+          _ngaySanXuat = picked;
+          _controllers['ngaySanXuat']!.text = '${picked.day}/${picked.month}/${picked.year}';
+        } else {
+          _ngayHetHan = picked;
+          _controllers['ngayHetHan']!.text = '${picked.day}/${picked.month}/${picked.year}';
+        }
+      });
+    }
   }
 
   @override
@@ -259,6 +307,55 @@ class _ProductDialogState extends State<ProductDialog> {
                       controller: _controllers['xuatXu']!,
                       label: 'Xuất xứ',
                       icon: Iconsax.location,
+                    ),
+                    const SizedBox(height: 16),
+                    // Ngày sản xuất và Hạn sử dụng
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectDate(context, isProductionDate: true),
+                            child: AbsorbPointer(
+                              child: TextField(
+                                controller: _controllers['ngaySanXuat']!,
+                                decoration: InputDecoration(
+                                  labelText: 'Ngày sản xuất',
+                                  prefixIcon: const Icon(Iconsax.calendar, color: Color(0xFF2E7D32)),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  suffixIcon: const Icon(Icons.calendar_today, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectDate(context, isProductionDate: false),
+                            child: AbsorbPointer(
+                              child: TextField(
+                                controller: _controllers['ngayHetHan']!,
+                                decoration: InputDecoration(
+                                  labelText: 'Hạn sử dụng',
+                                  prefixIcon: const Icon(Iconsax.calendar_1, color: Color(0xFF2E7D32)),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: const BorderSide(color: Color(0xFF2E7D32), width: 2),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                  suffixIcon: const Icon(Icons.calendar_today, color: Colors.grey),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     ProductCategoryDropdown(

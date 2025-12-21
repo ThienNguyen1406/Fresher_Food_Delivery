@@ -1,4 +1,4 @@
-﻿var builder = WebApplication.CreateBuilder(args);
+var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -30,6 +30,15 @@ builder.Services.AddHttpContextAccessor();
 
 // Đăng ký BlockchainService
 builder.Services.AddScoped<FressFood.Services.IBlockchainService, FressFood.Services.BlockchainService>();
+
+// Đăng ký HttpClient cho AI Service
+builder.Services.AddHttpClient();
+
+// Đăng ký AI Service (OpenAI)
+builder.Services.AddScoped<FressFood.Services.IAIService, FressFood.Services.OpenAIService>();
+
+// Đăng ký ChatbotService
+builder.Services.AddScoped<FressFood.Services.ChatbotService>();
 
 var app = builder.Build();
 

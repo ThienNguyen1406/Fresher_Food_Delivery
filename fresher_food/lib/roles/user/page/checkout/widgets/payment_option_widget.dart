@@ -51,17 +51,39 @@ class PaymentOptionWidget extends StatelessWidget {
         value: value,
         groupValue: provider.selectedPaymentId,
         onChanged: (value) {
-          String paymentMethod = 'banking';
+          String paymentMethod = 'cod'; // Mặc định là COD
           final payName = title.toLowerCase();
-          if (payName.contains('cod')) {
+          
+          // Kiểm tra COD trước (thanh toán khi nhận hàng)
+          if (payName.contains('cod') || 
+              payName.contains('tiền mặt') || 
+              payName.contains('khi nhận hàng') ||
+              payName.contains('thanh toán khi nhận')) {
             paymentMethod = 'cod';
-          } else if (payName.contains('momo')) {
-            paymentMethod = 'momo';
-          } else if (payName.contains('stripe') || payName.contains('thẻ') || payName.contains('card') || payName.contains('credit')) {
-            paymentMethod = 'stripe';
-          } else if (payName.contains('banking') || payName.contains('bank') || payName.contains('chuyển khoản') || payName.contains('transfer')) {
+          } 
+          // Kiểm tra chuyển khoản ngân hàng
+          else if (payName.contains('banking') || 
+                   payName.contains('bank') || 
+                   payName.contains('chuyển khoản') || 
+                   payName.contains('transfer') ||
+                   payName.contains('ngân hàng')) {
             paymentMethod = 'banking';
+          } 
+          // Kiểm tra MoMo
+          else if (payName.contains('momo')) {
+            paymentMethod = 'momo';
+          } 
+          // Kiểm tra Stripe/Card
+          else if (payName.contains('stripe') || 
+                   payName.contains('thẻ') || 
+                   payName.contains('card') || 
+                   payName.contains('credit') ||
+                   payName.contains('debit')) {
+            paymentMethod = 'stripe';
           }
+          // Mặc định là COD nếu không match
+          
+          print('Payment method được chọn: $paymentMethod (từ title: $title)');
           provider.updatePaymentMethod(paymentMethod, value!);
         },
         title: Text(

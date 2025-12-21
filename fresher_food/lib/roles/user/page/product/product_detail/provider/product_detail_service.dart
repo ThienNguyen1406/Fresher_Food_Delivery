@@ -93,11 +93,21 @@ class ProductDetailService {
         throw Exception('Vui lòng đăng nhập để đánh giá');
       }
 
+      // Đảm bảo maTaiKhoan được điền đúng
+      final ratingWithUser = Rating(
+        maSanPham: rating.maSanPham,
+        maTaiKhoan: user.maTaiKhoan, // Điền maTaiKhoan từ user
+        soSao: rating.soSao,
+        noiDung: rating.noiDung,
+      );
+
       final existingRating = await _ratingApi.getUserRatingForProduct(rating.maSanPham);
       if (existingRating != null && existingRating.soSao > 0) {
-        return await _ratingApi.updateRating(rating);
+        // Cập nhật đánh giá
+        return await _ratingApi.updateRating(ratingWithUser);
       } else {
-        return await _ratingApi.addRating(rating);
+        // Thêm đánh giá mới
+        return await _ratingApi.addRating(ratingWithUser);
       }
     } catch (e) {
       throw Exception('Lỗi khi gửi đánh giá: $e');

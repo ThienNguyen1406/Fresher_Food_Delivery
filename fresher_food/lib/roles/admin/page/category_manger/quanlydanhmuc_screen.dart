@@ -6,6 +6,7 @@ import 'package:fresher_food/services/api/category_api.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
 
+/// Màn hình quản lý danh mục - CRUD danh mục sản phẩm
 class QuanLyDanhMucScreen extends StatefulWidget {
   const QuanLyDanhMucScreen({super.key});
 
@@ -21,12 +22,14 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
   String _searchKeyword = '';
   final TextEditingController _searchController = TextEditingController();
 
+  /// Khối khởi tạo: Load danh sách danh mục từ server
   @override
   void initState() {
     super.initState();
     _loadCategories();
   }
 
+  /// Khối chức năng: Load tất cả danh mục từ API
   Future<void> _loadCategories() async {
     setState(() => _isLoading = true);
     try {
@@ -42,6 +45,7 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
     }
   }
 
+  /// Khối chức năng: Tìm kiếm danh mục theo tên hoặc mã danh mục
   void _onSearch(String keyword) {
     setState(() => _searchKeyword = keyword);
     if (keyword.isEmpty) {
@@ -55,6 +59,7 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
     });
   }
 
+  /// Khối chức năng: Hiển thị dialog thêm danh mục mới
   void _showAddCategoryDialog() {
     showDialog(
       context: context,
@@ -68,6 +73,7 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
     );
   }
 
+  /// Khối chức năng: Hiển thị dialog chỉnh sửa danh mục
   void _showEditCategoryDialog(Category category) {
     showDialog(
       context: context,
@@ -82,6 +88,7 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
     );
   }
 
+  /// Khối chức năng: Hiển thị dialog xác nhận xóa danh mục
   void _showDeleteConfirmation(Category category) {
     showDialog(
       context: context,
@@ -483,24 +490,19 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                                               errorBuilder: (context, error, stackTrace) {
                                                 return Container(
                                                   color: color.withOpacity(0.3),
-                                                  child: Center(
-                                                    child: Icon(
-                                                      Iconsax.gallery_slash,
-                                                      size: 40,
-                                                      color: color.withOpacity(0.6),
-                                                    ),
+                                                  child: Image.asset(
+                                                    'lib/assets/img/loginImg.png',
+                                                    fit: BoxFit.cover,
+                                                    width: double.infinity,
+                                                    height: double.infinity,
                                                   ),
                                                 );
                                               },
                                             )
                                           : Container(
                                               color: color.withOpacity(0.3),
-                                              child: Center(
-                                                child: Icon(
-                                                  Iconsax.category,
-                                                  size: 40,
-                                                  color: color.withOpacity(0.6),
-                                                ),
+                                              child: Image(
+                                                  image: AssetImage("lib/assets/img/loginImg.png")
                                               ),
                                             ),
                                     ),
@@ -880,11 +882,11 @@ class _CategoryDialogState extends State<CategoryDialog> {
                           image: NetworkImage(_getImageUrl(widget.category!.icon)),
                           fit: BoxFit.cover,
                         )
-                      : null,
+                      : DecorationImage(
+                          image: AssetImage('assets/img/loginImg.png'),
+                          fit: BoxFit.cover,
+                        ),
             ),
-            child: !hasNewImage && !hasExistingImage
-                ? const Icon(Iconsax.gallery, size: 40, color: Colors.grey)
-                : null,
           ),
           const SizedBox(height: 16),
           _isUploadingImage

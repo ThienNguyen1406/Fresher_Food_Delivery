@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/roles/user/page/order/order_detail/provider/order_detail_provider.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:provider/provider.dart';
 
 
@@ -238,11 +239,17 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
       padding: const EdgeInsets.all(16),
       sliver: SliverList(
         delegate: SliverChildListDelegate([
+          _buildOrderTrackingCard(orderDetailProvider),
+          const SizedBox(height: 20),
           _buildOrderInfoCard(orderDetailProvider),
           const SizedBox(height: 20),
           _buildProductListCard(orderDetailProvider),
           const SizedBox(height: 20),
           _buildPaymentInfoCard(orderDetailProvider),
+          if (orderDetailProvider.canCancelOrder()) ...[
+            const SizedBox(height: 20),
+            _buildCancelOrderButton(orderDetailProvider),
+          ],
           const SizedBox(height: 20),
         ]),
       ),
@@ -769,6 +776,383 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildOrderTrackingCard(OrderDetailProvider orderDetailProvider) {
+    final steps = orderDetailProvider.getTrackingSteps();
+    
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.1),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.grey.shade100,
+            width: 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E8),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.track_changes_rounded,
+                      size: 20,
+                      color: const Color(0xFF4CAF50),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Theo dõi đơn hàng',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              ...steps.asMap().entries.map((entry) {
+                final index = entry.key;
+                final step = entry.value;
+                final isLast = index == steps.length - 1;
+                
+                return _buildTrackingStep(
+                  step: step,
+                  isLast: isLast,
+                  index: index,
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTrackingStep({
+    required Map<String, dynamic> step,
+    required bool isLast,
+    required int index,
+  }) {
+    final status = step['status'] as String;
+    final title = step['title'] as String;
+    final icon = step['icon'] as IconData;
+    
+    Color stepColor;
+    Color iconColor;
+    Color textColor;
+    
+    if (status == 'completed') {
+      stepColor = const Color(0xFF4CAF50);
+      iconColor = Colors.white;
+      textColor = Colors.black87;
+    } else if (status == 'current') {
+      stepColor = const Color(0xFF42A5F5);
+      iconColor = Colors.white;
+      textColor = Colors.black87;
+    } else if (status == 'cancelled') {
+      stepColor = const Color(0xFFEF5350);
+      iconColor = Colors.white;
+      textColor = Colors.black87;
+    } else {
+      stepColor = Colors.grey.shade300;
+      iconColor = Colors.grey.shade600;
+      textColor = Colors.grey.shade600;
+    }
+    
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: stepColor,
+                shape: BoxShape.circle,
+                boxShadow: status == 'completed' || status == 'current'
+                    ? [
+                        BoxShadow(
+                          color: stepColor.withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Icon(
+                icon,
+                size: 20,
+                color: iconColor,
+              ),
+            ),
+            if (!isLast)
+              Container(
+                width: 2,
+                height: 40,
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  color: status == 'completed' 
+                      ? const Color(0xFF4CAF50)
+                      : Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(1),
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Padding(
+            padding: EdgeInsets.only(top: isLast ? 0 : 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+                if (status == 'current')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Đang xử lý...',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCancelOrderButton(OrderDetailProvider orderDetailProvider) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.1),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: Colors.red.shade100,
+            width: 1,
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.cancel_outlined,
+                      size: 20,
+                      color: Colors.red.shade600,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Hủy đơn hàng',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 18,
+                            color: Colors.red.shade700,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Bạn có thể hủy đơn hàng này vì chưa được xác nhận',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => _showCancelOrderDialog(orderDetailProvider),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.cancel_rounded, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Hủy đơn hàng',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showCancelOrderDialog(OrderDetailProvider orderDetailProvider) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: Colors.orange.shade600,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Xác nhận hủy đơn hàng',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Bạn có chắc chắn muốn hủy đơn hàng này không? Hành động này không thể hoàn tác.',
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(
+                'Không',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final success = await orderDetailProvider.cancelOrder();
+                if (mounted) {
+                  final localizations = AppLocalizations.of(context)!;
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text(localizations.orderCancelledSuccessfully),
+                          ],
+                        ),
+                        backgroundColor: Colors.green,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.error, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Text(localizations.cannotCancelOrder),
+                          ],
+                        ),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Có, hủy đơn hàng',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 

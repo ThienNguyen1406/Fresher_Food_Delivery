@@ -181,7 +181,6 @@ class AppLocalizations {
 
       // Support
       'support_center': 'Trung tâm hỗ trợ',
-      'contact_support': 'Liên hệ hỗ trợ',
       'how_to_order': 'Cách đặt hàng',
       'order_steps':
           '1. Chọn sản phẩm bạn muốn mua\n2. Thêm vào giỏ hàng\n3. Xem giỏ hàng và chọn số lượng\n4. Điền thông tin giao hàng\n5. Chọn phương thức thanh toán\n6. Xác nhận đơn hàng',
@@ -202,6 +201,50 @@ class AppLocalizations {
       'no_messages': 'Chưa có tin nhắn',
       'type_message': 'Nhập tin nhắn...',
       'send': 'Gửi',
+
+      // Admin Dashboard
+      'admin_home': 'Trang chủ',
+      'admin_product_management': 'Quản lý sản phẩm',
+      'admin_category_management': 'Quản lý danh mục',
+      'admin_order_management': 'Quản lý đơn hàng',
+      'admin_user_management': 'Quản lý người dùng',
+      'admin_coupon_management': 'Quản lý mã giảm giá',
+      'admin_chat_management': 'Quản lý chat',
+      'admin_promotion_management': 'Quản lý khuyến mãi',
+      'admin_settings': 'Cài đặt',
+      'admin_administrator': 'Quản trị viên',
+      'feature_under_development': 'Tính năng đang phát triển',
+
+      // Order
+      'order_cancelled_successfully': 'Đơn hàng đã được hủy thành công',
+      'cannot_cancel_order': 'Không thể hủy đơn hàng. Vui lòng thử lại.',
+      'confirm': 'Xác nhận',
+
+      // Contact Support
+      'contact_support': 'Liên hệ hỗ trợ',
+      'send_success': 'Gửi thành công',
+      'support_request_sent': 'Yêu cầu hỗ trợ của bạn đã được gửi. Chúng tôi sẽ phản hồi trong vòng 24 giờ.',
+      'call': 'Gọi điện',
+      'call_confirmation': 'Bạn có muốn gọi đến số {phone}?',
+      'calling': 'Gọi đến {phone}',
+      'make_call': 'Gọi',
+      'send_email': 'Gửi email',
+      'email_confirmation': 'Bạn có muốn gửi email đến {email}?',
+      'sending_email': 'Gửi email đến {email}',
+      'send_email_action': 'Gửi',
+      'order_category': 'Đơn hàng',
+      'product_category': 'Sản phẩm',
+      'payment_category': 'Thanh toán',
+      'shipping_category': 'Vận chuyển',
+      'return_category': 'Đổi trả',
+      'other_category': 'Khác',
+
+      // Delivery Address
+      'set_as_default_address': 'Đặt làm địa chỉ mặc định',
+      'please_fill_all_fields': 'Vui lòng điền đầy đủ thông tin',
+      'confirm_delete': 'Xác nhận xóa',
+      'confirm_delete_address': 'Bạn có chắc chắn muốn xóa địa chỉ này?',
+      'delete': 'Xóa',
     },
     'en': {
       // Settings
@@ -369,7 +412,6 @@ class AppLocalizations {
 
       // Support
       'support_center': 'Support Center',
-      'contact_support': 'Contact Support',
       'how_to_order': 'How to Order',
       'order_steps':
           '1. Select products you want to buy\n2. Add to cart\n3. View cart and select quantity\n4. Fill delivery information\n5. Choose payment method\n6. Confirm order',
@@ -390,6 +432,50 @@ class AppLocalizations {
       'no_messages': 'No messages',
       'type_message': 'Type a message...',
       'send': 'Send',
+
+      // Admin Dashboard
+      'admin_home': 'Home',
+      'admin_product_management': 'Product Management',
+      'admin_category_management': 'Category Management',
+      'admin_order_management': 'Order Management',
+      'admin_user_management': 'User Management',
+      'admin_coupon_management': 'Coupon Management',
+      'admin_chat_management': 'Chat Management',
+      'admin_promotion_management': 'Promotion Management',
+      'admin_settings': 'Settings',
+      'admin_administrator': 'Administrator',
+      'feature_under_development': 'Feature Under Development',
+
+      // Order
+      'order_cancelled_successfully': 'Order cancelled successfully',
+      'cannot_cancel_order': 'Cannot cancel order. Please try again.',
+      'confirm': 'Confirm',
+
+      // Contact Support
+      'contact_support': 'Contact Support',
+      'send_success': 'Sent Successfully',
+      'support_request_sent': 'Your support request has been sent. We will respond within 24 hours.',
+      'call': 'Call',
+      'call_confirmation': 'Do you want to call {phone}?',
+      'calling': 'Calling {phone}',
+      'make_call': 'Call',
+      'send_email': 'Send Email',
+      'email_confirmation': 'Do you want to send email to {email}?',
+      'sending_email': 'Sending email to {email}',
+      'send_email_action': 'Send',
+      'order_category': 'Order',
+      'product_category': 'Product',
+      'payment_category': 'Payment',
+      'shipping_category': 'Shipping',
+      'return_category': 'Return',
+      'other_category': 'Other',
+
+      // Delivery Address
+      'set_as_default_address': 'Set as Default Address',
+      'please_fill_all_fields': 'Please fill in all fields',
+      'confirm_delete': 'Confirm Delete',
+      'confirm_delete_address': 'Are you sure you want to delete this address?',
+      'delete': 'Delete',
     },
   };
 
@@ -553,7 +639,6 @@ class AppLocalizations {
 
   // Support
   String get supportCenter => translate('support_center');
-  String get contactSupport => translate('contact_support');
   String get howToOrder => translate('how_to_order');
   String get orderSteps => translate('order_steps');
   String get shippingInfo => translate('shipping_info');
@@ -572,6 +657,50 @@ class AppLocalizations {
   String get noMessages => translate('no_messages');
   String get typeMessage => translate('type_message');
   String get send => translate('send');
+
+  // Admin Dashboard
+  String get adminHome => translate('admin_home');
+  String get adminProductManagement => translate('admin_product_management');
+  String get adminCategoryManagement => translate('admin_category_management');
+  String get adminOrderManagement => translate('admin_order_management');
+  String get adminUserManagement => translate('admin_user_management');
+  String get adminCouponManagement => translate('admin_coupon_management');
+  String get adminChatManagement => translate('admin_chat_management');
+  String get adminPromotionManagement => translate('admin_promotion_management');
+  String get adminSettings => translate('admin_settings');
+  String get adminAdministrator => translate('admin_administrator');
+  String get featureUnderDevelopment => translate('feature_under_development');
+
+  // Order
+  String get orderCancelledSuccessfully => translate('order_cancelled_successfully');
+  String get cannotCancelOrder => translate('cannot_cancel_order');
+  String get confirm => translate('confirm');
+
+  // Contact Support
+  String get contactSupport => translate('contact_support');
+  String get sendSuccess => translate('send_success');
+  String get supportRequestSent => translate('support_request_sent');
+  String get call => translate('call');
+  String callConfirmation(String phone) => translate('call_confirmation').replaceAll('{phone}', phone);
+  String calling(String phone) => translate('calling').replaceAll('{phone}', phone);
+  String get makeCall => translate('make_call');
+  String get sendEmail => translate('send_email');
+  String emailConfirmation(String email) => translate('email_confirmation').replaceAll('{email}', email);
+  String sendingEmail(String email) => translate('sending_email').replaceAll('{email}', email);
+  String get sendEmailAction => translate('send_email_action');
+  String get orderCategory => translate('order_category');
+  String get productCategory => translate('product_category');
+  String get paymentCategory => translate('payment_category');
+  String get shippingCategory => translate('shipping_category');
+  String get returnCategory => translate('return_category');
+  String get otherCategory => translate('other_category');
+
+  // Delivery Address
+  String get setAsDefaultAddress => translate('set_as_default_address');
+  String get pleaseFillAllFields => translate('please_fill_all_fields');
+  String get confirmDelete => translate('confirm_delete');
+  String get confirmDeleteAddress => translate('confirm_delete_address');
+  String get delete => translate('delete');
 }
 
 class _AppLocalizationsDelegate
@@ -589,5 +718,5 @@ class _AppLocalizationsDelegate
   }
 
   @override
-  bool shouldReload(_AppLocalizationsDelegate old) => false;
+  bool shouldReload(_AppLocalizationsDelegate old) => true;
 }

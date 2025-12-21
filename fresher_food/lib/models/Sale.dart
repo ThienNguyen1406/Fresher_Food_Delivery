@@ -1,6 +1,7 @@
 class Sale {
   final String idSale;
   final double giaTriKhuyenMai;
+  final String loaiGiaTri; // "Amount" hoặc "Percent"
   final String? moTaChuongTrinh;
   final DateTime ngayBatDau;
   final DateTime ngayKetThuc;
@@ -11,6 +12,7 @@ class Sale {
   Sale({
     required this.idSale,
     required this.giaTriKhuyenMai,
+    this.loaiGiaTri = 'Amount', // Default là Amount
     this.moTaChuongTrinh,
     required this.ngayBatDau,
     required this.ngayKetThuc,
@@ -54,6 +56,7 @@ class Sale {
     return {
       'id_sale': idSale,
       'giaTriKhuyenMai': giaTriKhuyenMai,
+      'loaiGiaTri': loaiGiaTri,
       'moTaChuongTrinh': moTaChuongTrinh,
       'ngayBatDau': ngayBatDau.toIso8601String(),
       'ngayKetThuc': ngayKetThuc.toIso8601String(),

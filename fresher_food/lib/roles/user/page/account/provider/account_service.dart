@@ -29,27 +29,16 @@ class AccountService {
     return await _favoriteApi.getFavoriteCount();
   }
 
-  // Purchased products (tạm thời)
+  // Lấy danh sách sản phẩm từ đơn hàng đã hoàn thành để đánh giá
   Future<List<Map<String, dynamic>>> getPurchasedProducts() async {
-    await Future.delayed(const Duration(seconds: 1)); // Giả lập delay
-    
-    // Dữ liệu mẫu - thay thế bằng API call thực tế
-    return [
-      {
-        'maSanPham': 'SP001',
-        'tenSanPham': 'iPhone 14 Pro Max',
-        'anh': 'https://example.com/iphone14.jpg'
-      },
-      {
-        'maSanPham': 'SP002', 
-        'tenSanPham': 'Samsung Galaxy S23',
-        'anh': 'https://example.com/galaxy-s23.jpg'
-      },
-      {
-        'maSanPham': 'SP003',
-        'tenSanPham': 'MacBook Air M2',
-        'anh': 'https://example.com/macbook-air.jpg'
-      },
-    ];
+    try {
+      // Gọi API để lấy sản phẩm từ đơn hàng đã hoàn thành
+      final products = await _orderApi.getCompletedOrderProducts();
+      return products;
+    } catch (e) {
+      print('Error getting purchased products: $e');
+      // Trả về danh sách rỗng nếu có lỗi
+      return [];
+    }
   }
 }

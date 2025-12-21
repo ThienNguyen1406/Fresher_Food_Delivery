@@ -13,6 +13,7 @@ import 'package:fresher_food/roles/user/page/cart/widgets/cart_snackbar_widgets.
 import 'package:fresher_food/roles/user/page/cart/widgets/zero_quantity_dialog.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 
+/// Màn hình giỏ hàng - quản lý sản phẩm trong giỏ hàng
 class CartPage extends StatefulWidget {
   const CartPage({super.key});
 
@@ -21,15 +22,16 @@ class CartPage extends StatefulWidget {
 }
 
 class _CartPageState extends State<CartPage> {
+  /// Khối khởi tạo: Load dữ liệu giỏ hàng từ provider
   @override
   void initState() {
     super.initState();
-    // Initialize data from provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CartProvider>().initialize();
     });
   }
 
+  /// Khối chức năng: Hiển thị cảnh báo khi số lượng vượt quá tồn kho
   void _showStockWarning(CartItem item) {
     showDialog(
       context: context,
@@ -39,6 +41,7 @@ class _CartPageState extends State<CartPage> {
     );
   }
 
+  /// Khối chức năng: Hiển thị dialog xác nhận xóa sản phẩm
   void _showDeleteConfirmation(CartItem cartItem) {
     showDialog(
       context: context,
@@ -52,6 +55,7 @@ class _CartPageState extends State<CartPage> {
     });
   }
 
+  /// Khối chức năng: Xóa sản phẩm khỏi giỏ hàng
   Future<void> _removeFromCart(CartItem cartItem) async {
     final provider = context.read<CartProvider>();
     final success =
@@ -64,6 +68,10 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
+  /// Khối chức năng: Cập nhật số lượng sản phẩm trong giỏ hàng
+  /// - Kiểm tra số lượng hợp lệ
+  /// - Kiểm tra tồn kho
+  /// - Cập nhật lên server
   Future<void> _updateQuantity(CartItem cartItem, int newQuantity) async {
     final provider = context.read<CartProvider>();
 
@@ -91,6 +99,7 @@ class _CartPageState extends State<CartPage> {
     }
   }
 
+  /// Khối chức năng: Xử lý thanh toán - chuyển đến màn hình checkout
   void _handleCheckout(CartProvider provider) {
     if (provider.state.selectedItems.isEmpty) {
       CartSnackbarWidgets.showError(

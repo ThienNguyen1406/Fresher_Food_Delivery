@@ -4,6 +4,7 @@ import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/roles/user/widgets/avatar_with_menu_widget.dart';
 import 'package:provider/provider.dart';
 
+/// Màn hình tài khoản - quản lý thông tin người dùng và các tùy chọn
 class AccountPage extends StatefulWidget {
   const AccountPage({super.key});
 
@@ -12,16 +13,16 @@ class AccountPage extends StatefulWidget {
 }
 
 class _AccountPageState extends State<AccountPage> {
+  /// Khối khởi tạo: Load dữ liệu từ provider
   @override
   void initState() {
     super.initState();
-    // Initialize data from provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<AccountProvider>().initialize();
     });
   }
 
-  // Hàm hiển thị dialog chọn sản phẩm để đánh giá
+  /// Khối chức năng: Hiển thị dialog chọn sản phẩm để đánh giá
   void _showProductReviewDialog() {
     showDialog(
       context: context,
@@ -116,6 +117,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  /// Khối chức năng: Xử lý đăng xuất với dialog xác nhận
   Future<void> _logout(BuildContext context) async {
     final provider = context.read<AccountProvider>();
 
@@ -242,6 +244,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  /// Khối chức năng: Hiển thị thông báo lỗi
   void _showErrorSnackbar(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -255,6 +258,7 @@ class _AccountPageState extends State<AccountPage> {
     );
   }
 
+  /// Khối giao diện chính: Hiển thị loading, profile hoặc yêu cầu đăng nhập
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

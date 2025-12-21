@@ -30,6 +30,12 @@ class CartApi {
         
         final cartResponse = CartResponse.fromJson(data);
         print('Converted ${cartResponse.sanPham.length} cart items');
+        
+        // Debug: Log giá từ backend
+        for (var item in cartResponse.sanPham) {
+          print('[Cart API] ${item.tenSanPham}: GiaBan=${item.giaBan}, SoLuong=${item.soLuong}, ThanhTien=${item.thanhTien}');
+        }
+        
         return cartResponse;
       } else {
         throw Exception('Failed to load cart: ${response.statusCode} - ${response.body}');

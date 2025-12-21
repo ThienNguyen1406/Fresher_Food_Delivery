@@ -53,6 +53,10 @@ class NoteCard extends StatelessWidget {
             onChanged: provider.updateNote,
             maxLines: 3,
             style: TextStyle(color: textPrimary, fontSize: 15),
+            enableInteractiveSelection: true,
+            enableSuggestions: true,
+            autocorrect: true,
+            textInputAction: TextInputAction.done,
             decoration: InputDecoration(
               hintText: 'Ví dụ: Giao hàng giờ hành chính, gọi điện trước khi giao...',
               hintStyle: TextStyle(color: textSecondary.withOpacity(0.6)),

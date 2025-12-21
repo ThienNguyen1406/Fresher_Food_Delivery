@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Product.dart';
 import 'package:iconsax/iconsax.dart';
 
-class ProductDeleteDialog extends StatelessWidget {
+class ProductDeleteDialog extends StatefulWidget {
   final Product product;
   final Future<bool> Function(String) onDelete;
 
@@ -11,6 +11,45 @@ class ProductDeleteDialog extends StatelessWidget {
     required this.product,
     required this.onDelete,
   });
+
+  @override
+  State<ProductDeleteDialog> createState() => _ProductDeleteDialogState();
+}
+
+class _ProductDeleteDialogState extends State<ProductDeleteDialog> {
+  bool _isDeleting = false;
+
+  Future<void> _handleDelete() async {
+    setState(() => _isDeleting = true);
+    
+    try {
+      final success = await widget.onDelete(widget.product.maSanPham);
+      
+      if (!mounted) return;
+      
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Xóa sản phẩm thành công'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() => _isDeleting = false);
+        // Error dialog đã được hiển thị trong onDelete callback
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isDeleting = false);
+      // Error dialog đã được hiển thị trong onDelete callback
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +89,7 @@ class ProductDeleteDialog extends StatelessWidget {
               child: Column(
                 children: [
                   Text(
-                    'Bạn có chắc muốn xóa sản phẩm "${product.tenSanPham}"?',
+                    'Bạn có chắc muốn xóa sản phẩm "${widget.product.tenSanPham}"?',
                     style: const TextStyle(fontSize: 16),
                     textAlign: TextAlign.center,
                   ),
@@ -60,6 +99,15 @@ class ProductDeleteDialog extends StatelessWidget {
                     style: TextStyle(color: Colors.grey),
                     textAlign: TextAlign.center,
                   ),
+                  if (_isDeleting) ...[
+                    const SizedBox(height: 16),
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Đang xóa sản phẩm...',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -75,40 +123,35 @@ class ProductDeleteDialog extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.grey,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  if (!_isDeleting)
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      child: const Text('Hủy'),
                     ),
-                    child: const Text('Hủy'),
-                  ),
-                  const SizedBox(width: 12),
+                  if (!_isDeleting) const SizedBox(width: 12),
                   ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                      final success = await onDelete(product.maSanPham);
-                      if (success && context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Xóa thành công'),
-                            backgroundColor: Colors.green,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.all(Radius.circular(12)),
-                            ),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
-                      }
-                    },
+                    onPressed: _isDeleting ? null : _handleDelete,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.red,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      disabledBackgroundColor: Colors.grey,
                     ),
-                    child: const Text('Xóa'),
+                    child: _isDeleting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text('Xóa'),
                   ),
                 ],
               ),

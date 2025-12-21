@@ -32,6 +32,12 @@ class CartProvider with ChangeNotifier {
   Future<void> loadCart() async {
     try {
       final cartResponse = await _cartService.getCart();
+      
+      // Debug: Log để kiểm tra giá
+      for (var item in cartResponse.sanPham) {
+        print('[Cart] ${item.tenSanPham}: GiaBan=${item.giaBan}, SoLuong=${item.soLuong}, ThanhTien=${item.thanhTien}');
+      }
+      
       _state = _state.copyWith(
         cartItems: cartResponse.sanPham,
         tongTien: cartResponse.tongTien,
@@ -130,28 +136,8 @@ class CartProvider with ChangeNotifier {
       final success =
           await _cartService.updateCartItem(cartItem.maSanPham, newQuantity);
       if (success) {
-        final updatedCartItems = _state.cartItems.map((item) {
-          if (item.maSanPham == cartItem.maSanPham) {
-            return cartItem.copyWith(
-              soLuong: newQuantity,
-              thanhTien: cartItem.giaBan * newQuantity,
-            );
-          }
-          return item;
-        }).toList();
-
-        final tongTien = updatedCartItems.fold(
-            0.0, (double total, item) => total + item.thanhTien);
-        final tongSoLuong =
-            updatedCartItems.fold(0, (int total, item) => total + item.soLuong);
-
-        _state = _state.copyWith(
-          cartItems: updatedCartItems,
-          tongTien: tongTien,
-          tongSoLuong: tongSoLuong,
-        );
-        _updateSelectedItems();
-        notifyListeners();
+        // Reload cart để lấy giá thực tế từ backend (có Sale và giảm giá hết hạn)
+        await loadCart();
         return true;
       }
       return false;

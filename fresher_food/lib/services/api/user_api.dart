@@ -303,7 +303,15 @@ class UserApi {
     return res.statusCode == 200;
   }
 
-  Future isAdmin() async {}
+  Future<bool> isAdmin() async {
+    try {
+      final user = await getCurrentUser();
+      if (user == null) return false;
+      return user.vaiTro.toLowerCase() == 'admin';
+    } catch (e) {
+      return false;
+    }
+  }
 
   // Upload/Update Avatar
   Future<bool> updateAvatar(String avatarUrl) async {

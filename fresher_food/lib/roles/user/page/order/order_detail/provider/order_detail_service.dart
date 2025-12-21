@@ -38,4 +38,12 @@ class OrderDetailService {
     }
     return total;
   }
+
+  Future<bool> cancelOrder(String orderId) async {
+    try {
+      return await _orderApi.cancelOrder(orderId);
+    } catch (e) {
+      throw Exception('Lỗi hủy đơn hàng: $e');
+    }
+  }
 }

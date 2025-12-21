@@ -11,6 +11,7 @@ class CartItem {
   final String tenDanhMuc;
   final String maTaiKhoan;
   final double thanhTien;
+  final DateTime? ngayHetHan; // Ngày hết hạn để tính giảm giá
   bool isSelected;
 
   CartItem({
@@ -24,10 +25,24 @@ class CartItem {
     required this.tenDanhMuc,
     required this.maTaiKhoan,
     required this.thanhTien,
+    this.ngayHetHan,
     this.isSelected = false, // Mặc định là false
   });
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
+    DateTime? ngayHetHan;
+    if (json['ngayHetHan'] != null) {
+      try {
+        if (json['ngayHetHan'] is String) {
+          ngayHetHan = DateTime.parse(json['ngayHetHan']);
+        } else if (json['ngayHetHan'] is DateTime) {
+          ngayHetHan = json['ngayHetHan'] as DateTime;
+        }
+      } catch (e) {
+        print('Lỗi parse ngayHetHan trong CartItem: $e');
+      }
+    }
+    
     return CartItem(
       maGioHang: json['maGioHang']?.toString() ?? '',
       maSanPham: json['maSanPham']?.toString() ?? '',
@@ -39,6 +54,7 @@ class CartItem {
       tenDanhMuc: json['tenDanhMuc']?.toString() ?? '',
       maTaiKhoan: json['maTaiKhoan']?.toString() ?? '',
       thanhTien: (json['thanhTien'] ?? 0).toDouble(),
+      ngayHetHan: ngayHetHan,
       isSelected: json['isSelected'] ?? false, // Thêm từ JSON nếu có
     );
   }
@@ -71,6 +87,7 @@ class CartItem {
     String? tenDanhMuc,
     String? maTaiKhoan,
     double? thanhTien,
+    DateTime? ngayHetHan,
     bool? isSelected,
   }) {
     return CartItem(
@@ -84,6 +101,7 @@ class CartItem {
       tenDanhMuc: tenDanhMuc ?? this.tenDanhMuc,
       maTaiKhoan: maTaiKhoan ?? this.maTaiKhoan,
       thanhTien: thanhTien ?? this.thanhTien,
+      ngayHetHan: ngayHetHan ?? this.ngayHetHan,
       isSelected: isSelected ?? this.isSelected,
     );
   }

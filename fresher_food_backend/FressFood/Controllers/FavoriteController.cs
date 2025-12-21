@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -71,7 +71,7 @@ namespace FressFood.Controllers
                                     p.TenSanPham, p.GiaBan, p.Anh, p.MoTa, p.SoLuongTon
                              FROM YeuThich f
                              INNER JOIN SanPham p ON f.MaSanPham = p.MaSanPham
-                             WHERE f.MaTaiKhoan = @MaTaiKhoan";
+                             WHERE f.MaTaiKhoan = @MaTaiKhoan AND (p.IsDeleted = 0 OR p.IsDeleted IS NULL)";
 
                     using (var command = new SqlCommand(query, connection))
                     {

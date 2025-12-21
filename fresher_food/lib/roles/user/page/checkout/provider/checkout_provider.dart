@@ -5,6 +5,8 @@ import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/models/Pay.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_service.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_state.dart';
+import 'package:fresher_food/services/api/delivery_address_api.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class CheckoutProvider with ChangeNotifier {
   final CheckoutService _service = CheckoutService();
@@ -77,11 +79,33 @@ class CheckoutProvider with ChangeNotifier {
     try {
       updateLoading(true);
       final userInfo = await _service.loadUserInfo();
+      
+      // Thử load địa chỉ mặc định từ API trước
+      String name = userInfo['hoTen'] ?? '';
+      String phone = userInfo['sdt'] ?? '';
+      String address = userInfo['diaChi'] ?? '';
+      
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final maTaiKhoan = prefs.getString('maTaiKhoan') ?? userInfo['maTaiKhoan'] ?? '';
+        if (maTaiKhoan.isNotEmpty) {
+          final deliveryAddressApi = DeliveryAddressApi();
+          final defaultAddress = await deliveryAddressApi.getDefaultAddress(maTaiKhoan);
+          if (defaultAddress != null) {
+            name = defaultAddress.hoTen;
+            phone = defaultAddress.soDienThoai;
+            address = defaultAddress.diaChi;
+          }
+        }
+      } catch (e) {
+        // Nếu không load được địa chỉ từ API, dùng thông tin user
+        print('Không thể load địa chỉ mặc định: $e');
+      }
 
       _state = _state.copyWith(
-        name: userInfo['hoTen'] ?? '',
-        phone: userInfo['sdt'] ?? '',
-        address: userInfo['diaChi'] ?? '',
+        name: name,
+        phone: phone,
+        address: address,
       );
       notifyListeners();
     } catch (e) {
@@ -147,6 +171,9 @@ class CheckoutProvider with ChangeNotifier {
   }
 
   void removeCoupon() {
+    print('removeCoupon được gọi');
+    print('Trước khi xóa - selectedCoupon: ${_state.selectedCoupon?.code}');
+    
     final newFinalAmount = _service.calculateFinalAmount(
       _state.totalAmount,
       0.0,
@@ -154,11 +181,16 @@ class CheckoutProvider with ChangeNotifier {
     );
 
     _state = _state.copyWith(
-      selectedCoupon: null,
+      clearCoupon: true,
       discountAmount: 0.0,
       finalAmount: newFinalAmount,
     );
+    
+    print('Sau khi xóa - selectedCoupon: ${_state.selectedCoupon}');
+    print('Final amount mới: $newFinalAmount');
+    
     notifyListeners();
+    print('Đã gọi notifyListeners');
   }
 
   void updateFinalAmount() {

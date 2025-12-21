@@ -10,9 +10,11 @@ import 'package:fresher_food/roles/admin/page/chat_manager/admin_chat_list_page.
 import 'package:fresher_food/roles/admin/page/promotion_manager/quanlykhuyenmai.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/services/api/chat_api.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:iconsax/iconsax.dart';
 import 'dart:async';
 
+/// Màn hình dashboard admin - quản lý tất cả các chức năng quản trị
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
 
@@ -27,61 +29,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final ChatApi _chatApi = ChatApi();
   Timer? _refreshTimer;
 
-  // Danh sách màn hình quản lý
-  late final List<Map<String, dynamic>> _screens = [
-    {
-      'title': 'Trang chủ',
-      'screen': const ThongKeScreen(),
-      'icon': Iconsax.home
-    },
-    {
-      'title': 'Quản lý sản phẩm',
-      'screen': const QuanLySanPhamScreen(),
-      'icon': Iconsax.box
-    },
-    {
-      'title': 'Quản lý danh mục',
-      'screen': const QuanLyDanhMucScreen(),
-      'icon': Iconsax.category
-    },
-    {
-      'title': 'Quản lý đơn hàng',
-      'screen': const QuanLyDonHangScreen(),
-      'icon': Iconsax.shopping_bag
-    },
-    {
-      'title': 'Quản lý người dùng',
-      'screen': const QuanLyNguoiDungScreen(),
-      'icon': Iconsax.profile_2user
-    },
-    {
-      'title': 'Quản lý mã giảm giá',
-      'screen': const QuanLyPhieuGiamGiaScreen(),
-      'icon': Iconsax.discount_shape
-    },
-    {
-      'title': 'Quản lý chat',
-      'screen': const AdminChatListPage(),
-      'icon': Iconsax.message
-    },
-    {
-      'title': 'Quản lý khuyến mãi',
-      'screen': const QuanLyKhuyenMaiScreen(),
-      'icon': Iconsax.magicpen
-    },
-    {
-      'title': 'Cài đặt',
-      'screen': const CaiDatScreen(),
-      'icon': Iconsax.setting
-    },
-  ];
+  /// Khối chức năng: Lấy danh sách các màn hình quản lý với localization
+  List<Map<String, dynamic>> _getScreens(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
+    return [
+      {
+        'title': localizations.adminHome,
+        'screen': const ThongKeScreen(),
+        'icon': Iconsax.home
+      },
+      {
+        'title': localizations.adminProductManagement,
+        'screen': const QuanLySanPhamScreen(),
+        'icon': Iconsax.box
+      },
+      {
+        'title': localizations.adminCategoryManagement,
+        'screen': const QuanLyDanhMucScreen(),
+        'icon': Iconsax.category
+      },
+      {
+        'title': localizations.adminOrderManagement,
+        'screen': const QuanLyDonHangScreen(),
+        'icon': Iconsax.shopping_bag
+      },
+      {
+        'title': localizations.adminUserManagement,
+        'screen': const QuanLyNguoiDungScreen(),
+        'icon': Iconsax.profile_2user
+      },
+      {
+        'title': localizations.adminCouponManagement,
+        'screen': const QuanLyPhieuGiamGiaScreen(),
+        'icon': Iconsax.discount_shape
+      },
+      {
+        'title': localizations.adminChatManagement,
+        'screen': const AdminChatListPage(),
+        'icon': Iconsax.message
+      },
+      {
+        'title': localizations.adminPromotionManagement,
+        'screen': const QuanLyKhuyenMaiScreen(),
+        'icon': Iconsax.magicpen
+      },
+      {
+        'title': localizations.adminSettings,
+        'screen': const CaiDatScreen(),
+        'icon': Iconsax.setting
+      },
+    ];
+  }
 
+  /// Khối khởi tạo: Load thông tin user, tin nhắn chưa đọc và tự động refresh mỗi 10 giây
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
     _loadUnreadMessagesCount();
-    // Auto refresh every 10 seconds
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) {
         _loadUnreadMessagesCount();
@@ -95,6 +100,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     super.dispose();
   }
 
+  /// Khối chức năng: Load thông tin người dùng admin
   Future<void> _loadUserInfo() async {
     try {
       final user = await UserApi().getUserInfo();
@@ -106,6 +112,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  /// Khối chức năng: Load số lượng tin nhắn chưa đọc từ chat
   Future<void> _loadUnreadMessagesCount() async {
     try {
       final chats = await _chatApi.getAdminChats();
@@ -123,14 +130,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
+  /// Khối giao diện chính: Hiển thị AppBar, Drawer và màn hình quản lý được chọn
   @override
   Widget build(BuildContext context) {
-    final screen = _screens[_selectedIndex]['screen'];
+    final screens = _getScreens(context);
+    final screen = screens[_selectedIndex]['screen'];
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
-      appBar: _buildAppBar(),
-      drawer: _buildDrawer(),
-      body: screen ?? _buildComingSoonScreen(),
+      appBar: _buildAppBar(screens),
+      drawer: _buildDrawer(screens, context),
+      body: screen ?? _buildComingSoonScreen(context),
     );
   }
 
@@ -143,7 +152,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  Widget _buildComingSoonScreen() {
+  Widget _buildComingSoonScreen(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -155,7 +165,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           const SizedBox(height: 16),
           Text(
-            'Tính năng đang phát triển',
+            localizations.featureUnderDevelopment,
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -167,10 +177,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  AppBar _buildAppBar() {
+  AppBar _buildAppBar(List<Map<String, dynamic>> screens) {
     return AppBar(
       title: Text(
-        _screens[_selectedIndex]['title'],
+        screens[_selectedIndex]['title'],
         style: const TextStyle(
           fontWeight: FontWeight.w700,
           fontSize: 20,
@@ -222,7 +232,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDrawer() {
+  Widget _buildDrawer(List<Map<String, dynamic>> screens, BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
     return Drawer(
       child: ListView(
         children: [
@@ -249,7 +260,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  _userInfo?['tenTaiKhoan'] ?? 'Quản trị viên',
+                  _userInfo?['tenTaiKhoan'] ?? localizations.adminAdministrator,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 18,
@@ -270,14 +281,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
           // Danh sách menu
           ...List.generate(
-            _screens.length,
+            screens.length,
             (index) {
               final isChatMenu = index == 6; // Index of "Quản lý chat"
               return ListTile(
                 leading: Stack(
                   children: [
                     Icon(
-                      _screens[index]['icon'],
+                      screens[index]['icon'],
                       color: _selectedIndex == index
                           ? const Color(0xFF2E7D32)
                           : Colors.grey.shade700,
@@ -310,7 +321,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   ],
                 ),
                 title: Text(
-                  _screens[index]['title'],
+                  screens[index]['title'],
                   style: TextStyle(
                     fontWeight: _selectedIndex == index
                         ? FontWeight.w600

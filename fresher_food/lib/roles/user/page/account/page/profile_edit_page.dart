@@ -254,6 +254,10 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
       keyboardType: keyboardType,
       maxLines: maxLines,
       validator: validator,
+      enableInteractiveSelection: true,
+      enableSuggestions: true,
+      autocorrect: true,
+      textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF667EEA)),

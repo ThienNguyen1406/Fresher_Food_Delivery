@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
@@ -39,7 +39,17 @@ namespace FoodShop.Controllers
                     }
                     catch (SqlException sqlEx)
                     {
-                        return StatusCode(500, new { error = $"Lỗi kết nối database: {sqlEx.Message}. Vui lòng kiểm tra SQL Server đã chạy và database 'FoodOrder' đã tồn tại." });
+                        // Lấy tên database từ connection string
+                        var dbName = "database";
+                        if (!string.IsNullOrEmpty(connectionString))
+                        {
+                            var dbMatch = System.Text.RegularExpressions.Regex.Match(connectionString, @"Database=([^;]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                            if (dbMatch.Success)
+                            {
+                                dbName = dbMatch.Groups[1].Value;
+                            }
+                        }
+                        return StatusCode(500, new { error = $"Lỗi kết nối database: {sqlEx.Message}. Vui lòng kiểm tra SQL Server đã chạy và database '{dbName}' đã tồn tại." });
                     }
                     string query = @"SELECT MaTaiKhoan, TenNguoiDung, MatKhau, Email, HoTen, Sdt, DiaChi, VaiTro, Avatar 
                                    FROM NguoiDung 

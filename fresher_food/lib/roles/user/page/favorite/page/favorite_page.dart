@@ -10,7 +10,7 @@ import 'package:fresher_food/roles/user/page/favorite/widgets/favorite_item_widg
 import 'package:fresher_food/roles/user/page/favorite/widgets/favorite_delete_dialog.dart';
 import 'package:fresher_food/roles/user/page/favorite/widgets/favorite_snackbar_widgets.dart';
 
-
+/// Màn hình sản phẩm yêu thích - quản lý danh sách sản phẩm đã yêu thích
 class FavoritePage extends StatefulWidget {
   const FavoritePage({super.key});
 
@@ -22,9 +22,9 @@ class _FavoritePageState extends State<FavoritePage> {
   @override
   void initState() {
     super.initState();
-    // Không gọi initialize ở đây nữa, sẽ gọi trong build
   }
 
+  /// Khối giao diện chính: Hiển thị loading, error, empty hoặc danh sách yêu thích
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -72,6 +72,7 @@ class _FavoritePageState extends State<FavoritePage> {
   }
 
 
+  /// Khối giao diện: Xây dựng danh sách sản phẩm yêu thích với pull-to-refresh
   Widget _buildFavoriteList(FavoriteProvider provider) {
     if (provider.isEmpty) {
       return const FavoriteEmptyScreen();
@@ -98,6 +99,7 @@ class _FavoritePageState extends State<FavoritePage> {
   }
 
 
+  /// Khối chức năng: Hiển thị dialog xác nhận xóa sản phẩm khỏi yêu thích
   void _showDeleteConfirmation(FavoriteProvider provider, Product product) {
     showDialog(
       context: context,
@@ -110,6 +112,7 @@ class _FavoritePageState extends State<FavoritePage> {
     );
   }
 
+  /// Khối chức năng: Xóa sản phẩm khỏi danh sách yêu thích
   Future<void> _removeFromFavorites(
       FavoriteProvider provider, Product product) async {
     try {

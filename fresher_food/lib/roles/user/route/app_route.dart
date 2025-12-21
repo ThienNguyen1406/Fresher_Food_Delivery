@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/main_screen.dart';
-import 'package:fresher_food/roles/user/page/login/login_screen.dart';
+import 'package:fresher_food/roles/user/page/auth/auth_screen.dart';
 import 'package:fresher_food/roles/user/page/splash/splash_screen.dart';
 import 'package:fresher_food/roles/user/home/page/home_page.dart';
 import 'package:fresher_food/roles/user/page/cart/page/cart_page.dart';
@@ -48,7 +48,7 @@ class AppRoute {
     if (routeName == splash) {
       return MaterialPageRoute(builder: (_) => const SplashScreen());
     } else if (routeName == login) {
-      return MaterialPageRoute(builder: (_) => const LoginScreen());
+      return MaterialPageRoute(builder: (_) => const AuthScreen());
     } else if (routeName == main) {
       return MaterialPageRoute(builder: (_) => const MainScreen());
     } else if (routeName == home) {

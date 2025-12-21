@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 
-
+/// Màn hình splash - kiểm tra trạng thái đăng nhập và điều hướng
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -17,6 +17,11 @@ class _SplashScreenState extends State<SplashScreen> {
     _checkAuthStatus();
   }
 
+  /// Khối chức năng: Kiểm tra trạng thái đăng nhập và điều hướng
+  /// - Đợi 2 giây để hiển thị splash
+  /// - Kiểm tra người dùng đã đăng nhập chưa
+  /// - Nếu đã đăng nhập: chuyển đến Main hoặc Admin Dashboard
+  /// - Nếu chưa đăng nhập: chuyển đến màn hình đăng nhập
   Future<void> _checkAuthStatus() async {
     await Future.delayed(const Duration(seconds: 2));
 
@@ -43,6 +48,7 @@ class _SplashScreenState extends State<SplashScreen> {
     }
   }
 
+  /// Khối giao diện: Hiển thị logo và loading indicator
   @override
   Widget build(BuildContext context) {
     return Scaffold(

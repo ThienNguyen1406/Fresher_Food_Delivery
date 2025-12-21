@@ -6,16 +6,16 @@ import 'package:iconsax/iconsax.dart';
 class ProductItemWidget extends StatelessWidget {
   final Product product;
   final Category category;
-  final Function(Product) onEdit;
-  final Function(Product) onDelete;
+  final Function(Product)? onEdit;
+  final Function(Product)? onDelete;
   final String Function(double) formatPrice;
 
   const ProductItemWidget({
     super.key,
     required this.product,
     required this.category,
-    required this.onEdit,
-    required this.onDelete,
+    this.onEdit,
+    this.onDelete,
     required this.formatPrice,
   });
 
@@ -130,21 +130,24 @@ class ProductItemWidget extends StatelessWidget {
             ),
 
             // Nút hành động
-            Column(
-              children: [
-                _buildActionButton(
-                  onPressed: () => onEdit(product),
-                  icon: Iconsax.edit,
-                  color: const Color(0xFF2196F3),
-                ),
-                const SizedBox(height: 8),
-                _buildActionButton(
-                  onPressed: () => onDelete(product),
-                  icon: Iconsax.trash,
-                  color: Colors.red,
-                ),
-              ],
-            ),
+            if (onEdit != null || onDelete != null)
+              Column(
+                children: [
+                  if (onEdit != null)
+                    _buildActionButton(
+                      onPressed: () => onEdit!(product),
+                      icon: Iconsax.edit,
+                      color: const Color(0xFF2196F3),
+                    ),
+                  if (onEdit != null && onDelete != null) const SizedBox(height: 8),
+                  if (onDelete != null)
+                    _buildActionButton(
+                      onPressed: () => onDelete!(product),
+                      icon: Iconsax.trash,
+                      color: Colors.red,
+                    ),
+                ],
+              ),
           ],
         ),
       ),

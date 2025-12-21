@@ -4,6 +4,7 @@ import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detai
 import 'package:fresher_food/services/api/order_api.dart';
 import 'package:iconsax/iconsax.dart';
 
+/// Màn hình quản lý đơn hàng - xem, lọc và cập nhật trạng thái đơn hàng
 class QuanLyDonHangScreen extends StatefulWidget {
   const QuanLyDonHangScreen({super.key});
 
@@ -55,12 +56,14 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     'cancelled': Color(0xFFEF5350), // Đỏ sáng
   };
 
+  /// Khối khởi tạo: Load danh sách đơn hàng từ server
   @override
   void initState() {
     super.initState();
     _loadOrders();
   }
 
+  /// Khối chức năng: Load tất cả đơn hàng từ API
   Future<void> _loadOrders() async {
     try {
       setState(() {
@@ -82,6 +85,7 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     }
   }
 
+  /// Khối chức năng: Cập nhật trạng thái đơn hàng (pending, processing, shipping, completed, cancelled)
   Future<void> _updateOrderStatus(String orderId, String newStatus) async {
     try {
       final apiService = OrderApi();
@@ -294,6 +298,10 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                     border: Border.all(color: Colors.grey.shade200),
                   ),
                   child: TextField(
+                    enableInteractiveSelection: true,
+                    enableSuggestions: true,
+                    autocorrect: true,
+                    textInputAction: TextInputAction.search,
                     onChanged: (value) {
                       setState(() {
                         _searchQuery = value;

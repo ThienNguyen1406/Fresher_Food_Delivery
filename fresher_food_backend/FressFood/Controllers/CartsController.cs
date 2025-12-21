@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -18,6 +18,7 @@ namespace FoodShop.Controllers
             _httpContextAccessor = httpContextAccessor;
         }
 
+        
         // GET: api/Carts/user/{userId}
         [HttpGet("user/{userId}")]
         public IActionResult GetCartByUser(string userId)
@@ -40,40 +41,71 @@ namespace FoodShop.Controllers
                             sp.GiaBan,
                             sp.Anh,
                             sp.SoLuongTon,
+                            sp.NgayHetHan,
                             dm.TenDanhMuc,
                             gh.MaTaiKhoan
                         FROM SanPham_GioHang spgh
                         INNER JOIN GioHang gh ON spgh.MaGioHang = gh.MaGioHang
                         INNER JOIN SanPham sp ON spgh.MaSanPham = sp.MaSanPham
                         INNER JOIN DanhMuc dm ON sp.MaDanhMuc = dm.MaDanhMuc
-                        WHERE gh.MaTaiKhoan = @MaTaiKhoan";
+                        WHERE gh.MaTaiKhoan = @MaTaiKhoan AND (sp.IsDeleted = 0 OR sp.IsDeleted IS NULL)";
 
                     using (var command = new SqlCommand(query, connection))
                     {
                         command.Parameters.AddWithValue("@MaTaiKhoan", userId);
 
+                        // Đọc tất cả dữ liệu vào list trước, sau đó mới tính giá để tránh lỗi DataReader
+                        var tempItems = new List<(string MaGioHang, string MaSanPham, int SoLuong, string TenSanPham, decimal GiaBan, string? Anh, int SoLuongTon, DateTime? NgayHetHan, string TenDanhMuc, string MaTaiKhoan)>();
                         using (var reader = command.ExecuteReader())
                         {
                             while (reader.Read())
                             {
-                                var anh = reader["Anh"] as string;
-                                var anhUrl = !string.IsNullOrEmpty(anh) ? GetFullImageUrl(anh) : null;
-
-                                var cartItem = new CartItemDetail
-                                {
-                                    MaGioHang = reader["MaGioHang"].ToString() ?? "",
-                                    MaSanPham = reader["MaSanPham"].ToString() ?? "",
-                                    SoLuong = Convert.ToInt32(reader["SoLuong"]),
-                                    TenSanPham = reader["TenSanPham"].ToString() ?? "",
-                                    GiaBan = Convert.ToDecimal(reader["GiaBan"]),
-                                    Anh = anhUrl,
-                                    SoLuongTon = Convert.ToInt32(reader["SoLuongTon"]),
-                                    TenDanhMuc = reader["TenDanhMuc"].ToString() ?? "",
-                                    MaTaiKhoan = reader["MaTaiKhoan"].ToString() ?? "",
-                                    ThanhTien = Convert.ToInt32(reader["SoLuong"]) * Convert.ToDecimal(reader["GiaBan"])
-                                };
-                                cartItems.Add(cartItem);
+                                tempItems.Add((
+                                    MaGioHang: reader["MaGioHang"].ToString() ?? "",
+                                    MaSanPham: reader["MaSanPham"].ToString() ?? "",
+                                    SoLuong: Convert.ToInt32(reader["SoLuong"]),
+                                    TenSanPham: reader["TenSanPham"].ToString() ?? "",
+                                    GiaBan: Convert.ToDecimal(reader["GiaBan"]),
+                                    Anh: reader["Anh"] as string,
+                                    SoLuongTon: Convert.ToInt32(reader["SoLuongTon"]),
+                                    NgayHetHan: reader["NgayHetHan"] != DBNull.Value && reader["NgayHetHan"] != null 
+                                        ? (DateTime?)Convert.ToDateTime(reader["NgayHetHan"]) 
+                                        : null,
+                                    TenDanhMuc: reader["TenDanhMuc"].ToString() ?? "",
+                                    MaTaiKhoan: reader["MaTaiKhoan"].ToString() ?? ""
+                                ));
                             }
+                        }
+                        
+                        // Sau khi đóng reader, mới tính giá thực tế
+                        foreach (var item in tempItems)
+                        {
+                            var anh = item.Anh;
+                            var anhUrl = !string.IsNullOrEmpty(anh) ? GetFullImageUrl(anh) : null;
+                            
+                            // Tính giá thực tế (có Sale và giảm giá hết hạn) - connection đã không còn reader mở
+                            var giaThucTe = TinhGiaThucTe(item.MaSanPham, item.GiaBan, item.NgayHetHan, connection);
+                            var thanhTien = item.SoLuong * giaThucTe;
+                            
+                            // Debug: Log để kiểm tra
+                            Console.WriteLine($"[Cart FINAL] {item.MaSanPham} ({item.TenSanPham}): GiaBan={item.GiaBan}, GiaThucTe={giaThucTe}, SoLuong={item.SoLuong}, ThanhTien={thanhTien}");
+                            System.Diagnostics.Debug.WriteLine($"[Cart] {item.MaSanPham}: GiaBan={item.GiaBan}, GiaThucTe={giaThucTe}, SoLuong={item.SoLuong}, ThanhTien={thanhTien}");
+
+                            var cartItem = new CartItemDetail
+                            {
+                                MaGioHang = item.MaGioHang,
+                                MaSanPham = item.MaSanPham,
+                                SoLuong = item.SoLuong,
+                                TenSanPham = item.TenSanPham,
+                                GiaBan = item.GiaBan,
+                                Anh = anhUrl,
+                                SoLuongTon = item.SoLuongTon,
+                                NgayHetHan = item.NgayHetHan,
+                                TenDanhMuc = item.TenDanhMuc,
+                                MaTaiKhoan = item.MaTaiKhoan,
+                                ThanhTien = thanhTien
+                            };
+                            cartItems.Add(cartItem);
                         }
                     }
 
@@ -252,6 +284,105 @@ namespace FoodShop.Controllers
 
         #region Helper Methods
 
+        /// <summary>
+        /// Tính giá thực tế của sản phẩm (có Sale và giảm giá hết hạn)
+        /// </summary>
+        private decimal TinhGiaThucTe(string maSanPham, decimal giaBan, DateTime? ngayHetHan, SqlConnection connection)
+        {
+            decimal giaThucTe = giaBan;
+            decimal giamGiaHetHan = 0;
+            bool coGiamGiaHetHan = false;
+            
+            // Kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
+            if (ngayHetHan.HasValue)
+            {
+                var now = DateTime.Now;
+                var daysUntilExpiry = (ngayHetHan.Value.Date - now.Date).Days;
+                Console.WriteLine($"[Cart Price] {maSanPham}: NgayHetHan={ngayHetHan.Value:yyyy-MM-dd}, DaysUntilExpiry={daysUntilExpiry}");
+                if (daysUntilExpiry >= 0 && daysUntilExpiry <= 7)
+                {
+                    giamGiaHetHan = giaBan * 0.3m;
+                    coGiamGiaHetHan = true;
+                    Console.WriteLine($"[Cart Price] {maSanPham}: Co giam gia het han 30% = {giamGiaHetHan}");
+                }
+            }
+            
+            // Kiểm tra Sale (khuyến mãi) - ưu tiên Sale hơn giảm giá hết hạn
+            decimal? giaTriKhuyenMai = null;
+            string? loaiGiaTri = null;
+            try
+            {
+                string saleQuery = @"
+                    SELECT TOP 1 GiaTriKhuyenMai, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri
+                    FROM KhuyenMai
+                    WHERE (MaSanPham = @MaSanPham OR MaSanPham = 'ALL')
+                      AND TrangThai = 'Active'
+                      AND NgayBatDau <= GETDATE()
+                      AND NgayKetThuc >= GETDATE()
+                    ORDER BY CASE WHEN MaSanPham = @MaSanPham THEN 0 ELSE 1 END";
+                
+                using (var saleCommand = new SqlCommand(saleQuery, connection))
+                {
+                    saleCommand.Parameters.AddWithValue("@MaSanPham", maSanPham);
+                    
+                    using (var saleReader = saleCommand.ExecuteReader())
+                    {
+                        if (saleReader.Read())
+                        {
+                            giaTriKhuyenMai = Convert.ToDecimal(saleReader["GiaTriKhuyenMai"]);
+                            loaiGiaTri = saleReader["LoaiGiaTri"]?.ToString() ?? "Amount";
+                            Console.WriteLine($"[Cart Price] {maSanPham}: Tim thay Sale, GiaTriKhuyenMai={giaTriKhuyenMai}, LoaiGiaTri={loaiGiaTri}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"[Cart Price] {maSanPham}: Khong tim thay Sale (kiem tra trong DB)");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log lỗi nhưng vẫn tiếp tục
+                Console.WriteLine($"[Cart Price] Error getting sale for {maSanPham}: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[Cart] Error getting sale for {maSanPham}: {ex.Message}");
+            }
+            
+            // Áp dụng giảm giá: Ưu tiên Sale, sau đó mới đến giảm giá hết hạn
+            if (giaTriKhuyenMai.HasValue && giaTriKhuyenMai.Value > 0)
+            {
+                // Có Sale -> tính giá theo loại (Amount hoặc Percent)
+                if (loaiGiaTri == "Percent")
+                {
+                    // Giảm giá theo phần trăm: GiaThucTe = GiaBan * (1 - GiaTriKhuyenMai / 100)
+                    // Ví dụ: GiaTriKhuyenMai = 30 -> giảm 30%
+                    decimal phanTramGiam = giaTriKhuyenMai.Value / 100m;
+                    decimal soTienGiam = giaBan * phanTramGiam;
+                    giaThucTe = Math.Max(0, giaBan - soTienGiam);
+                    Console.WriteLine($"[Cart Price] {maSanPham}: Dung Sale PERCENT, GiaBan={giaBan}, Giam={giaTriKhuyenMai.Value}%, SoTienGiam={soTienGiam}, GiaThucTe={giaThucTe}");
+                }
+                else
+                {
+                    // Giảm giá theo số tiền: GiaThucTe = GiaBan - GiaTriKhuyenMai
+                    giaThucTe = Math.Max(0, giaBan - giaTriKhuyenMai.Value);
+                    Console.WriteLine($"[Cart Price] {maSanPham}: Dung Sale AMOUNT, GiaBan={giaBan}, GiaTriKhuyenMai={giaTriKhuyenMai.Value}, GiaThucTe={giaThucTe}");
+                }
+            }
+            else if (coGiamGiaHetHan && giamGiaHetHan > 0)
+            {
+                // Không có Sale -> dùng giảm giá hết hạn
+                giaThucTe = Math.Max(0, giaBan - giamGiaHetHan);
+                Console.WriteLine($"[Cart Price] {maSanPham}: Dung giam gia het han, GiaBan={giaBan}, GiamGiaHetHan={giamGiaHetHan}, GiaThucTe={giaThucTe}");
+            }
+            else
+            {
+                Console.WriteLine($"[Cart Price] {maSanPham}: Khong co giam gia, GiaThucTe={giaThucTe} (giaBan)");
+            }
+            
+            var finalPrice = Math.Max(0, giaThucTe);
+            Console.WriteLine($"[Cart Price] {maSanPham}: FINAL GiaThucTe={finalPrice}");
+            return finalPrice;
+        }
+
         private string GetFullImageUrl(string imageName)
         {
             var request = _httpContextAccessor.HttpContext?.Request;
@@ -263,7 +394,7 @@ namespace FoodShop.Controllers
 
         private bool KiemTraTonKho(string maSanPham, int soLuong, SqlConnection connection)
         {
-            string query = "SELECT SoLuongTon FROM SanPham WHERE MaSanPham = @MaSanPham";
+            string query = "SELECT SoLuongTon FROM SanPham WHERE MaSanPham = @MaSanPham AND (IsDeleted = 0 OR IsDeleted IS NULL)";
 
             using (var command = new SqlCommand(query, connection))
             {
@@ -360,6 +491,7 @@ namespace FoodShop.Controllers
         public decimal GiaBan { get; set; }
         public string? Anh { get; set; }
         public int SoLuongTon { get; set; }
+        public DateTime? NgayHetHan { get; set; }
         public string TenDanhMuc { get; set; } = string.Empty;
         public required string MaTaiKhoan { get; set; }
         public decimal ThanhTien { get; set; }

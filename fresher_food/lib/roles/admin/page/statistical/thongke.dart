@@ -8,6 +8,7 @@ import 'package:fresher_food/roles/admin/page/order_manager/quanlydonhang.dart';
 import 'package:fresher_food/roles/admin/page/user_manager/quanlynguoidung.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/quanlysanpham.dart';
 
+/// Màn hình thống kê - hiển thị các số liệu và biểu đồ thống kê doanh thu, đơn hàng
 class ThongKeScreen extends StatefulWidget {
   const ThongKeScreen({super.key});
 
@@ -16,8 +17,6 @@ class ThongKeScreen extends StatefulWidget {
 }
 
 class _ThongKeScreenState extends State<ThongKeScreen> {
-  // final ApiService apiService = ApiService();
-
   bool _loading = true;
   int tongDonHang = 0;
   double doanhThu = 0.0;
@@ -32,19 +31,30 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
   double _revenueByDateRange = 0.0;
   int _ordersByDateRange = 0;
   int _customersByDateRange = 0;
+  int _donThanhCong = 0;
+  int _donBiHuy = 0;
 
   // Thống kê doanh thu theo tháng
   List<Map<String, dynamic>> _monthlyRevenue = [];
   bool _loadingMonthlyRevenue = false;
   int _selectedYear = DateTime.now().year;
 
+  // Dữ liệu cho biểu đồ
+  List<Map<String, dynamic>> _statusDistribution = [];
+  bool _loadingStatusDistribution = false;
+  List<Map<String, dynamic>> _monthlyOrderGrowth = [];
+  bool _loadingMonthlyOrderGrowth = false;
+
+  /// Khối khởi tạo: Load tất cả dữ liệu thống kê
   @override
   void initState() {
     super.initState();
     loadStats();
     loadMonthlyRevenue();
+    loadMonthlyOrderGrowth();
   }
 
+  /// Khối chức năng: Load thống kê tổng quan (tổng đơn hàng, doanh thu, người dùng, sản phẩm)
   Future<void> loadStats() async {
     setState(() => _loading = true);
     try {
@@ -52,9 +62,17 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
       final donHangs = await OrderApi().getOrders();
       tongDonHang = donHangs.length;
 
-      // Lấy tất cả order details và tính doanh thu
+      // Lọc chỉ lấy đơn hàng đã hoàn thành (complete)
+      final completedOrders = donHangs.where((order) {
+        final status = order.trangThai.toLowerCase();
+        return status.contains('hoàn thành') || 
+               status.contains('đã giao hàng') ||
+               status.contains('complete');
+      }).toList();
+
+      // Lấy tất cả order details và tính doanh thu CHỈ từ đơn hàng đã hoàn thành
       allOrderDetails = [];
-      for (var donHang in donHangs) {
+      for (var donHang in completedOrders) {
         try {
           final orderDetail =
               await OrderApi().getOrderDetail(donHang.maDonHang);
@@ -71,7 +89,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
         }
       }
 
-      // Tính tổng doanh thu từ order details
+      // Tính tổng doanh thu từ order details (chỉ đơn hàng đã hoàn thành)
       doanhThu = allOrderDetails.fold(
           0.0, (sum, detail) => sum + (detail.giaBan * detail.soLuong));
 
@@ -99,7 +117,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
     return amount.toStringAsFixed(0);
   }
 
-  // Load thống kê doanh thu theo khoảng thời gian
+  /// Khối chức năng: Load thống kê doanh thu theo khoảng thời gian được chọn
   Future<void> loadRevenueStatistics() async {
     if (_startDate == null || _endDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,8 +164,13 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
             (statistics['tongDoanhThu'] as num?)?.toDouble() ?? 0.0;
         _ordersByDateRange = statistics['tongDonHang'] as int? ?? 0;
         _customersByDateRange = statistics['tongKhachHang'] as int? ?? 0;
+        _donThanhCong = statistics['donThanhCong'] as int? ?? 0;
+        _donBiHuy = statistics['donBiHuy'] as int? ?? 0;
         _loadingRevenue = false;
       });
+
+      // Load dữ liệu cho pie chart
+      await loadStatusDistribution();
 
       print(
           '📊 Final values: Revenue=${_revenueByDateRange}, Orders=${_ordersByDateRange}, Customers=${_customersByDateRange}');
@@ -164,6 +187,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
   }
 
   // Load thống kê doanh thu theo tháng
+  /// Khối chức năng: Load thống kê doanh thu theo tháng trong năm được chọn
   Future<void> loadMonthlyRevenue() async {
     setState(() {
       _loadingMonthlyRevenue = true;
@@ -183,6 +207,54 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
       debugPrint("❌ Lỗi fetch thống kê doanh thu theo tháng: $e");
       setState(() {
         _loadingMonthlyRevenue = false;
+      });
+    }
+  }
+
+  // Load phân bố trạng thái đơn hàng (cho pie chart)
+  Future<void> loadStatusDistribution() async {
+    if (_startDate == null || _endDate == null) return;
+
+    setState(() {
+      _loadingStatusDistribution = true;
+    });
+
+    try {
+      final distribution = await OrderApi().getOrderStatusDistribution(
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+      
+      setState(() {
+        _statusDistribution = distribution;
+        _loadingStatusDistribution = false;
+      });
+    } catch (e) {
+      debugPrint("❌ Lỗi fetch phân bố trạng thái: $e");
+      setState(() {
+        _loadingStatusDistribution = false;
+      });
+    }
+  }
+
+  // Load tăng trưởng đơn hàng theo tháng (cho line chart)
+  /// Khối chức năng: Load thống kê tăng trưởng đơn hàng theo tháng
+  Future<void> loadMonthlyOrderGrowth() async {
+    setState(() {
+      _loadingMonthlyOrderGrowth = true;
+    });
+
+    try {
+      final growth = await OrderApi().getMonthlyOrderGrowth(year: _selectedYear);
+      
+      setState(() {
+        _monthlyOrderGrowth = growth;
+        _loadingMonthlyOrderGrowth = false;
+      });
+    } catch (e) {
+      debugPrint("❌ Lỗi fetch tăng trưởng đơn hàng: $e");
+      setState(() {
+        _loadingMonthlyOrderGrowth = false;
       });
     }
   }
@@ -257,6 +329,10 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
 
             // Thống kê doanh thu theo khoảng thời gian
             _buildRevenueByDateRangeSection(),
+            const SizedBox(height: 30),
+
+            // Line Chart - Tăng trưởng đơn hàng theo tháng
+            _buildOrderGrowthLineChart(),
             const SizedBox(height: 30),
 
             // Charts Section
@@ -628,9 +704,9 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
                       Text(
                         '$_ordersByDateRange',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[800],
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
                         ),
                       ),
                     ],
@@ -649,9 +725,65 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
                       Text(
                         '$_customersByDateRange',
                         style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.grey[800],
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Divider(color: Colors.grey[300]),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.check_circle, color: Colors.green[600], size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Đơn thành công:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '$_donThanhCong',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.cancel, color: Colors.red[600], size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Đơn bị hủy:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                      Text(
+                        '$_donBiHuy',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red[700],
                         ),
                       ),
                     ],
@@ -659,6 +791,11 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
                 ],
               ),
             ),
+            // Pie Chart - Phân bố trạng thái đơn hàng
+            if (!_loadingStatusDistribution && _statusDistribution.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              _buildStatusPieChart(),
+            ],
           ],
         ],
       ),
@@ -687,10 +824,6 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
         ),
         const SizedBox(height: 20),
         _buildRevenueChart(),
-        const SizedBox(height: 24),
-        _buildOrderTypeChart(),
-        const SizedBox(height: 24),
-        _buildUserGrowthChart(),
       ],
     );
   }
@@ -915,9 +1048,51 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
     );
   }
 
-  Widget _buildOrderTypeChart() {
+
+  LinearGradient _createGradient(List<Color> colors) {
+    return LinearGradient(
+      colors: colors,
+      begin: Alignment.bottomCenter,
+      end: Alignment.topCenter,
+    );
+  }
+
+  // Pie Chart - Phân bố trạng thái đơn hàng
+  Widget _buildStatusPieChart() {
+    if (_statusDistribution.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Màu sắc cho từng trạng thái
+    final colors = [
+      Colors.orange,
+      Colors.blue,
+      Colors.purple,
+      Colors.green,
+      Colors.red,
+    ];
+
+    // Tạo dữ liệu cho pie chart
+    final pieChartSections = _statusDistribution.asMap().entries.map((entry) {
+      final index = entry.key;
+      final data = entry.value;
+      final percentage = (data['percentage'] as num).toDouble();
+
+      return PieChartSectionData(
+        value: percentage,
+        title: '${percentage.toStringAsFixed(1)}%',
+        color: colors[index % colors.length],
+        radius: 60,
+        titleStyle: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      );
+    }).toList();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -933,97 +1108,107 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            "Phân loại đơn hàng",
+            'Phân loại đơn hàng',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: Colors.grey[800],
             ),
           ),
-          const SizedBox(height: 16),
-          SizedBox(
-            height: 200,
-            child: Row(
-              children: [
-                Expanded(
-                  flex: 3,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 4,
-                      centerSpaceRadius: 40,
-                      sections: [
-                        PieChartSectionData(
-                          color: Colors.blue,
-                          value: 35,
-                          title: '35%',
-                          radius: 50,
-                          titleStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        PieChartSectionData(
-                          color: Colors.green,
-                          value: 25,
-                          title: '25%',
-                          radius: 50,
-                          titleStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        PieChartSectionData(
-                          color: Colors.orange,
-                          value: 20,
-                          title: '20%',
-                          radius: 50,
-                          titleStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        PieChartSectionData(
-                          color: Colors.purple,
-                          value: 20,
-                          title: '20%',
-                          radius: 50,
-                          titleStyle: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              // Pie Chart
+              SizedBox(
+                width: 200,
+                height: 200,
+                child: PieChart(
+                  PieChartData(
+                    sections: pieChartSections,
+                    centerSpaceRadius: 40,
+                    sectionsSpace: 2,
                   ),
                 ),
-                Expanded(
-                  flex: 2,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildLegendItem("Đơn Online", Colors.blue),
-                      _buildLegendItem("Đơn tại quán", Colors.green),
-                      _buildLegendItem("Đơn mang về", Colors.orange),
-                      _buildLegendItem("Đơn giao hàng", Colors.purple),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 20),
+              // Legend
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: _statusDistribution.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final data = entry.value;
+                    final category = data['category'] as String;
+                    final count = data['count'] as int;
+                    final percentage = (data['percentage'] as num).toDouble();
+
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 16,
+                            height: 16,
+                            decoration: BoxDecoration(
+                              color: colors[index % colors.length],
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              category,
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '$count (${percentage.toStringAsFixed(1)}%)',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[800],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildUserGrowthChart() {
+  // Line Chart - Tăng trưởng đơn hàng theo tháng
+  Widget _buildOrderGrowthLineChart() {
+    // Tính maxY dựa trên dữ liệu
+    double maxOrders = 0;
+    if (_monthlyOrderGrowth.isNotEmpty) {
+      maxOrders = _monthlyOrderGrowth
+          .map((e) => (e['soDonHang'] as num).toDouble())
+          .reduce((a, b) => a > b ? a : b);
+    }
+    double maxY = maxOrders * 1.2;
+    if (maxY == 0) maxY = 10;
+
+    // Tạo dữ liệu cho line chart
+    final lineSpots = _monthlyOrderGrowth.isEmpty
+        ? List.generate(12, (index) => FlSpot(index.toDouble(), 0))
+        : _monthlyOrderGrowth.asMap().entries.map((entry) {
+            final index = entry.key;
+            final monthData = entry.value;
+            final soDonHang = (monthData['soDonHang'] as num).toDouble();
+            return FlSpot(index.toDouble(), soDonHang);
+          }).toList();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -1042,150 +1227,115 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                "Tăng trưởng người dùng",
+                'Tăng trưởng đơn hàng',
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: Colors.grey[800],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.group_add, color: Colors.orange, size: 16),
-                    const SizedBox(width: 4),
-                    Text(
-                      "+8.2%",
-                      style: TextStyle(
-                        color: Colors.orange,
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
+              // Year selector
+              DropdownButton<int>(
+                value: _selectedYear,
+                items: List.generate(5, (index) {
+                  final year = DateTime.now().year - index;
+                  return DropdownMenuItem(
+                    value: year,
+                    child: Text('Năm $year'),
+                  );
+                }),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _selectedYear = value;
+                    });
+                    loadMonthlyOrderGrowth();
+                  }
+                },
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           SizedBox(
-            height: 200,
-            child: LineChart(
-              LineChartData(
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: Colors.grey[200],
-                    strokeWidth: 1,
-                  ),
-                ),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, _) {
-                        const months = ['T5', 'T6', 'T7', 'T8', 'T9', 'T10'];
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 8.0),
-                          child: Text(
-                            months[value.toInt()],
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 12,
-                            ),
+            height: 250,
+            child: _loadingMonthlyOrderGrowth
+                ? const Center(child: CircularProgressIndicator())
+                : LineChart(
+                    LineChartData(
+                      gridData: FlGridData(
+                        show: true,
+                        drawVerticalLine: false,
+                        getDrawingHorizontalLine: (value) => FlLine(
+                          color: Colors.grey[200],
+                          strokeWidth: 1,
+                        ),
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            getTitlesWidget: (value, meta) {
+                              return Text(
+                                value.toInt().toString(),
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 10,
+                                ),
+                              );
+                            },
                           ),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (value, _) {
-                        return Text(
-                          '${value.toInt()}',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 30,
+                            getTitlesWidget: (value, meta) {
+                              final monthNames = [
+                                'T1', 'T2', 'T3', 'T4', 'T5', 'T6',
+                                'T7', 'T8', 'T9', 'T10', 'T11', 'T12'
+                              ];
+                              if (value.toInt() >= 0 && value.toInt() < 12) {
+                                return Text(
+                                  monthNames[value.toInt()],
+                                  style: TextStyle(
+                                    color: Colors.grey[600],
+                                    fontSize: 10,
+                                  ),
+                                );
+                              }
+                              return const Text('');
+                            },
                           ),
-                        );
-                      },
+                        ),
+                        rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                      ),
+                      borderData: FlBorderData(show: false),
+                      lineBarsData: [
+                        LineChartBarData(
+                          spots: lineSpots,
+                          isCurved: true,
+                          color: Colors.orange,
+                          barWidth: 3,
+                          dotData: FlDotData(show: true),
+                          belowBarData: BarAreaData(
+                            show: true,
+                            color: Colors.orange.withOpacity(0.1),
+                          ),
+                        ),
+                      ],
+                      minY: 0,
+                      maxY: maxY,
                     ),
                   ),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                ),
-                borderData: FlBorderData(show: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: const [
-                      FlSpot(0, 3),
-                      FlSpot(1, 4),
-                      FlSpot(2, 6),
-                      FlSpot(3, 8),
-                      FlSpot(4, 10),
-                      FlSpot(5, 12),
-                    ],
-                    isCurved: true,
-                    gradient: _createGradient([Colors.orange, Colors.amber]),
-                    barWidth: 4,
-                    belowBarData: BarAreaData(
-                      show: true,
-                      gradient: _createGradient([
-                        Colors.orange.withOpacity(0.3),
-                        Colors.amber.withOpacity(0.1),
-                      ]),
-                    ),
-                    dotData: const FlDotData(show: true),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLegendItem(String text, Color color) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        children: [
-          Container(
-            width: 12,
-            height: 12,
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(3),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            text,
-            style: TextStyle(
-              color: Colors.grey[700],
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  LinearGradient _createGradient(List<Color> colors) {
-    return LinearGradient(
-      colors: colors,
-      begin: Alignment.bottomCenter,
-      end: Alignment.topCenter,
     );
   }
 }

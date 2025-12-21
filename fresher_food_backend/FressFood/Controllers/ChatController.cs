@@ -1,4 +1,5 @@
 using FressFood.Models;
+using FressFood.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Text;
@@ -11,11 +12,13 @@ namespace FressFood.Controllers
     {
         private readonly IConfiguration _configuration;
         private readonly ILogger<ChatController> _logger;
+        private readonly ChatbotService _chatbotService;
 
-        public ChatController(IConfiguration configuration, ILogger<ChatController> logger)
+        public ChatController(IConfiguration configuration, ILogger<ChatController> logger, ChatbotService chatbotService)
         {
             _configuration = configuration;
             _logger = logger;
+            _chatbotService = chatbotService;
         }
 
         /// <summary>
@@ -361,6 +364,78 @@ namespace FressFood.Controllers
                             command.Parameters.AddWithValue("@MaAdmin", request.MaNguoiGui);
                             await command.ExecuteNonQueryAsync();
                         }
+                    }
+
+                    // Nếu user gửi tin nhắn, chatbot tự động trả lời sau 2 giây
+                    if (request.LoaiNguoiGui == "User")
+                    {
+                        // Xử lý tin nhắn bằng chatbot trong background (không block response)
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await Task.Delay(2000); // Đợi 2 giây trước khi trả lời (tự nhiên hơn)
+                                
+                                // Xử lý tin nhắn bằng chatbot (có thể gọi AI nếu cần)
+                                var botResponse = await _chatbotService.ProcessMessageAsync(request.NoiDung, request.MaChat);
+                                
+                                if (!string.IsNullOrEmpty(botResponse))
+                                {
+                                    var botMaTinNhan = $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                                    
+                                    using (var botConnection = new SqlConnection(connectionString))
+                                    {
+                                        await botConnection.OpenAsync();
+                                        
+                                        // Tạo tin nhắn từ chatbot
+                                        string botMessageQuery = @"
+                                            INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                            VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+
+                                        using (var botCommand = new SqlCommand(botMessageQuery, botConnection))
+                                        {
+                                            botCommand.Parameters.AddWithValue("@MaTinNhan", botMaTinNhan);
+                                            botCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
+                                            botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT"); // Mã chatbot
+                                            botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Admin"); // Hiển thị như admin
+                                            botCommand.Parameters.AddWithValue("@NoiDung", botResponse);
+                                            botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                            botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+
+                                            await botCommand.ExecuteNonQueryAsync();
+                                        }
+
+                                        // Cập nhật tin nhắn cuối trong Chat
+                                        string updateChatQuery = @"
+                                            UPDATE Chat 
+                                            SET TinNhanCuoi = @TinNhanCuoi, 
+                                                NgayTinNhanCuoi = @NgayTinNhanCuoi,
+                                                NgayCapNhat = @NgayCapNhat
+                                            WHERE MaChat = @MaChat";
+
+                                        using (var updateCommand = new SqlCommand(updateChatQuery, botConnection))
+                                        {
+                                            var preview = botResponse.Length > 100 
+                                                ? botResponse.Substring(0, 100) 
+                                                : botResponse;
+
+                                            updateCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
+                                            updateCommand.Parameters.AddWithValue("@TinNhanCuoi", preview);
+                                            updateCommand.Parameters.AddWithValue("@NgayTinNhanCuoi", DateTime.Now);
+                                            updateCommand.Parameters.AddWithValue("@NgayCapNhat", DateTime.Now);
+
+                                            await updateCommand.ExecuteNonQueryAsync();
+                                        }
+                                    }
+                                    
+                                    _logger.LogInformation($"Chatbot auto-replied to chat {request.MaChat}");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, $"Error sending chatbot auto-reply for chat {request.MaChat}");
+                            }
+                        });
                     }
                 }
 

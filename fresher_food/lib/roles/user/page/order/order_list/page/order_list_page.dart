@@ -5,6 +5,7 @@ import 'package:fresher_food/roles/user/page/order/order_list/provider/order_lis
 import 'package:provider/provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 
+/// Màn hình danh sách đơn hàng - hiển thị tất cả đơn hàng của người dùng
 class OrderListPage extends StatefulWidget {
   const OrderListPage({super.key});
 
@@ -13,6 +14,7 @@ class OrderListPage extends StatefulWidget {
 }
 
 class _OrderListPageState extends State<OrderListPage> {
+  /// Khối khởi tạo: Load danh sách đơn hàng từ server
   @override
   void initState() {
     super.initState();
@@ -21,6 +23,7 @@ class _OrderListPageState extends State<OrderListPage> {
     });
   }
 
+  /// Khối giao diện chính: Hiển thị loading, error, empty hoặc danh sách đơn hàng
   @override
   Widget build(BuildContext context) {
     return Scaffold(

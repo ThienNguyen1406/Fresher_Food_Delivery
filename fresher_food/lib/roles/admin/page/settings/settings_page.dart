@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:fresher_food/roles/user/page/login/login_screen.dart' show LoginScreen;
+import 'package:fresher_food/roles/user/page/auth/auth_screen.dart' show AuthScreen;
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:iconsax/iconsax.dart';
 
@@ -134,7 +134,7 @@ class _CaiDatScreenState extends State<CaiDatScreen> {
                               if (success) {
                                 Navigator.pushAndRemoveUntil(
                                   context,
-                                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                                  MaterialPageRoute(builder: (context) => const AuthScreen()),
                                   (route) => false,
                                 );
                               }
@@ -344,7 +344,7 @@ class _CaiDatScreenState extends State<CaiDatScreen> {
                     onPressed: () {
                       Navigator.push(
                         context,
-                        MaterialPageRoute(builder: (context) => const LoginScreen()),
+                        MaterialPageRoute(builder: (context) => const AuthScreen()),
                       );
                     },
                     style: ElevatedButton.styleFrom(

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 
 class ContactSupportPage extends StatefulWidget {
   const ContactSupportPage({super.key});
@@ -11,17 +12,20 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
   final _formKey = GlobalKey<FormState>();
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
-  String _selectedCategory = 'Đơn hàng';
+  String? _selectedCategory;
   bool _isSubmitting = false;
 
-  final List<String> _categories = [
-    'Đơn hàng',
-    'Sản phẩm',
-    'Thanh toán',
-    'Vận chuyển',
-    'Đổi trả',
-    'Khác',
-  ];
+  List<String> _getCategories(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
+    return [
+      localizations.orderCategory,
+      localizations.productCategory,
+      localizations.paymentCategory,
+      localizations.shippingCategory,
+      localizations.returnCategory,
+      localizations.otherCategory,
+    ];
+  }
 
   @override
   void dispose() {
@@ -41,19 +45,18 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     setState(() => _isSubmitting = false);
 
     if (mounted) {
+      final localizations = AppLocalizations.of(context)!;
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Row(
+          title: Row(
             children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(width: 8),
-              Text('Gửi thành công'),
+              const Icon(Icons.check_circle, color: Colors.green, size: 28),
+              const SizedBox(width: 8),
+              Text(localizations.sendSuccess),
             ],
           ),
-          content: const Text(
-            'Yêu cầu hỗ trợ của bạn đã được gửi. Chúng tôi sẽ phản hồi trong vòng 24 giờ.',
-          ),
+          content: Text(localizations.supportRequestSent),
           actions: [
             TextButton(
               onPressed: () {
@@ -70,12 +73,17 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
 
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context)!;
+    final categories = _getCategories(context);
+    if (_selectedCategory == null) {
+      _selectedCategory = categories[0];
+    }
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
       appBar: AppBar(
-        title: const Text(
-          'Liên hệ hỗ trợ',
-          style: TextStyle(
+        title: Text(
+          localizations.contactSupport,
+          style: const TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 20,
             color: Colors.black87,
@@ -181,7 +189,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                               color: Color(0xFF667EEA), width: 2),
                         ),
                       ),
-                      items: _categories.map((category) {
+                      items: categories.map((category) {
                         return DropdownMenuItem(
                           value: category,
                           child: Text(category),
@@ -194,6 +202,10 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _subjectController,
+                      enableInteractiveSelection: true,
+                      enableSuggestions: true,
+                      autocorrect: true,
+                      textInputAction: TextInputAction.next,
                       decoration: InputDecoration(
                         labelText: 'Tiêu đề *',
                         prefixIcon:
@@ -218,6 +230,10 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                     TextFormField(
                       controller: _messageController,
                       maxLines: 6,
+                      enableInteractiveSelection: true,
+                      enableSuggestions: true,
+                      autocorrect: true,
+                      textInputAction: TextInputAction.newline,
                       decoration: InputDecoration(
                         labelText: 'Nội dung *',
                         prefixIcon: const Padding(
@@ -308,27 +324,28 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
   }
 
   void _makePhoneCall(String phoneNumber) {
+    final localizations = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Gọi điện'),
-        content: Text('Bạn có muốn gọi đến số $phoneNumber?'),
+        title: Text(localizations.call),
+        content: Text(localizations.callConfirmation(phoneNumber)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
+            child: Text(localizations.cancel),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Gọi đến $phoneNumber'),
+                  content: Text(localizations.calling(phoneNumber)),
                   backgroundColor: Colors.green,
                 ),
               );
             },
-            child: const Text('Gọi'),
+            child: Text(localizations.makeCall),
           ),
         ],
       ),
@@ -336,27 +353,28 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
   }
 
   void _sendEmail(String email) {
+    final localizations = AppLocalizations.of(context)!;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Gửi email'),
-        content: Text('Bạn có muốn gửi email đến $email?'),
+        title: Text(localizations.sendEmail),
+        content: Text(localizations.emailConfirmation(email)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Hủy'),
+            child: Text(localizations.cancel),
           ),
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Gửi email đến $email'),
+                  content: Text(localizations.sendingEmail(email)),
                   backgroundColor: Colors.green,
                 ),
               );
             },
-            child: const Text('Gửi'),
+            child: Text(localizations.sendEmailAction),
           ),
         ],
       ),

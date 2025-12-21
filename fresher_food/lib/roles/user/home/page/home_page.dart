@@ -7,7 +7,7 @@ import 'package:fresher_food/roles/user/home/widgets/banner_section.dart';
 import 'package:fresher_food/roles/user/home/widgets/categories_section.dart';
 import 'package:fresher_food/roles/user/home/widgets/products_section.dart';
 
-
+/// Màn hình trang chủ - hiển thị banner, danh mục và sản phẩm
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -28,18 +28,19 @@ class _HomePageState extends State<HomePage> {
     "lib/assets/img/anh3.png",
   ];
 
+  /// Khối khởi tạo: Khởi tạo PageController, auto-scroll banner và load dữ liệu
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
     _startAutoScroll();
 
-    // Initialize data from provider
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeProvider>().initializeData();
     });
   }
 
+  /// Khối chức năng: Tự động scroll banner mỗi 3 giây
   void _startAutoScroll() {
     _timer = Timer.periodic(const Duration(seconds: 3), (Timer timer) {
       if (_pageController.hasClients) {

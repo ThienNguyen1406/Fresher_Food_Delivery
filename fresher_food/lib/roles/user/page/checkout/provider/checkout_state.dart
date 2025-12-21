@@ -59,6 +59,7 @@ class CheckoutState {
     List<Pay>? paymentMethods,
     List<PhieuGiamGia>? availableCoupons,
     PhieuGiamGia? selectedCoupon,
+    bool? clearCoupon = false, // Flag để clear coupon
     bool? isLoading,
     bool? isProcessingPayment,
     double? discountAmount,
@@ -76,7 +77,7 @@ class CheckoutState {
       selectedPaymentId: selectedPaymentId ?? this.selectedPaymentId,
       paymentMethods: paymentMethods ?? this.paymentMethods,
       availableCoupons: availableCoupons ?? this.availableCoupons,
-      selectedCoupon: selectedCoupon ?? this.selectedCoupon,
+      selectedCoupon: clearCoupon == true ? null : (selectedCoupon ?? this.selectedCoupon),
       isLoading: isLoading ?? this.isLoading,
       isProcessingPayment: isProcessingPayment ?? this.isProcessingPayment,
       discountAmount: discountAmount ?? this.discountAmount,

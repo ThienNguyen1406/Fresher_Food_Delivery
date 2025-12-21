@@ -36,12 +36,8 @@ class Product {
       donViTinh: json['donViTinh']?.toString() ?? '',
       xuatXu: json['xuatXu']?.toString() ?? '',
       maDanhMuc: json['maDanhMuc']?.toString() ?? '',
-      ngaySanXuat: json['ngaySanXuat'] != null
-          ? DateTime.parse(json['ngaySanXuat'])
-          : null,
-      ngayHetHan: json['ngayHetHan'] != null
-          ? DateTime.parse(json['ngayHetHan'])
-          : null,
+      ngaySanXuat: Product._safeParseDateTime(json['ngaySanXuat']),
+      ngayHetHan: Product._safeParseDateTime(json['ngayHetHan']),
     );
   }
 
@@ -75,5 +71,23 @@ class Product {
       ngaySanXuat: ngaySanXuat,
       ngayHetHan: ngayHetHan,
     );
+  }
+
+  // Helper method để parse DateTime an toàn
+  static DateTime? _safeParseDateTime(dynamic value) {
+    if (value == null) return null;
+    
+    try {
+      if (value is String) {
+        // Thử parse ISO8601 format
+        return DateTime.parse(value);
+      } else if (value is DateTime) {
+        return value;
+      }
+    } catch (e) {
+      print('Lỗi parse DateTime: $value - $e');
+    }
+    
+    return null;
   }
 }

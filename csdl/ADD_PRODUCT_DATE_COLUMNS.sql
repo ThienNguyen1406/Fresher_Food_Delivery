@@ -1,5 +1,8 @@
+-- =============================================
 -- Script thêm cột NgaySanXuat và NgayHetHan vào bảng SanPham
 -- Chạy script này trên SQL Server để thêm 2 cột mới
+-- Ngày tạo: 2025-01-11
+-- =============================================
 
 USE FressFood;
 GO
@@ -42,6 +45,23 @@ BEGIN
 END
 GO
 
-PRINT 'Script hoàn tất!';
+-- Kiểm tra lại các cột đã được thêm
+SELECT 
+    COLUMN_NAME,
+    DATA_TYPE,
+    IS_NULLABLE,
+    COLUMN_DEFAULT
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'SanPham'
+    AND COLUMN_NAME IN ('NgaySanXuat', 'NgayHetHan')
+ORDER BY COLUMN_NAME;
 GO
 
+PRINT '';
+PRINT '=============================================';
+PRINT 'Script hoàn tất!';
+PRINT 'Đã kiểm tra và thêm các cột:';
+PRINT '- NgaySanXuat (datetime, NULL)';
+PRINT '- NgayHetHan (datetime, NULL)';
+PRINT '=============================================';
+GO

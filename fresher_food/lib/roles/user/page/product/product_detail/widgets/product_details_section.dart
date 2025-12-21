@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Product.dart';
+import 'package:fresher_food/utils/date_formatter.dart';
 
 class ProductDetailsSection extends StatelessWidget {
   final Product product;
@@ -21,6 +22,17 @@ class ProductDetailsSection extends StatelessWidget {
           _buildDetailRow(
               "Số lượng tồn", "${product.soLuongTon} ${product.donViTinh}"),
           _buildDetailRow("Mã sản phẩm", product.maSanPham),
+          if (product.ngaySanXuat != null)
+            _buildDetailRow(
+              "Ngày sản xuất",
+              DateFormatter.formatDate(product.ngaySanXuat!),
+            ),
+          if (product.ngayHetHan != null)
+            _buildDetailRowWithWarning(
+              "Ngày hết hạn",
+              DateFormatter.formatDate(product.ngayHetHan!),
+              product.ngayHetHan!,
+            ),
         ],
       ),
     );
@@ -107,4 +119,105 @@ class ProductDetailsSection extends StatelessWidget {
       ),
     );
   }
+
+  Widget _buildDetailRowWithWarning(String label, String value, DateTime expiryDate) {
+    final now = DateTime.now();
+    final daysUntilExpiry = expiryDate.difference(now).inDays;
+    final isExpired = expiryDate.isBefore(now);
+    final isNearExpiry = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+
+    Color textColor = Colors.black87;
+    Widget? warningWidget;
+
+    if (isExpired) {
+      textColor = Colors.red.shade700;
+      warningWidget = Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.red.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.red.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.warning_amber_rounded, size: 14, color: Colors.red.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Đã hết hạn',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.red.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (isNearExpiry) {
+      textColor = Colors.orange.shade700;
+      warningWidget = Container(
+        margin: const EdgeInsets.only(left: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: Colors.orange.shade50,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.orange.shade200),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.schedule, size: 14, color: Colors.orange.shade700),
+            const SizedBox(width: 4),
+            Text(
+              'Còn $daysUntilExpiry ngày',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.orange.shade700,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                      color: textColor,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                if (warningWidget != null) warningWidget,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
 }

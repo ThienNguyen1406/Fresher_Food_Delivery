@@ -20,8 +20,12 @@ class ProductFormField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
-      keyboardType: keyboardType,
+      keyboardType: maxLines > 1 ? TextInputType.multiline : (keyboardType ?? TextInputType.text),
       maxLines: maxLines,
+      enableInteractiveSelection: true,
+      enableSuggestions: (keyboardType == TextInputType.text || keyboardType == null) && maxLines == 1,
+      autocorrect: (keyboardType == TextInputType.text || keyboardType == null) && maxLines == 1,
+      textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF2E7D32)),

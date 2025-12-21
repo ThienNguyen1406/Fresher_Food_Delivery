@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
+import 'package:fresher_food/roles/user/page/checkout/widgets/delivery_address_dialog.dart';
 
 class DeliveryInfoCard extends StatelessWidget {
   final CheckoutProvider provider;
@@ -33,13 +34,57 @@ class DeliveryInfoCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Thông tin nhận hàng',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: textPrimary,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Thông tin nhận hàng',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                ),
+              ),
+              InkWell(
+                onTap: () async {
+                  await showDialog(
+                    context: context,
+                    builder: (context) => DeliveryAddressDialog(
+                      provider: provider,
+                      surfaceColor: surfaceColor,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                    ),
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.edit_outlined,
+                        size: 16,
+                        color: const Color(0xFF10B981),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Chỉnh sửa',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFF10B981),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
           _buildInfoRow(Icons.person_outline, 'Họ và tên', provider.state.name),

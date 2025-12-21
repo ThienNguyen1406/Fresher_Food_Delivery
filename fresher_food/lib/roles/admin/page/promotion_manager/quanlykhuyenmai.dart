@@ -56,6 +56,7 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
           return Sale(
             idSale: sale.idSale,
             giaTriKhuyenMai: sale.giaTriKhuyenMai,
+            loaiGiaTri: sale.loaiGiaTri,
             moTaChuongTrinh: sale.moTaChuongTrinh,
             ngayBatDau: sale.ngayBatDau,
             ngayKetThuc: sale.ngayKetThuc,
@@ -82,6 +83,7 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
         return Sale(
           idSale: sale.idSale,
           giaTriKhuyenMai: sale.giaTriKhuyenMai,
+          loaiGiaTri: sale.loaiGiaTri,
           moTaChuongTrinh: sale.moTaChuongTrinh,
           ngayBatDau: sale.ngayBatDau,
           ngayKetThuc: sale.ngayKetThuc,
@@ -167,6 +169,7 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
     DateTime? ngayBatDau = sale?.ngayBatDau;
     DateTime? ngayKetThuc = sale?.ngayKetThuc;
     String? selectedProductId = sale?.maSanPham;
+    String selectedLoaiGiaTri = sale?.loaiGiaTri ?? 'Amount';
 
     await showDialog(
       context: context,
@@ -268,6 +271,11 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                   // Mô tả
                   TextFormField(
                     controller: moTaController,
+                    keyboardType: TextInputType.multiline,
+                    enableInteractiveSelection: true,
+                    enableSuggestions: false,
+                    autocorrect: false,
+                    textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       labelText: 'Mô tả chương trình',
                       border: OutlineInputBorder(
@@ -411,6 +419,7 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                     final newSale = Sale(
                       idSale: sale?.idSale ?? '',
                       giaTriKhuyenMai: double.parse(giaTriController.text),
+                      loaiGiaTri: selectedLoaiGiaTri,
                       moTaChuongTrinh: moTaController.text.isEmpty
                           ? null
                           : moTaController.text,
@@ -665,14 +674,40 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Icon(Icons.attach_money, size: 20, color: _primaryColor),
+                Icon(
+                  sale.loaiGiaTri == 'Percent' ? Icons.percent : Icons.attach_money, 
+                  size: 20, 
+                  color: _primaryColor
+                ),
                 const SizedBox(width: 8),
                 Text(
-                  '${NumberFormat('#,###').format(sale.giaTriKhuyenMai.toInt())} VNĐ',
+                  sale.loaiGiaTri == 'Percent'
+                      ? '${sale.giaTriKhuyenMai.toStringAsFixed(0)}%'
+                      : '${NumberFormat('#,###').format(sale.giaTriKhuyenMai.toInt())} VNĐ',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                     color: _primaryColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: sale.loaiGiaTri == 'Percent' 
+                        ? Colors.blue.shade50 
+                        : Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    sale.loaiGiaTri == 'Percent' ? 'THEO %' : 'THEO SỐ TIỀN',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: sale.loaiGiaTri == 'Percent' 
+                          ? Colors.blue.shade700 
+                          : Colors.green.shade700,
+                    ),
                   ),
                 ),
               ],

@@ -142,6 +142,12 @@ class RatingApi {
   Future<bool> updateRating(Rating rating) async {
     try {
       final headers = await ApiService().getHeaders();
+      // Đảm bảo có Content-Type header
+      headers['Content-Type'] = 'application/json';
+      
+      print('🔄 Updating rating: ${rating.toJson()}');
+      print('🔄 URL: ${Constant().baseUrl}/Ratings');
+      
       final response = await http
           .put(
             Uri.parse('${Constant().baseUrl}/Ratings'),
@@ -150,12 +156,22 @@ class RatingApi {
           )
           .timeout(const Duration(seconds: 30));
 
+      print('📦 Update Rating API Response: ${response.statusCode}');
+      print('📦 Update Rating API Body: ${response.body}');
+
       if (response.statusCode == 200) {
         return true;
+      } else if (response.statusCode == 404) {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['error'] ?? 'Không tìm thấy đánh giá để cập nhật');
+      } else if (response.statusCode == 400) {
+        final errorData = json.decode(response.body);
+        throw Exception(errorData['error'] ?? 'Dữ liệu không hợp lệ');
       } else {
-        throw Exception('Failed to update rating: ${response.statusCode}');
+        throw Exception('Failed to update rating: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
+      print('❌ Error updating rating: $e');
       throw Exception('Error updating rating: $e');
     }
   }

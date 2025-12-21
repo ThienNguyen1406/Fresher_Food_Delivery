@@ -3,6 +3,7 @@ import 'package:fresher_food/models/Coupon.dart';
 import 'package:fresher_food/services/api/coupon_api.dart';
 import 'package:provider/provider.dart';
 
+/// Màn hình quản lý phiếu giảm giá - xem, tìm kiếm và xóa mã giảm giá
 class QuanLyPhieuGiamGiaScreen extends StatefulWidget {
   const QuanLyPhieuGiamGiaScreen({super.key});
 
@@ -36,6 +37,7 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
     'large': [Color(0xFFEF4444), Color(0xFFDC2626)],
   };
 
+  /// Khối khởi tạo: Load danh sách phiếu giảm giá từ server
   @override
   void initState() {
     super.initState();
@@ -48,6 +50,7 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
     super.dispose();
   }
 
+  /// Khối chức năng: Load tất cả phiếu giảm giá từ API
   Future<void> _loadCoupons() async {
     try {
       setState(() => _isLoading = true);
@@ -60,12 +63,14 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
     }
   }
 
+  /// Khối chức năng: Lọc phiếu giảm giá theo từ khóa tìm kiếm
   void _filterCoupons() {
     setState(() {
       _searchQuery = _searchController.text.trim();
     });
   }
 
+  /// Khối chức năng: Lấy danh sách phiếu giảm giá đã lọc theo mã hoặc mô tả
   List<PhieuGiamGia> get _filteredCoupons {
     if (_searchQuery.isEmpty) return _coupons;
     return _coupons.where((coupon) =>
@@ -74,6 +79,7 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
     ).toList();
   }
 
+  /// Khối chức năng: Xóa phiếu giảm giá với dialog xác nhận
   Future<void> _deleteCoupon(String id) async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -271,8 +277,12 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
         SizedBox(height: 8),
         TextField(
           controller: controller,
-          keyboardType: keyboardType,
+          keyboardType: maxLines > 1 ? TextInputType.multiline : keyboardType,
           maxLines: maxLines,
+          enableInteractiveSelection: true,
+          enableSuggestions: keyboardType == TextInputType.text && maxLines == 1,
+          autocorrect: keyboardType == TextInputType.text && maxLines == 1,
+          textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
           decoration: InputDecoration(
             hintText: hintText,
             prefixIcon: Icon(icon, color: _textTertiary),
@@ -374,6 +384,10 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
               child: TextField(
                 controller: _searchController,
                 onChanged: (_) => _filterCoupons(),
+                enableInteractiveSelection: true,
+                enableSuggestions: true,
+                autocorrect: true,
+                textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
                   hintText: 'Tìm kiếm mã giảm giá...',
                   prefixIcon: Icon(Icons.search, color: _textTertiary),

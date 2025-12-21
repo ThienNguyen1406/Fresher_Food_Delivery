@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/coupon_selection_dialog.dart';
 
 class CouponSection extends StatelessWidget {
-  final CheckoutProvider provider;
   final Color surfaceColor;
   final Color textPrimary;
   final Color textSecondary;
@@ -12,7 +12,6 @@ class CouponSection extends StatelessWidget {
 
   const CouponSection({
     super.key,
-    required this.provider,
     required this.surfaceColor,
     required this.textPrimary,
     required this.textSecondary,
@@ -22,6 +21,8 @@ class CouponSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Consumer<CheckoutProvider>(
+      builder: (context, provider, child) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -51,7 +52,7 @@ class CouponSection extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => _showCouponSelectionDialog(context),
+                onPressed: () => _showCouponSelectionDialog(context, provider),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: backgroundColor,
                   foregroundColor: textPrimary,
@@ -76,61 +77,91 @@ class CouponSection extends StatelessWidget {
               ),
             )
           else
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: primaryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: primaryColor.withOpacity(0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.discount_outlined, color: primaryColor),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          provider.selectedCoupon!.code,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: primaryColor,
-                          ),
-                        ),
-                        if (provider.selectedCoupon?.moTa != null && provider.selectedCoupon!.moTa.isNotEmpty)
-                          Text(
-                            provider.selectedCoupon!.moTa,
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: textSecondary,
+            Stack(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: primaryColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: primaryColor.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.discount_outlined, color: primaryColor),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              provider.selectedCoupon!.code,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: primaryColor,
+                              ),
                             ),
-                          ),
-                        Text(
-                          'Giảm ${provider.formatPrice(provider.selectedCoupon!.giaTri)}đ',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.green,
-                          ),
+                            if (provider.selectedCoupon?.moTa != null && provider.selectedCoupon!.moTa.isNotEmpty)
+                              Text(
+                                provider.selectedCoupon!.moTa,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: textSecondary,
+                                ),
+                              ),
+                            Text(
+                              'Giảm ${provider.formatPrice(provider.selectedCoupon!.giaTri)}đ',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                      const SizedBox(width: 40), // Dành chỗ cho nút xóa
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 8,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: () {
+                        print('Xóa mã giảm giá được click');
+                        provider.removeCoupon();
+                        print('Đã gọi removeCoupon');
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      splashColor: textSecondary.withOpacity(0.2),
+                      highlightColor: textSecondary.withOpacity(0.1),
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.close,
+                          color: textSecondary,
+                          size: 18,
+                        ),
+                      ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => provider.removeCoupon(),
-                    icon: Icon(Icons.close, color: textSecondary),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
         ],
       ),
+      );
+      },
     );
   }
 
-  void _showCouponSelectionDialog(BuildContext context) {
+  void _showCouponSelectionDialog(BuildContext context, CheckoutProvider provider) {
     showDialog(
       context: context,
       builder: (BuildContext context) {

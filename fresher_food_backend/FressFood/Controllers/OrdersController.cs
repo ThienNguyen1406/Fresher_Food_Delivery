@@ -1,4 +1,4 @@
-﻿using FressFood.Models;
+using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
@@ -43,12 +43,16 @@ namespace FoodShop.Controllers
                     connection.Open();
 
                     // Query để lấy doanh thu theo từng tháng trong năm
+                    // CHỈ tính đơn hàng đã hoàn thành (complete)
                     string query = @"SELECT 
                                         MONTH(dh.NgayDat) as Thang,
                                         ISNULL(SUM(od.GiaBan * od.SoLuong), 0) as DoanhThu
                                     FROM DonHang dh
                                     LEFT JOIN ChiTietDonHang od ON dh.MaDonHang = od.MaDonHang
                                     WHERE YEAR(dh.NgayDat) = @Year
+                                        AND (dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                                             OR dh.TrangThai LIKE '%complete%'
+                                             OR dh.TrangThai LIKE '%Complete%')
                                     GROUP BY MONTH(dh.NgayDat)
                                     ORDER BY MONTH(dh.NgayDat)";
 
@@ -111,74 +115,117 @@ namespace FoodShop.Controllers
                     connection.Open();
 
                     // Xây dựng query với điều kiện lọc theo ngày
+                    // CHỈ tính đơn hàng đã hoàn thành (complete) cho doanh thu
                     // Sử dụng LEFT JOIN để vẫn tính được đơn hàng ngay cả khi chưa có chi tiết
-                    string query = @"SELECT 
+                    string baseCondition = "";
+                    if (startDate.HasValue)
+                    {
+                        baseCondition += " AND CAST(dh.NgayDat AS DATE) >= @StartDate";
+                    }
+                    if (endDate.HasValue)
+                    {
+                        baseCondition += " AND CAST(dh.NgayDat AS DATE) <= @EndDate";
+                    }
+
+                    // Query cho doanh thu (chỉ đơn hoàn thành)
+                    string revenueQuery = @"SELECT 
                                         ISNULL(SUM(od.GiaBan * od.SoLuong), 0) as TongDoanhThu,
                                         COUNT(DISTINCT dh.MaDonHang) as TongDonHang,
                                         COUNT(DISTINCT dh.MaTaiKhoan) as TongKhachHang
                                     FROM DonHang dh
                                     LEFT JOIN ChiTietDonHang od ON dh.MaDonHang = od.MaDonHang
-                                    WHERE 1=1";
+                                    WHERE (dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                                           OR dh.TrangThai LIKE '%complete%'
+                                           OR dh.TrangThai LIKE '%Complete%')" + baseCondition;
 
-                    // Thêm điều kiện lọc theo ngày nếu có
-                    if (startDate.HasValue)
-                    {
-                        query += " AND CAST(dh.NgayDat AS DATE) >= @StartDate";
-                    }
+                    // Query cho số đơn thành công và bị hủy
+                    string statusQuery = @"SELECT 
+                                        SUM(CASE WHEN (dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                                                      OR dh.TrangThai LIKE '%complete%'
+                                                      OR dh.TrangThai LIKE '%Complete%') THEN 1 ELSE 0 END) as DonThanhCong,
+                                        SUM(CASE WHEN (dh.TrangThai LIKE N'%hủy%' 
+                                                      OR dh.TrangThai LIKE N'%Hủy%'
+                                                      OR dh.TrangThai LIKE '%cancel%'
+                                                      OR dh.TrangThai LIKE '%Cancel%'
+                                                      OR dh.TrangThai LIKE '%cancelled%'
+                                                      OR dh.TrangThai LIKE '%Cancelled%') THEN 1 ELSE 0 END) as DonBiHuy
+                                    FROM DonHang dh
+                                    WHERE 1=1" + baseCondition;
 
-                    if (endDate.HasValue)
-                    {
-                        query += " AND CAST(dh.NgayDat AS DATE) <= @EndDate";
-                    }
+                    decimal tongDoanhThu = 0;
+                    int tongDonHang = 0;
+                    int tongKhachHang = 0;
+                    int donThanhCong = 0;
+                    int donBiHuy = 0;
 
-                    using (var command = new SqlCommand(query, connection))
+                    using (var command = new SqlCommand(revenueQuery, connection))
                     {
                         if (startDate.HasValue)
                         {
                             command.Parameters.AddWithValue("@StartDate", startDate.Value.Date);
                         }
-
                         if (endDate.HasValue)
                         {
                             command.Parameters.AddWithValue("@EndDate", endDate.Value.Date);
                         }
 
-                        // Debug: Log query để kiểm tra
-                        System.Diagnostics.Debug.WriteLine($"Revenue Statistics Query: {query}");
+                        using (var reader = command.ExecuteReader())
+                        {
+                            if (reader.Read())
+                            {
+                                tongDoanhThu = reader["TongDoanhThu"] != DBNull.Value 
+                                    ? Convert.ToDecimal(reader["TongDoanhThu"]) 
+                                    : 0;
+                                tongDonHang = reader["TongDonHang"] != DBNull.Value 
+                                    ? Convert.ToInt32(reader["TongDonHang"]) 
+                                    : 0;
+                                tongKhachHang = reader["TongKhachHang"] != DBNull.Value 
+                                    ? Convert.ToInt32(reader["TongKhachHang"]) 
+                                    : 0;
+                            }
+                        }
+                    }
+
+                    // Lấy số đơn thành công và bị hủy
+                    using (var command = new SqlCommand(statusQuery, connection))
+                    {
                         if (startDate.HasValue)
-                            System.Diagnostics.Debug.WriteLine($"StartDate: {startDate.Value.Date}");
+                        {
+                            command.Parameters.AddWithValue("@StartDate", startDate.Value.Date);
+                        }
                         if (endDate.HasValue)
-                            System.Diagnostics.Debug.WriteLine($"EndDate: {endDate.Value.Date}");
+                        {
+                            command.Parameters.AddWithValue("@EndDate", endDate.Value.Date);
+                        }
 
                         using (var reader = command.ExecuteReader())
                         {
                             if (reader.Read())
                             {
-                                var tongDoanhThu = reader["TongDoanhThu"] != DBNull.Value 
-                                    ? Convert.ToDecimal(reader["TongDoanhThu"]) 
+                                donThanhCong = reader["DonThanhCong"] != DBNull.Value 
+                                    ? Convert.ToInt32(reader["DonThanhCong"]) 
                                     : 0;
-                                var tongDonHang = reader["TongDonHang"] != DBNull.Value 
-                                    ? Convert.ToInt32(reader["TongDonHang"]) 
+                                donBiHuy = reader["DonBiHuy"] != DBNull.Value 
+                                    ? Convert.ToInt32(reader["DonBiHuy"]) 
                                     : 0;
-                                var tongKhachHang = reader["TongKhachHang"] != DBNull.Value 
-                                    ? Convert.ToInt32(reader["TongKhachHang"]) 
-                                    : 0;
-
-                                var statistics = new
-                                {
-                                    tongDoanhThu = tongDoanhThu,
-                                    tongDonHang = tongDonHang,
-                                    tongKhachHang = tongKhachHang,
-                                    startDate = startDate?.ToString("yyyy-MM-dd"),
-                                    endDate = endDate?.ToString("yyyy-MM-dd")
-                                };
-
-                                System.Diagnostics.Debug.WriteLine($"Revenue Statistics Result: DoanhThu={tongDoanhThu}, DonHang={tongDonHang}, KhachHang={tongKhachHang}");
-
-                                return Ok(new { message = "Lấy thống kê doanh thu thành công", data = statistics });
                             }
                         }
                     }
+
+                    var statistics = new
+                    {
+                        tongDoanhThu = tongDoanhThu,
+                        tongDonHang = tongDonHang,
+                        tongKhachHang = tongKhachHang,
+                        donThanhCong = donThanhCong,
+                        donBiHuy = donBiHuy,
+                        startDate = startDate?.ToString("yyyy-MM-dd"),
+                        endDate = endDate?.ToString("yyyy-MM-dd")
+                    };
+
+                    System.Diagnostics.Debug.WriteLine($"Revenue Statistics Result: DoanhThu={tongDoanhThu}, DonHang={tongDonHang}, KhachHang={tongKhachHang}, ThanhCong={donThanhCong}, BiHuy={donBiHuy}");
+
+                    return Ok(new { message = "Lấy thống kê doanh thu thành công", data = statistics });
                 }
 
                 return Ok(new { 
@@ -196,6 +243,206 @@ namespace FoodShop.Controllers
             {
                 System.Diagnostics.Debug.WriteLine($"Error in GetRevenueStatistics: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"Stack Trace: {ex.StackTrace}");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // GET: api/orders/status-distribution?startDate=2025-01-01&endDate=2025-12-31
+        // Lấy tỉ lệ phân bố trạng thái đơn hàng (cho pie chart)
+        [HttpGet("status-distribution")]
+        public IActionResult GetOrderStatusDistribution([FromQuery] DateTime? startDate, [FromQuery] DateTime? endDate)
+        {
+            try
+            {
+                var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+
+                    string baseCondition = "";
+                    if (startDate.HasValue)
+                    {
+                        baseCondition += " AND CAST(dh.NgayDat AS DATE) >= @StartDate";
+                    }
+                    if (endDate.HasValue)
+                    {
+                        baseCondition += " AND CAST(dh.NgayDat AS DATE) <= @EndDate";
+                    }
+
+                    // Query để đếm số đơn hàng theo từng trạng thái
+                    string query = @"SELECT 
+                                        dh.TrangThai,
+                                        COUNT(*) as SoLuong
+                                    FROM DonHang dh
+                                    WHERE 1=1" + baseCondition + @"
+                                    GROUP BY dh.TrangThai
+                                    ORDER BY COUNT(*) DESC";
+
+                    var statusList = new List<object>();
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        if (startDate.HasValue)
+                        {
+                            command.Parameters.AddWithValue("@StartDate", startDate.Value.Date);
+                        }
+                        if (endDate.HasValue)
+                        {
+                            command.Parameters.AddWithValue("@EndDate", endDate.Value.Date);
+                        }
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            int totalOrders = 0;
+                            var tempStatusList = new List<(string Status, int Count)>();
+
+                            while (reader.Read())
+                            {
+                                var trangThai = reader["TrangThai"].ToString();
+                                var soLuong = Convert.ToInt32(reader["SoLuong"]);
+                                totalOrders += soLuong;
+                                tempStatusList.Add((trangThai, soLuong));
+                            }
+
+                            // Phân loại trạng thái thành các nhóm
+                            foreach (var item in tempStatusList)
+                            {
+                                string category = "";
+                                if (item.Status.Contains("chờ") || item.Status.Contains("Chờ") || 
+                                    item.Status.Contains("pending") || item.Status.Contains("Pending"))
+                                {
+                                    category = "Đang chờ xác nhận";
+                                }
+                                else if (item.Status.Contains("xử") || item.Status.Contains("Xử") || 
+                                         item.Status.Contains("processing") || item.Status.Contains("Processing"))
+                                {
+                                    category = "Đang xử lí";
+                                }
+                                else if (item.Status.Contains("giao") || item.Status.Contains("Giao") || 
+                                         item.Status.Contains("delivering") || item.Status.Contains("Delivering"))
+                                {
+                                    category = "Đang giao";
+                                }
+                                else if (item.Status.Contains("Hoàn thành") || item.Status.Contains("Đã giao hàng") || 
+                                         item.Status.Contains("complete") || item.Status.Contains("Complete"))
+                                {
+                                    category = "Đã hoàn thành";
+                                }
+                                else if (item.Status.Contains("hủy") || item.Status.Contains("Hủy") || 
+                                         item.Status.Contains("cancel") || item.Status.Contains("Cancel"))
+                                {
+                                    category = "Bị hủy";
+                                }
+                                else
+                                {
+                                    category = item.Status; // Giữ nguyên nếu không khớp
+                                }
+
+                                var existing = statusList.FirstOrDefault(s => 
+                                    (s as dynamic).category == category) as dynamic;
+                                
+                                if (existing != null)
+                                {
+                                    existing.count += item.Count;
+                                }
+                                else
+                                {
+                                    statusList.Add(new
+                                    {
+                                        category = category,
+                                        count = item.Count,
+                                        percentage = totalOrders > 0 ? Math.Round((double)item.Count / totalOrders * 100, 2) : 0
+                                    });
+                                }
+                            }
+
+                            // Tính lại phần trăm sau khi gộp
+                            foreach (dynamic item in statusList)
+                            {
+                                item.percentage = totalOrders > 0 ? Math.Round((double)item.count / totalOrders * 100, 2) : 0;
+                            }
+                        }
+                    }
+
+                    return Ok(new { 
+                        message = "Lấy phân bố trạng thái đơn hàng thành công", 
+                        data = statusList 
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in GetOrderStatusDistribution: {ex.Message}");
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        // GET: api/orders/monthly-growth?year=2025
+        // Lấy tăng trưởng đơn hàng theo tháng (cho line chart)
+        [HttpGet("monthly-growth")]
+        public IActionResult GetMonthlyOrderGrowth([FromQuery] int? year)
+        {
+            try
+            {
+                if (!year.HasValue)
+                {
+                    year = DateTime.Now.Year;
+                }
+
+                var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                var monthlyGrowth = new Dictionary<int, int>();
+
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+
+                    // Query để đếm số đơn hàng theo từng tháng
+                    string query = @"SELECT 
+                                        MONTH(dh.NgayDat) as Thang,
+                                        COUNT(*) as SoDonHang
+                                    FROM DonHang dh
+                                    WHERE YEAR(dh.NgayDat) = @Year
+                                    GROUP BY MONTH(dh.NgayDat)
+                                    ORDER BY MONTH(dh.NgayDat)";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@Year", year.Value);
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var thang = Convert.ToInt32(reader["Thang"]);
+                                var soDonHang = Convert.ToInt32(reader["SoDonHang"]);
+                                monthlyGrowth[thang] = soDonHang;
+                            }
+                        }
+                    }
+                }
+
+                // Đảm bảo có đủ 12 tháng (nếu tháng nào không có dữ liệu thì trả về 0)
+                var result = new List<object>();
+                for (int month = 1; month <= 12; month++)
+                {
+                    result.Add(new
+                    {
+                        thang = month,
+                        soDonHang = monthlyGrowth.ContainsKey(month) ? monthlyGrowth[month] : 0
+                    });
+                }
+
+                return Ok(new 
+                { 
+                    message = "Lấy tăng trưởng đơn hàng theo tháng thành công", 
+                    data = result,
+                    year = year.Value
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error in GetMonthlyOrderGrowth: {ex.Message}");
                 return StatusCode(500, new { error = ex.Message });
             }
         }
@@ -607,6 +854,83 @@ namespace FoodShop.Controllers
         }
 
 
+        // GET: api/orders/completed-products/{maTaiKhoan}
+        // Lấy danh sách sản phẩm từ đơn hàng đã hoàn thành để đánh giá
+        [HttpGet("completed-products/{maTaiKhoan}")]
+        public IActionResult GetCompletedOrderProducts(string maTaiKhoan)
+        {
+            try
+            {
+                var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                var products = new List<object>();
+
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+                    
+                    // Lấy danh sách sản phẩm từ đơn hàng đã hoàn thành
+                    // Loại bỏ trùng lặp và chỉ lấy sản phẩm chưa được đánh giá
+                    // Hỗ trợ nhiều format trạng thái: 'Hoàn thành', 'Đã giao hàng', 'Complete', 'completed', etc.
+                    string query = @"SELECT DISTINCT 
+                                    sp.MaSanPham,
+                                    sp.TenSanPham,
+                                    sp.Anh,
+                                    sp.GiaBan,
+                                    sp.DonViTinh,
+                                    sp.XuatXu
+                                FROM ChiTietDonHang ctdh
+                                INNER JOIN DonHang dh ON ctdh.MaDonHang = dh.MaDonHang
+                                INNER JOIN SanPham sp ON ctdh.MaSanPham = sp.MaSanPham
+                                LEFT JOIN DanhGia dg ON sp.MaSanPham = dg.MaSanPham AND dg.MaTaiKhoan = @MaTaiKhoan
+                                WHERE dh.MaTaiKhoan = @MaTaiKhoan
+                                    AND (sp.IsDeleted = 0 OR sp.IsDeleted IS NULL)
+                                    AND (
+                                        dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                                        OR dh.TrangThai LIKE '%complete%'
+                                        OR dh.TrangThai LIKE '%Complete%'
+                                        OR dh.TrangThai LIKE '%hoàn thành%'
+                                        OR dh.TrangThai LIKE '%giao hàng%'
+                                    )
+                                    AND dg.MaSanPham IS NULL  -- Chưa đánh giá
+                                ORDER BY sp.TenSanPham";
+
+                    using (var command = new SqlCommand(query, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoan);
+
+                        using (var reader = command.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var fileName = reader["Anh"]?.ToString();
+                                var product = new
+                                {
+                                    maSanPham = reader["MaSanPham"].ToString(),
+                                    tenSanPham = reader["TenSanPham"].ToString(),
+                                    anh = string.IsNullOrEmpty(fileName) ? null :
+                                          $"{Request.Scheme}://{Request.Host}/images/products/{fileName}",
+                                    giaBan = Convert.ToDecimal(reader["GiaBan"]),
+                                    donViTinh = reader["DonViTinh"]?.ToString(),
+                                    xuatXu = reader["XuatXu"]?.ToString()
+                                };
+                                products.Add(product);
+                            }
+                        }
+                    }
+                }
+
+                return Ok(new
+                {
+                    message = "Lấy danh sách sản phẩm từ đơn hàng đã hoàn thành thành công",
+                    data = products
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         #region Helper Methods
 
         /// <summary>
@@ -614,7 +938,7 @@ namespace FoodShop.Controllers
         /// </summary>
         private bool KiemTraTonKho(string maSanPham, int soLuong, SqlConnection connection, SqlTransaction transaction)
         {
-            string query = "SELECT SoLuongTon FROM SanPham WHERE MaSanPham = @MaSanPham";
+            string query = "SELECT SoLuongTon FROM SanPham WHERE MaSanPham = @MaSanPham AND (IsDeleted = 0 OR IsDeleted IS NULL)";
 
             using (var command = new SqlCommand(query, connection, transaction))
             {
