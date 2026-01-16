@@ -7,7 +7,6 @@ class ProductImageSection extends StatelessWidget {
   final Function(int) onPageChanged;
   final String productId;
   final bool isOutOfStock;
-  final bool isExpired;
 
   const ProductImageSection({
     super.key,
@@ -17,7 +16,6 @@ class ProductImageSection extends StatelessWidget {
     required this.onPageChanged,
     required this.productId,
     required this.isOutOfStock,
-    this.isExpired = false,
   });
 
   @override
@@ -40,27 +38,13 @@ class ProductImageSection extends StatelessWidget {
               itemBuilder: (context, index) {
                 return Hero(
                   tag: productId,
-                  child: Stack(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: NetworkImage(productImages[index]),
-                            fit: BoxFit.cover,
-                          ),
-                        ),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      image: DecorationImage(
+                        image: NetworkImage(productImages[index]),
+                        fit: BoxFit.cover,
                       ),
-                      // Gạch chéo khi hết hàng hoặc hết hạn
-                      if (isOutOfStock || isExpired)
-                        CustomPaint(
-                          painter: DiagonalLinePainter(),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.3),
-                            ),
-                          ),
-                        ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -130,34 +114,6 @@ class ProductImageSection extends StatelessWidget {
                   ),
                 ),
               ),
-            if (isExpired && !isOutOfStock)
-              Positioned(
-                top: 80,
-                right: 20,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade600,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: const Text(
-                    'HẾT HẠN',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ),
           ],
         ),
       ),
@@ -183,25 +139,4 @@ class ProductImageSection extends StatelessWidget {
       ),
     );
   }
-}
-
-// Custom Painter để vẽ đường gạch chéo
-class DiagonalLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
-    // Vẽ đường gạch chéo từ góc trên trái đến góc dưới phải
-    canvas.drawLine(
-      Offset(0, 0),
-      Offset(size.width, size.height),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

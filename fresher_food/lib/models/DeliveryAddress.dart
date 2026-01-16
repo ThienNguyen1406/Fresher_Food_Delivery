@@ -28,10 +28,10 @@ class DeliveryAddress {
       diaChi: json['diaChi'] ?? '',
       laDiaChiMacDinh: json['laDiaChiMacDinh'] ?? false,
       ngayTao: json['ngayTao'] != null
-          ? DateTime.parse(json['ngayTao'].toString())
+          ? DateTime.parse(json['ngayTao'])
           : DateTime.now(),
       ngayCapNhat: json['ngayCapNhat'] != null
-          ? DateTime.parse(json['ngayCapNhat'].toString())
+          ? DateTime.parse(json['ngayCapNhat'])
           : null,
     );
   }

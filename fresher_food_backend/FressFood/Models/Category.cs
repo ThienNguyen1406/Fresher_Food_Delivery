@@ -5,7 +5,6 @@
         public string MaDanhMuc { get; set; } = string.Empty;
         public string TenDanhMuc { get; set; } = string.Empty;
         public string? Icon { get; set; } // Lưu đường dẫn ảnh
-        public int SoLuongSanPham { get; set; } = 0; // Số lượng sản phẩm trong danh mục
     }
 
     public class CategoryCreateModel
