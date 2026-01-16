@@ -16,9 +16,9 @@ namespace FressFood.Controllers
             _configuration = configuration;
         }
 
-        // GET: api/Coupon
+        // GET: api/Coupon?maTaiKhoan=xxx
         [HttpGet]
-        public async Task<IActionResult> Get()
+        public async Task<IActionResult> Get([FromQuery] string? maTaiKhoan = null)
         {
             try
             {
@@ -28,21 +28,60 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa FROM PhieuGiamGia";
+                    
+                    // Nếu có maTaiKhoan, lọc ra những voucher user chưa sử dụng
+                    string query;
+                    if (!string.IsNullOrEmpty(maTaiKhoan))
+                    {
+                        query = @"SELECT p.Id_phieugiamgia, p.Code, p.GiaTri, p.MoTa, 
+                                         ISNULL(p.LoaiGiaTri, 'Amount') as LoaiGiaTri, 
+                                         p.SoLuongToiDa, 
+                                         ISNULL(p.SoLuongDaSuDung, 0) as SoLuongDaSuDung
+                                  FROM PhieuGiamGia p
+                                  WHERE (p.SoLuongToiDa IS NULL OR ISNULL(p.SoLuongDaSuDung, 0) < p.SoLuongToiDa)
+                                    AND NOT EXISTS (
+                                        SELECT 1 FROM LichSuSuDungVoucher l
+                                        WHERE l.MaTaiKhoan = @MaTaiKhoan 
+                                          AND l.Id_phieugiamgia = p.Id_phieugiamgia
+                                    )";
+                    }
+                    else
+                    {
+                        // Admin xem tất cả voucher
+                        query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung FROM PhieuGiamGia";
+                    }
 
                     using (var command = new SqlCommand(query, connection))
-                    using (var reader = await command.ExecuteReaderAsync())
                     {
-                        while (await reader.ReadAsync())
+                        if (!string.IsNullOrEmpty(maTaiKhoan))
                         {
-                            var coupon = new Coupon
+                            // Convert MaTaiKhoan sang INT nếu cần
+                            if (int.TryParse(maTaiKhoan, out int maTaiKhoanInt))
                             {
-                                Id_phieugiamgia = reader["Id_phieugiamgia"].ToString(),
-                                Code = reader["Code"].ToString(),
-                                GiaTri = Convert.ToDecimal(reader["GiaTri"]),
-                                MoTa = reader["MoTa"]?.ToString()
-                            };
-                            coupons.Add(coupon);
+                                command.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoanInt);
+                            }
+                            else
+                            {
+                                command.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoan);
+                            }
+                        }
+
+                        using (var reader = await command.ExecuteReaderAsync())
+                        {
+                            while (await reader.ReadAsync())
+                            {
+                                var coupon = new Coupon
+                                {
+                                    Id_phieugiamgia = reader["Id_phieugiamgia"].ToString(),
+                                    Code = reader["Code"].ToString(),
+                                    GiaTri = Convert.ToDecimal(reader["GiaTri"]),
+                                    MoTa = reader["MoTa"]?.ToString(),
+                                    LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
+                                    SoLuongToiDa = reader["SoLuongToiDa"] != DBNull.Value ? (int?)Convert.ToInt32(reader["SoLuongToiDa"]) : null,
+                                    SoLuongDaSuDung = reader["SoLuongDaSuDung"] != DBNull.Value ? Convert.ToInt32(reader["SoLuongDaSuDung"]) : 0
+                                };
+                                coupons.Add(coupon);
+                            }
                         }
                     }
                 }
@@ -67,7 +106,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = @"SELECT Id_phieugiamgia, Code, GiaTri, MoTa 
+                    string query = @"SELECT Id_phieugiamgia, Code, GiaTri, MoTa, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung 
                              FROM PhieuGiamGia 
                              WHERE Code LIKE '%' + @Code + '%'";
 
@@ -84,7 +123,10 @@ namespace FressFood.Controllers
                                     Id_phieugiamgia = reader["Id_phieugiamgia"].ToString(),
                                     Code = reader["Code"].ToString(),
                                     GiaTri = Convert.ToDecimal(reader["GiaTri"]),
-                                    MoTa = reader["MoTa"]?.ToString()
+                                    MoTa = reader["MoTa"]?.ToString(),
+                                    LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
+                                    SoLuongToiDa = reader["SoLuongToiDa"] != DBNull.Value ? (int?)Convert.ToInt32(reader["SoLuongToiDa"]) : null,
+                                    SoLuongDaSuDung = reader["SoLuongDaSuDung"] != DBNull.Value ? Convert.ToInt32(reader["SoLuongDaSuDung"]) : 0
                                 };
                                 coupons.Add(coupon);
                             }
@@ -112,7 +154,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                    string query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -157,7 +199,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa FROM PhieuGiamGia WHERE Code = @Code";
+                    string query = "SELECT Id_phieugiamgia, Code, GiaTri, MoTa, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung FROM PhieuGiamGia WHERE Code = @Code";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -172,7 +214,10 @@ namespace FressFood.Controllers
                                     Id_phieugiamgia = reader["Id_phieugiamgia"].ToString(),
                                     Code = reader["Code"].ToString(),
                                     GiaTri = Convert.ToDecimal(reader["GiaTri"]),
-                                    MoTa = reader["MoTa"]?.ToString()
+                                    MoTa = reader["MoTa"]?.ToString(),
+                                    LoaiGiaTri = reader["LoaiGiaTri"]?.ToString() ?? "Amount",
+                                    SoLuongToiDa = reader["SoLuongToiDa"] != DBNull.Value ? (int?)Convert.ToInt32(reader["SoLuongToiDa"]) : null,
+                                    SoLuongDaSuDung = reader["SoLuongDaSuDung"] != DBNull.Value ? Convert.ToInt32(reader["SoLuongDaSuDung"]) : 0
                                 };
                             }
                         }
@@ -201,14 +246,17 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = @"INSERT INTO PhieuGiamGia (Code, GiaTri, MoTa) 
-                            VALUES (@Code, @GiaTri, @MoTa)";
+                    string query = @"INSERT INTO PhieuGiamGia (Code, GiaTri, MoTa, LoaiGiaTri, SoLuongToiDa, SoLuongDaSuDung) 
+                            VALUES (@Code, @GiaTri, @MoTa, @LoaiGiaTri, @SoLuongToiDa, @SoLuongDaSuDung)";
 
                     using (var command = new SqlCommand(query, connection))
                     {
                         command.Parameters.AddWithValue("@Code", coupon.Code);
                         command.Parameters.AddWithValue("@GiaTri", coupon.GiaTri);
                         command.Parameters.AddWithValue("@MoTa", coupon.MoTa ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@LoaiGiaTri", coupon.LoaiGiaTri ?? "Amount");
+                        command.Parameters.AddWithValue("@SoLuongToiDa", coupon.SoLuongToiDa.HasValue ? (object)coupon.SoLuongToiDa.Value : DBNull.Value);
+                        command.Parameters.AddWithValue("@SoLuongDaSuDung", coupon.SoLuongDaSuDung);
 
                         int result = await command.ExecuteNonQueryAsync();
 
@@ -239,7 +287,10 @@ namespace FressFood.Controllers
                     string query = @"UPDATE PhieuGiamGia 
                             SET Code = @Code,
                                 GiaTri = @GiaTri,
-                                MoTa = @MoTa
+                                MoTa = @MoTa,
+                                LoaiGiaTri = @LoaiGiaTri,
+                                SoLuongToiDa = @SoLuongToiDa,
+                                SoLuongDaSuDung = @SoLuongDaSuDung
                             WHERE Id_phieugiamgia = @Id_phieugiamgia";
 
                     using (var command = new SqlCommand(query, connection))
@@ -248,6 +299,9 @@ namespace FressFood.Controllers
                         command.Parameters.AddWithValue("@Code", coupon.Code);
                         command.Parameters.AddWithValue("@GiaTri", coupon.GiaTri);
                         command.Parameters.AddWithValue("@MoTa", coupon.MoTa ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@LoaiGiaTri", coupon.LoaiGiaTri ?? "Amount");
+                        command.Parameters.AddWithValue("@SoLuongToiDa", coupon.SoLuongToiDa.HasValue ? (object)coupon.SoLuongToiDa.Value : DBNull.Value);
+                        command.Parameters.AddWithValue("@SoLuongDaSuDung", coupon.SoLuongDaSuDung);
 
                         int result = await command.ExecuteNonQueryAsync();
 

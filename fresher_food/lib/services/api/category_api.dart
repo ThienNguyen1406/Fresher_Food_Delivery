@@ -96,9 +96,11 @@ class CategoryApi {
 
   Future<bool> deleteCategory(String id) async {
     try {
+      final headers = await ApiService().getHeaders();
       final response = await http.delete(
         Uri.parse('${Constant().baseUrl}/Category/$id'),
-      );
+        headers: headers,
+      ).timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
@@ -106,9 +108,20 @@ class CategoryApi {
       } else if (response.statusCode == 400) {
         final jsonResponse = json.decode(response.body);
         throw Exception(jsonResponse['error'] ?? 'Không thể xóa danh mục');
+      } else if (response.statusCode == 404) {
+        final jsonResponse = json.decode(response.body);
+        throw Exception(jsonResponse['error'] ?? 'Không tìm thấy danh mục');
+      } else if (response.statusCode == 500) {
+        final jsonResponse = json.decode(response.body);
+        throw Exception(jsonResponse['error'] ?? 'Lỗi server khi xóa danh mục');
+      } else {
+        throw Exception('Lỗi xóa danh mục: ${response.statusCode}');
       }
-      return false;
     } catch (e) {
+      // Nếu đã là Exception thì rethrow, không wrap lại
+      if (e is Exception) {
+        rethrow;
+      }
       throw Exception('Lỗi xóa danh mục: $e');
     }
   }

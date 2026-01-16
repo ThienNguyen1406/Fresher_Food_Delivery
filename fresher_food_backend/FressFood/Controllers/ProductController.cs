@@ -1,5 +1,4 @@
 using FressFood.Models;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 
@@ -16,9 +15,9 @@ namespace FressFood.Controllers
             _configuration = configuration;
         }
 
-        // GET: api/Products
+        // GET: api/Products?originalPrice=true (cho admin) hoặc không có param (cho user)
         [HttpGet]
-        public async Task<IActionResult> Get()
+        public async Task<IActionResult> Get([FromQuery] bool originalPrice = false)
         {
             try
             {
@@ -37,7 +36,7 @@ namespace FressFood.Controllers
                     using (var reader = await command.ExecuteReaderAsync())
                     {
                         var tempProducts = new List<(string MaSanPham, string TenSanPham, string? MoTa, string? XuatXu, string DonViTinh, decimal GiaBan, int SoLuongTon, string MaDanhMuc, DateTime? NgaySanXuat, DateTime? NgayHetHan, string? Anh)>();
-                        
+
                         while (await reader.ReadAsync())
                         {
                             var fileName = reader["Anh"]?.ToString();
@@ -50,23 +49,28 @@ namespace FressFood.Controllers
                                 GiaBan: Convert.ToDecimal(reader["GiaBan"]),
                                 SoLuongTon: Convert.ToInt32(reader["SoLuongTon"]),
                                 MaDanhMuc: reader["MaDanhMuc"].ToString(),
-                                NgaySanXuat: reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                    ? (DateTime?)null 
+                                NgaySanXuat: reader.IsDBNull(reader.GetOrdinal("NgaySanXuat"))
+                                    ? (DateTime?)null
                                     : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
-                                NgayHetHan: reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                    ? (DateTime?)null 
+                                NgayHetHan: reader.IsDBNull(reader.GetOrdinal("NgayHetHan"))
+                                    ? (DateTime?)null
                                     : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
                                 Anh: fileName
                             ));
                         }
-                        
-                        // Sau khi đóng reader, tính giá thực tế cho từng sản phẩm
+
+                        // Sau khi đóng reader, tính giá cho từng sản phẩm
                         foreach (var item in tempProducts)
                         {
-                            var giaThucTe = TinhGiaThucTe(item.MaSanPham, item.GiaBan, item.NgayHetHan, connection);
+                            // Nếu originalPrice=true (admin) -> trả về giá gốc, không tính lại
+                            // Nếu originalPrice=false (user) -> tính giá thực tế (có Sale/giảm giá hết hạn)
+                            decimal giaHienThi = originalPrice
+                                ? item.GiaBan  // Admin: trả về giá gốc
+                                : TinhGiaThucTe(item.MaSanPham, item.GiaBan, item.NgayHetHan, connection); // User: tính giá thực tế
+
                             var anhUrl = string.IsNullOrEmpty(item.Anh) ? null :
                                         $"{Request.Scheme}://{Request.Host}/images/products/{item.Anh}";
-                            
+
                             var product = new Product
                             {
                                 MaSanPham = item.MaSanPham,
@@ -74,7 +78,7 @@ namespace FressFood.Controllers
                                 MoTa = item.MoTa,
                                 XuatXu = item.XuatXu,
                                 DonViTinh = item.DonViTinh,
-                                GiaBan = giaThucTe, // Trả về giá thực tế (đã giảm giá)
+                                GiaBan = giaHienThi, // Trả về giá gốc (admin) hoặc giá thực tế (user)
                                 SoLuongTon = item.SoLuongTon,
                                 MaDanhMuc = item.MaDanhMuc,
                                 NgaySanXuat = item.NgaySanXuat,
@@ -120,6 +124,14 @@ namespace FressFood.Controllers
                             if (await reader.ReadAsync())
                             {
                                 var fileName = reader["Anh"]?.ToString();
+                                var giaBanGoc = Convert.ToDecimal(reader["GiaBan"]);
+                                DateTime? ngayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
+                                    ? null 
+                                    : reader.GetDateTime(reader.GetOrdinal("NgayHetHan"));
+
+                                // Tính giá thực tế (có Sale và giảm giá hết hạn)
+                                var giaThucTe = TinhGiaThucTe(id, giaBanGoc, ngayHetHan, connection);
+
                                 product = new Product
                                 {
                                     MaSanPham = reader["MaSanPham"].ToString(),
@@ -127,15 +139,13 @@ namespace FressFood.Controllers
                                     MoTa = reader["MoTa"]?.ToString(),
                                     XuatXu = reader["XuatXu"]?.ToString(),
                                     DonViTinh = reader["DonViTinh"]?.ToString(),
-                                    GiaBan = Convert.ToDecimal(reader["GiaBan"]),
+                                    GiaBan = giaThucTe, // Trả về giá thực tế (đã giảm giá)
                                     SoLuongTon = Convert.ToInt32(reader["SoLuongTon"]),
                                     MaDanhMuc = reader["MaDanhMuc"].ToString(),
-                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                        ? null 
+                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat"))
+                                        ? null
                                         : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
-                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                        ? null 
-                                        : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
+                                    NgayHetHan = ngayHetHan,
                                     // Ghép thành URL để client load ảnh trực tiếp
                                     Anh = string.IsNullOrEmpty(fileName) ? null :
                                           $"{Request.Scheme}://{Request.Host}/images/products/{fileName}"
@@ -182,7 +192,7 @@ namespace FressFood.Controllers
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             var tempProducts = new List<(string MaSanPham, string TenSanPham, string? MoTa, string? XuatXu, string DonViTinh, decimal GiaBan, int SoLuongTon, string MaDanhMuc, DateTime? NgaySanXuat, DateTime? NgayHetHan, string? Anh)>();
-                            
+
                             while (await reader.ReadAsync())
                             {
                                 var fileName = reader["Anh"]?.ToString();
@@ -195,23 +205,23 @@ namespace FressFood.Controllers
                                     GiaBan: Convert.ToDecimal(reader["GiaBan"]),
                                     SoLuongTon: Convert.ToInt32(reader["SoLuongTon"]),
                                     MaDanhMuc: reader["MaDanhMuc"].ToString(),
-                                    NgaySanXuat: reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                        ? (DateTime?)null 
+                                    NgaySanXuat: reader.IsDBNull(reader.GetOrdinal("NgaySanXuat"))
+                                        ? (DateTime?)null
                                         : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
-                                    NgayHetHan: reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                        ? (DateTime?)null 
+                                    NgayHetHan: reader.IsDBNull(reader.GetOrdinal("NgayHetHan"))
+                                        ? (DateTime?)null
                                         : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
                                     Anh: fileName
                                 ));
                             }
-                            
+
                             // Sau khi đóng reader, tính giá thực tế cho từng sản phẩm
                             foreach (var item in tempProducts)
                             {
                                 var giaThucTe = TinhGiaThucTe(item.MaSanPham, item.GiaBan, item.NgayHetHan, connection);
                                 var anhUrl = string.IsNullOrEmpty(item.Anh) ? null :
                                             $"{Request.Scheme}://{Request.Host}/images/products/{item.Anh}";
-                                
+
                                 var product = new Product
                                 {
                                     MaSanPham = item.MaSanPham,
@@ -246,6 +256,18 @@ namespace FressFood.Controllers
         {
             try
             {
+                // Validation: Giá sản phẩm không thể nhỏ hơn 0
+                if (request.GiaBan < 0)
+                {
+                    return BadRequest(new { error = "Giá sản phẩm không thể nhỏ hơn 0" });
+                }
+
+                // Validation: Số lượng tồn phải >= 0
+                if (request.SoLuongTon < 0)
+                {
+                    return BadRequest(new { error = "Số lượng tồn phải lớn hơn hoặc bằng 0" });
+                }
+
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
 
                 using (var connection = new SqlConnection(connectionString))
@@ -275,11 +297,11 @@ namespace FressFood.Controllers
                         command.Parameters.AddWithValue("@XuatXu", request.XuatXu ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@DonViTinh", request.DonViTinh ?? (object)DBNull.Value);
                         command.Parameters.AddWithValue("@MaDanhMuc", request.MaDanhMuc);
-                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue 
-                            ? (object)request.NgaySanXuat.Value 
+                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue
+                            ? (object)request.NgaySanXuat.Value
                             : DBNull.Value);
-                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue 
-                            ? (object)request.NgayHetHan.Value 
+                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue
+                            ? (object)request.NgayHetHan.Value
                             : DBNull.Value);
 
                         using (var reader = await command.ExecuteReaderAsync())
@@ -298,10 +320,10 @@ namespace FressFood.Controllers
                                     DonViTinh = reader.IsDBNull(reader.GetOrdinal("DonViTinh")) ? null : reader.GetString(reader.GetOrdinal("DonViTinh")),
                                     MaDanhMuc = reader.GetString(reader.GetOrdinal("MaDanhMuc")),
                                     NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                        ? null 
+                                        ? (DateTime?)null 
                                         : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
                                     NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                        ? null 
+                                        ? (DateTime?)null 
                                         : reader.GetDateTime(reader.GetOrdinal("NgayHetHan"))
                                 };
 
@@ -337,6 +359,18 @@ namespace FressFood.Controllers
         {
             try
             {
+                // Validation: Giá sản phẩm không thể nhỏ hơn 0
+                if (request.GiaBan < 0)
+                {
+                    return BadRequest(new { error = "Giá sản phẩm không thể nhỏ hơn 0" });
+                }
+
+                // Validation: Số lượng tồn phải >= 0
+                if (request.SoLuongTon < 0)
+                {
+                    return BadRequest(new { error = "Số lượng tồn phải lớn hơn hoặc bằng 0" });
+                }
+
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
 
                 using (var connection = new SqlConnection(connectionString))
@@ -384,11 +418,11 @@ namespace FressFood.Controllers
                         command.Parameters.AddWithValue("@XuatXu", (object?)request.XuatXu ?? DBNull.Value);
                         command.Parameters.AddWithValue("@DonViTinh", (object?)request.DonViTinh ?? DBNull.Value);
                         command.Parameters.AddWithValue("@MaDanhMuc", request.MaDanhMuc);
-                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue 
-                            ? (object)request.NgaySanXuat.Value 
+                        command.Parameters.AddWithValue("@NgaySanXuat", request.NgaySanXuat.HasValue
+                            ? (object)request.NgaySanXuat.Value
                             : DBNull.Value);
-                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue 
-                            ? (object)request.NgayHetHan.Value 
+                        command.Parameters.AddWithValue("@NgayHetHan", request.NgayHetHan.HasValue
+                            ? (object)request.NgayHetHan.Value
                             : DBNull.Value);
 
                         if (!string.IsNullOrEmpty(anhFileName))
@@ -424,11 +458,11 @@ namespace FressFood.Controllers
                                     XuatXu = reader["XuatXu"] as string,
                                     DonViTinh = reader["DonViTinh"] as string,
                                     MaDanhMuc = reader["MaDanhMuc"].ToString(),
-                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                        ? null 
+                                    NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat"))
+                                        ? (DateTime?)null
                                         : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
-                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                        ? null 
+                                    NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan"))
+                                        ? (DateTime?)null
                                         : reader.GetDateTime(reader.GetOrdinal("NgayHetHan"))
                                 };
 
@@ -461,7 +495,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    
+
                     // Kiểm tra xem sản phẩm có tồn tại và chưa bị xóa không
                     string checkProductQuery = @"SELECT COUNT(*) FROM SanPham 
                                                  WHERE MaSanPham = @MaSanPham AND (IsDeleted = 0 OR IsDeleted IS NULL)";
@@ -469,13 +503,13 @@ namespace FressFood.Controllers
                     {
                         checkCommand.Parameters.AddWithValue("@MaSanPham", id);
                         var productCount = (int)await checkCommand.ExecuteScalarAsync();
-                        
+
                         if (productCount == 0)
                         {
                             return NotFound(new { error = "Không tìm thấy sản phẩm để xóa" });
                         }
                     }
-                    
+
                     // Soft delete: đánh dấu là đã xóa và lưu thời gian xóa
                     string query = @"UPDATE SanPham 
                                      SET IsDeleted = 1, DeletedAt = GETDATE() 
@@ -510,7 +544,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    
+
                     // Tự động xóa vĩnh viễn các sản phẩm đã xóa hơn 30 ngày
                     string autoDeleteQuery = @"DELETE FROM SanPham 
                                                WHERE IsDeleted = 1 
@@ -524,7 +558,7 @@ namespace FressFood.Controllers
                             Console.WriteLine($"Đã tự động xóa vĩnh viễn {deletedCount} sản phẩm trong thùng rác (> 30 ngày)");
                         }
                     }
-                    
+
                     // Lấy danh sách sản phẩm trong thùng rác (chưa quá 30 ngày)
                     string query = @"SELECT MaSanPham, TenSanPham, MoTa, GiaBan, Anh, SoLuongTon, XuatXu, DonViTinh, MaDanhMuc, NgaySanXuat, NgayHetHan, DeletedAt,
                                      DATEDIFF(day, DeletedAt, GETDATE()) as DaysInTrash
@@ -543,10 +577,10 @@ namespace FressFood.Controllers
                             {
                                 deletedAt = reader.GetDateTime(reader.GetOrdinal("DeletedAt"));
                             }
-                            var daysInTrash = reader.IsDBNull(reader.GetOrdinal("DaysInTrash")) 
-                                ? 0 
+                            var daysInTrash = reader.IsDBNull(reader.GetOrdinal("DaysInTrash"))
+                                ? 0
                                 : reader.GetInt32(reader.GetOrdinal("DaysInTrash"));
-                            
+
                             var product = new
                             {
                                 MaSanPham = reader["MaSanPham"].ToString(),
@@ -557,11 +591,11 @@ namespace FressFood.Controllers
                                 GiaBan = Convert.ToDecimal(reader["GiaBan"]),
                                 SoLuongTon = Convert.ToInt32(reader["SoLuongTon"]),
                                 MaDanhMuc = reader["MaDanhMuc"].ToString(),
-                                NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")) 
-                                    ? (DateTime?)null 
+                                NgaySanXuat = reader.IsDBNull(reader.GetOrdinal("NgaySanXuat"))
+                                    ? (DateTime?)null
                                     : reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")),
-                                NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan")) 
-                                    ? (DateTime?)null 
+                                NgayHetHan = reader.IsDBNull(reader.GetOrdinal("NgayHetHan"))
+                                    ? (DateTime?)null
                                     : reader.GetDateTime(reader.GetOrdinal("NgayHetHan")),
                                 Anh = string.IsNullOrEmpty(fileName) ? null :
                                       $"{Request.Scheme}://{Request.Host}/images/products/{fileName}",
@@ -593,7 +627,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    
+
                     // Khôi phục sản phẩm: xóa đánh dấu IsDeleted
                     string query = @"UPDATE SanPham 
                                      SET IsDeleted = 0, DeletedAt = NULL 
@@ -627,7 +661,7 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    
+
                     // Kiểm tra xem sản phẩm có trong thùng rác không
                     string checkQuery = @"SELECT COUNT(*) FROM SanPham 
                                          WHERE MaSanPham = @MaSanPham AND IsDeleted = 1";
@@ -635,39 +669,197 @@ namespace FressFood.Controllers
                     {
                         checkCommand.Parameters.AddWithValue("@MaSanPham", id);
                         var count = (int)await checkCommand.ExecuteScalarAsync();
-                        
+
                         if (count == 0)
                         {
                             return NotFound(new { error = "Không tìm thấy sản phẩm trong thùng rác để xóa vĩnh viễn" });
                         }
                     }
-                    
-                    // Xóa vĩnh viễn sản phẩm
-                    string query = "DELETE FROM SanPham WHERE MaSanPham = @MaSanPham AND IsDeleted = 1";
-                    using (var command = new SqlCommand(query, connection))
-                    {
-                        command.Parameters.AddWithValue("@MaSanPham", id);
-                        int result = await command.ExecuteNonQueryAsync();
 
-                        if (result > 0)
-                            return Ok(new { message = "Đã xóa vĩnh viễn sản phẩm" });
-                        else
-                            return NotFound(new { error = "Không tìm thấy sản phẩm trong thùng rác để xóa vĩnh viễn" });
+                    // Kiểm tra xem sản phẩm có trong đơn hàng chưa hoàn thành không
+                    string checkIncompleteOrdersQuery = @"SELECT COUNT(*) 
+                                                          FROM ChiTietDonHang ctdh
+                                                          INNER JOIN DonHang dh ON ctdh.MaDonHang = dh.MaDonHang
+                                                          WHERE ctdh.MaSanPham = @MaSanPham
+                                                          AND NOT (
+                                                              dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng')
+                                                              OR dh.TrangThai LIKE '%complete%'
+                                                              OR dh.TrangThai LIKE '%Complete%'
+                                                              OR dh.TrangThai LIKE '%hoàn thành%'
+                                                              OR dh.TrangThai LIKE '%giao hàng%'
+                                                              OR dh.TrangThai LIKE '%Đã hủy%'
+                                                              OR dh.TrangThai LIKE '%hủy%'
+                                                              OR dh.TrangThai LIKE '%cancel%'
+                                                              OR dh.TrangThai LIKE '%Cancel%'
+                                                          )";
+                    using (var checkOrderCommand = new SqlCommand(checkIncompleteOrdersQuery, connection))
+                    {
+                        checkOrderCommand.Parameters.AddWithValue("@MaSanPham", id);
+                        var incompleteOrderCount = (int)await checkOrderCommand.ExecuteScalarAsync();
+
+                        if (incompleteOrderCount > 0)
+                        {
+                            return BadRequest(new { error = $"Không thể xóa vĩnh viễn sản phẩm vì đang có trong {incompleteOrderCount} đơn hàng chưa hoàn thành. Vui lòng đợi đơn hàng hoàn thành trước khi xóa." });
+                        }
+                    }
+
+                    // Kiểm tra xem sản phẩm có trong giỏ hàng không (kiểm tra bảng trung gian SanPham_GioHang)
+                    string checkCartQuery = @"SELECT COUNT(*) FROM SanPham_GioHang WHERE MaSanPham = @MaSanPham";
+                    using (var checkCartCommand = new SqlCommand(checkCartQuery, connection))
+                    {
+                        checkCartCommand.Parameters.AddWithValue("@MaSanPham", id);
+                        var cartCount = (int)await checkCartCommand.ExecuteScalarAsync();
+
+                        if (cartCount > 0)
+                        {
+                            return BadRequest(new { error = "Không thể xóa vĩnh viễn sản phẩm vì đang có trong giỏ hàng của khách hàng. Vui lòng yêu cầu khách hàng xóa khỏi giỏ hàng trước." });
+                        }
+                    }
+
+                    // Xóa vĩnh viễn sản phẩm
+                    // Sử dụng transaction để đảm bảo tính nhất quán
+                    using (var transaction = connection.BeginTransaction())
+                    {
+                        try
+                        {
+                            // Xóa tất cả các bản ghi liên quan trước (theo thứ tự để tránh foreign key constraint)
+                            // Lưu ý: Đã kiểm tra đơn hàng chưa hoàn thành và giỏ hàng ở trên, nên có thể xóa an toàn
+                            
+                            // 1. Xóa giỏ hàng (SanPham_GioHang - bảng trung gian) - phải xóa trước vì có thể có foreign key
+                            try
+                            {
+                                string deleteCartQuery = "DELETE FROM SanPham_GioHang WHERE MaSanPham = @MaSanPham";
+                                using (var deleteCartCommand = new SqlCommand(deleteCartQuery, connection, transaction))
+                                {
+                                    deleteCartCommand.Parameters.AddWithValue("@MaSanPham", id);
+                                    await deleteCartCommand.ExecuteNonQueryAsync();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Warning: Could not delete cart items: {ex.Message}");
+                                // Không throw vì có thể bảng không tồn tại hoặc không có dữ liệu
+                            }
+
+                            // 2. Xóa đánh giá (DanhGia)
+                            try
+                            {
+                                string deleteRatingsQuery = "DELETE FROM DanhGia WHERE MaSanPham = @MaSanPham";
+                                using (var deleteRatingsCommand = new SqlCommand(deleteRatingsQuery, connection, transaction))
+                                {
+                                    deleteRatingsCommand.Parameters.AddWithValue("@MaSanPham", id);
+                                    await deleteRatingsCommand.ExecuteNonQueryAsync();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Warning: Could not delete ratings: {ex.Message}");
+                            }
+
+                            // 3. Xóa sản phẩm yêu thích (YeuThich)
+                            try
+                            {
+                                string deleteFavoritesQuery = "DELETE FROM YeuThich WHERE MaSanPham = @MaSanPham";
+                                using (var deleteFavoritesCommand = new SqlCommand(deleteFavoritesQuery, connection, transaction))
+                                {
+                                    deleteFavoritesCommand.Parameters.AddWithValue("@MaSanPham", id);
+                                    await deleteFavoritesCommand.ExecuteNonQueryAsync();
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"Warning: Could not delete favorites: {ex.Message}");
+                            }
+
+                            // 4. Không xóa ChiTietDonHang - giữ lại lịch sử đơn hàng
+                            // (Đã kiểm tra đơn hàng chưa hoàn thành ở trên, nên chỉ còn đơn hàng đã hoàn thành)
+                            // Lưu ý: Nếu có foreign key constraint, có thể cần sửa database để cho phép xóa
+                            // hoặc set NULL cho MaSanPham trong ChiTietDonHang
+                            // Tạm thời bỏ qua việc xóa ChiTietDonHang để giữ lịch sử
+
+                            // 5. Xóa sản phẩm
+                            string query = "DELETE FROM SanPham WHERE MaSanPham = @MaSanPham AND IsDeleted = 1";
+                            using (var command = new SqlCommand(query, connection, transaction))
+                            {
+                                command.Parameters.AddWithValue("@MaSanPham", id);
+                                int result = await command.ExecuteNonQueryAsync();
+
+                                if (result > 0)
+                                {
+                                    transaction.Commit();
+                                    return Ok(new { message = "Đã xóa vĩnh viễn sản phẩm" });
+                                }
+                                else
+                                {
+                                    transaction.Rollback();
+                                    return NotFound(new { error = "Không tìm thấy sản phẩm trong thùng rác để xóa vĩnh viễn" });
+                                }
+                            }
+                        }
+                        catch (Microsoft.Data.SqlClient.SqlException sqlEx)
+                        {
+                            transaction.Rollback();
+                            // Log chi tiết lỗi SQL để debug
+                            Console.WriteLine($"SQL Error during permanent delete: {sqlEx.Number} - {sqlEx.Message}");
+                            Console.WriteLine($"Stack trace: {sqlEx.StackTrace}");
+                            
+                            // Nếu là lỗi foreign key constraint, trả về thông báo rõ ràng
+                            if (sqlEx.Number == 547)
+                            {
+                                return BadRequest(new { error = $"Không thể xóa vĩnh viễn sản phẩm do ràng buộc dữ liệu. Chi tiết: {sqlEx.Message}" });
+                            }
+                            
+                            throw; // Re-throw để xử lý ở catch bên ngoài
+                        }
+                        catch (Exception ex)
+                        {
+                            transaction.Rollback();
+                            Console.WriteLine($"Error during permanent delete: {ex.Message}");
+                            Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                            throw; // Re-throw để xử lý ở catch bên ngoài
+                        }
                     }
                 }
             }
             catch (Microsoft.Data.SqlClient.SqlException sqlEx)
             {
-                // Xử lý lỗi foreign key constraint
+                // Xử lý lỗi foreign key constraint (nếu vẫn còn lỗi sau khi đã kiểm tra)
+                Console.WriteLine($"SQL Exception during permanent delete: Number={sqlEx.Number}, Message={sqlEx.Message}");
+                Console.WriteLine($"Stack trace: {sqlEx.StackTrace}");
+                
                 if (sqlEx.Number == 547) // Foreign key constraint violation
                 {
-                    return BadRequest(new { error = "Không thể xóa vĩnh viễn sản phẩm vì đang được sử dụng trong hệ thống (đơn hàng, giỏ hàng, đánh giá, v.v.)" });
+                    // Lấy tên bảng gây ra lỗi từ message
+                    string errorMessage = "Không thể xóa vĩnh viễn sản phẩm vì đang được sử dụng trong hệ thống.";
+                    if (sqlEx.Message.Contains("ChiTietDonHang"))
+                    {
+                        errorMessage += " Sản phẩm đang có trong chi tiết đơn hàng. Vui lòng kiểm tra lại các đơn hàng liên quan.";
+                    }
+                    else if (sqlEx.Message.Contains("DanhGia"))
+                    {
+                        errorMessage += " Sản phẩm đang có đánh giá. Vui lòng xóa đánh giá trước.";
+                    }
+                    else if (sqlEx.Message.Contains("GioHang"))
+                    {
+                        errorMessage += " Sản phẩm đang có trong giỏ hàng. Vui lòng yêu cầu khách hàng xóa khỏi giỏ hàng.";
+                    }
+                    else if (sqlEx.Message.Contains("YeuThich"))
+                    {
+                        errorMessage += " Sản phẩm đang có trong danh sách yêu thích.";
+                    }
+                    else
+                    {
+                        errorMessage += $" Chi tiết: {sqlEx.Message}";
+                    }
+                    return BadRequest(new { error = errorMessage });
                 }
-                return StatusCode(500, new { error = $"Lỗi database: {sqlEx.Message}" });
+                return StatusCode(500, new { error = $"Lỗi database (Code: {sqlEx.Number}): {sqlEx.Message}" });
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { error = ex.Message });
+                Console.WriteLine($"General Exception during permanent delete: {ex.Message}");
+                Console.WriteLine($"Stack trace: {ex.StackTrace}");
+                return StatusCode(500, new { error = $"Lỗi xóa vĩnh viễn sản phẩm: {ex.Message}" });
             }
         }
 
@@ -697,22 +889,11 @@ namespace FressFood.Controllers
         private decimal TinhGiaThucTe(string maSanPham, decimal giaBan, DateTime? ngayHetHan, SqlConnection connection)
         {
             decimal giaThucTe = giaBan;
-            decimal giamGiaHetHan = 0;
-            bool coGiamGiaHetHan = false;
-            
-            // Kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
-            if (ngayHetHan.HasValue)
-            {
-                var now = DateTime.Now;
-                var daysUntilExpiry = (ngayHetHan.Value.Date - now.Date).Days;
-                if (daysUntilExpiry >= 0 && daysUntilExpiry <= 7)
-                {
-                    giamGiaHetHan = giaBan * 0.3m;
-                    coGiamGiaHetHan = true;
-                }
-            }
-            
-            // Kiểm tra Sale (khuyến mãi) - ưu tiên Sale hơn giảm giá hết hạn
+
+            // QUY TẮC: Kiểm tra Sale TRƯỚC. Nếu có Sale thì KHÔNG kiểm tra giảm giá hết hạn nữa
+            // Nếu không có Sale, mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
+
+            // Kiểm tra Sale (khuyến mãi) TRƯỚC
             decimal? giaTriKhuyenMai = null;
             string? loaiGiaTri = null;
             try
@@ -725,11 +906,11 @@ namespace FressFood.Controllers
                       AND NgayBatDau <= GETDATE()
                       AND NgayKetThuc >= GETDATE()
                     ORDER BY CASE WHEN MaSanPham = @MaSanPham THEN 0 ELSE 1 END";
-                
+
                 using (var saleCommand = new SqlCommand(saleQuery, connection))
                 {
                     saleCommand.Parameters.AddWithValue("@MaSanPham", maSanPham);
-                    
+
                     using (var saleReader = saleCommand.ExecuteReader())
                     {
                         if (saleReader.Read())
@@ -745,11 +926,11 @@ namespace FressFood.Controllers
                 // Log lỗi nhưng vẫn tiếp tục
                 Console.WriteLine($"[Product Price] Error getting sale for {maSanPham}: {ex.Message}");
             }
-            
-            // Áp dụng giảm giá: Ưu tiên Sale, sau đó mới đến giảm giá hết hạn
+
+            // Áp dụng giảm giá: Nếu có Sale thì CHỈ áp dụng Sale, KHÔNG kiểm tra giảm giá hết hạn
             if (giaTriKhuyenMai.HasValue && giaTriKhuyenMai.Value > 0)
             {
-                // Có Sale -> tính giá theo loại (Amount hoặc Percent)
+                // Có Sale -> CHỈ tính giá theo Sale, KHÔNG áp dụng giảm giá hết hạn
                 if (loaiGiaTri == "Percent")
                 {
                     // Giảm giá theo phần trăm: GiaThucTe = GiaBan * (1 - GiaTriKhuyenMai / 100)
@@ -764,12 +945,21 @@ namespace FressFood.Controllers
                     giaThucTe = Math.Max(0, giaBan - giaTriKhuyenMai.Value);
                 }
             }
-            else if (coGiamGiaHetHan && giamGiaHetHan > 0)
+            else
             {
-                // Không có Sale -> dùng giảm giá hết hạn
-                giaThucTe = Math.Max(0, giaBan - giamGiaHetHan);
+                // KHÔNG có Sale -> mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
+                if (ngayHetHan.HasValue)
+                {
+                    var now = DateTime.Now;
+                    var daysUntilExpiry = (ngayHetHan.Value.Date - now.Date).Days;
+                    if (daysUntilExpiry >= 0 && daysUntilExpiry <= 7)
+                    {
+                        decimal giamGiaHetHan = giaBan * 0.3m;
+                        giaThucTe = Math.Max(0, giaBan - giamGiaHetHan);
+                    }
+                }
             }
-            
+
             return Math.Max(0, giaThucTe);
         }
     }

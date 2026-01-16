@@ -174,7 +174,12 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                             throw Exception('Xóa thất bại');
                           }
                         } catch (e) {
-                          _showErrorDialog('Lỗi', e.toString());
+                          // Loại bỏ "Exception: " prefix nếu có
+                          String errorMessage = e.toString();
+                          if (errorMessage.startsWith('Exception: ')) {
+                            errorMessage = errorMessage.substring(11);
+                          }
+                          _showErrorDialog('Lỗi', errorMessage);
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -551,13 +556,13 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                                                   color: Colors.green.withOpacity(0.1),
                                                   borderRadius: BorderRadius.circular(6),
                                                 ),
-                                                child: const Row(
+                                                child: Row(
                                                   children: [
-                                                    Icon(Iconsax.box, size: 12, color: Colors.green),
-                                                    SizedBox(width: 2),
+                                                    const Icon(Iconsax.box, size: 12, color: Colors.green),
+                                                    const SizedBox(width: 2),
                                                     Text(
-                                                      '0 SP',
-                                                      style: TextStyle(
+                                                      '${category.soLuongSanPham} SP',
+                                                      style: const TextStyle(
                                                         color: Colors.green,
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.w600,

@@ -35,7 +35,7 @@ class ProductBottomActionBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!provider.isOutOfStock)
+          if (provider.canAddToCart)
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
@@ -86,40 +86,51 @@ class ProductBottomActionBar extends StatelessWidget {
                   child: child,
                 );
               },
-              child: ElevatedButton(
-                onPressed: provider.isOutOfStock ? null : onAddToCart,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 18),
-                  backgroundColor: provider.isOutOfStock
-                      ? Colors.grey.shade400
-                      : Colors.green.shade600,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: provider.isOutOfStock ? 0 : 4,
-                  shadowColor: provider.isOutOfStock
-                      ? Colors.transparent
-                      : Colors.green.withOpacity(0.3),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                        provider.isOutOfStock
-                            ? Icons.inventory_2_outlined
-                            : Icons.shopping_cart_outlined,
-                        size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      provider.isOutOfStock ? "HẾT HÀNG" : "Thêm vào giỏ hàng",
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
+              child: Builder(
+                builder: (context) {
+                  final canAddToCart = provider.canAddToCart;
+                  return ElevatedButton(
+                    onPressed: canAddToCart ? onAddToCart : null,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      backgroundColor: canAddToCart
+                          ? Colors.green.shade600
+                          : Colors.grey.shade400,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      elevation: canAddToCart ? 4 : 0,
+                      shadowColor: canAddToCart
+                          ? Colors.green.withOpacity(0.3)
+                          : Colors.transparent,
                     ),
-                  ],
-                ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                            canAddToCart
+                                ? Icons.shopping_cart_outlined
+                                : (provider.isOutOfStock
+                                    ? Icons.inventory_2_outlined
+                                    : Icons.warning_amber_rounded),
+                            size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          canAddToCart
+                              ? "Thêm vào giỏ hàng"
+                              : (provider.isOutOfStock
+                                  ? "HẾT HÀNG"
+                                  : "SẢN PHẨM HẾT HẠN"),
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ),
           ),

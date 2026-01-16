@@ -185,7 +185,7 @@ class HomeProvider with ChangeNotifier {
   }
 
   // Cart
-  Future<void> addToCart(Product product) async {
+  Future<bool> addToCart(Product product) async {
     try {
       final isLoggedIn = await _homeService.isLoggedIn();
       if (!isLoggedIn) {
@@ -196,6 +196,7 @@ class HomeProvider with ChangeNotifier {
       if (!success) {
         throw Exception('Không thể thêm sản phẩm vào giỏ hàng');
       }
+      return true;
     } catch (e) {
       rethrow;
     }

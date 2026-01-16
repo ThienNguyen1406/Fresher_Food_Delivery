@@ -246,11 +246,51 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                     ),
                   if (isGlobalSale || sale?.maSanPham == 'ALL')
                     const SizedBox(height: 16),
+                  // Dropdown chọn loại giảm giá
+                  DropdownButtonFormField<String>(
+                    value: selectedLoaiGiaTri,
+                    decoration: InputDecoration(
+                      labelText: 'Loại giảm giá',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'Amount',
+                        child: Row(
+                          children: [
+                            Icon(Icons.attach_money, size: 20, color: _textSecondary),
+                            SizedBox(width: 8),
+                            Text('Số tiền cố định (VNĐ)'),
+                          ],
+                        ),
+                      ),
+                      DropdownMenuItem(
+                        value: 'Percent',
+                        child: Row(
+                          children: [
+                            Icon(Icons.percent, size: 20, color: _textSecondary),
+                            SizedBox(width: 8),
+                            Text('Phần trăm (%)'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedLoaiGiaTri = value ?? 'Amount';
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
                   // Giá trị khuyến mãi
                   TextFormField(
                     controller: giaTriController,
                     decoration: InputDecoration(
-                      labelText: 'Giá trị khuyến mãi (VNĐ)',
+                      labelText: selectedLoaiGiaTri == 'Percent' 
+                          ? 'Giá trị khuyến mãi (%)' 
+                          : 'Giá trị khuyến mãi (VNĐ)',
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                       ),
@@ -260,9 +300,13 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                       if (value == null || value.isEmpty) {
                         return 'Vui lòng nhập giá trị khuyến mãi';
                       }
-                      if (double.tryParse(value) == null ||
-                          double.parse(value) <= 0) {
+                      final giaTri = double.tryParse(value);
+                      if (giaTri == null || giaTri <= 0) {
                         return 'Giá trị phải lớn hơn 0';
+                      }
+                      // Validate phần trăm
+                      if (selectedLoaiGiaTri == 'Percent' && (giaTri < 0 || giaTri > 100)) {
+                        return 'Phần trăm phải từ 0 đến 100';
                       }
                       return null;
                     },
@@ -405,6 +449,19 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                     return;
                   }
                   
+                  // Validate giá trị khuyến mãi
+                  final giaTri = double.tryParse(giaTriController.text);
+                  if (giaTri == null || giaTri <= 0) {
+                    _showSnackbar('Giá trị khuyến mãi phải lớn hơn 0', false);
+                    return;
+                  }
+                  
+                  // Validate phần trăm
+                  if (selectedLoaiGiaTri == 'Percent' && (giaTri < 0 || giaTri > 100)) {
+                    _showSnackbar('Phần trăm phải từ 0 đến 100', false);
+                    return;
+                  }
+                  
                   // Nếu là khuyến mãi toàn bộ, không cần chọn sản phẩm
                   final maSanPham = isGlobalSale || sale?.maSanPham == 'ALL' 
                       ? 'ALL' 
@@ -415,19 +472,30 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                     return;
                   }
 
+                  // Trim mã sản phẩm để đảm bảo không có khoảng trắng
+                  final maSanPhamTrimmed = maSanPham.trim();
+                  if (maSanPhamTrimmed.isEmpty) {
+                    _showSnackbar('Mã sản phẩm không hợp lệ', false);
+                    return;
+                  }
+
                   try {
+                    print('Creating sale with maSanPham: $maSanPhamTrimmed, loaiGiaTri: $selectedLoaiGiaTri, giaTri: $giaTri');
+                    
                     final newSale = Sale(
                       idSale: sale?.idSale ?? '',
-                      giaTriKhuyenMai: double.parse(giaTriController.text),
-                      loaiGiaTri: selectedLoaiGiaTri,
+                      giaTriKhuyenMai: giaTri,
+                      loaiGiaTri: selectedLoaiGiaTri, // Đảm bảo truyền đúng giá trị
                       moTaChuongTrinh: moTaController.text.isEmpty
                           ? null
                           : moTaController.text,
                       ngayBatDau: ngayBatDau!,
                       ngayKetThuc: ngayKetThuc!,
                       trangThai: sale?.trangThai ?? 'Active',
-                      maSanPham: maSanPham,
+                      maSanPham: maSanPhamTrimmed, // Sử dụng mã đã trim
                     );
+                    
+                    print('Sale object created: loaiGiaTri=${newSale.loaiGiaTri}, toJson=${newSale.toJson()}');
 
                     if (sale == null) {
                       await _saleApi.createSale(newSale);
@@ -439,7 +507,14 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
                     Navigator.pop(context);
                     _loadData();
                   } catch (e) {
-                    _showSnackbar('Lỗi: $e', false);
+                    // Hiển thị lỗi chi tiết từ backend
+                    String errorMessage = 'Lỗi: ';
+                    if (e.toString().contains('Exception:')) {
+                      errorMessage += e.toString().split('Exception:')[1].trim();
+                    } else {
+                      errorMessage += e.toString();
+                    }
+                    _showSnackbar(errorMessage, false);
                   }
                 }
               },

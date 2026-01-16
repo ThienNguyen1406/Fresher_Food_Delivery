@@ -80,33 +80,41 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
+  Future<void> _refreshData() async {
+    await context.read<HomeProvider>().initializeData();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       color: Colors.grey.shade50,
-      child: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Header
-          HomeAppBar(
-            searchController: _searchController,
-            searchFocusNode: _searchFocusNode,
-            onSearch: _handleSearch,
-            onResetSearch: _resetSearch,
-          ),
-          // Banner section
-          BannerSection(
-            pageController: _pageController,
-            banners: banners,
-          ),
-          // Categories section
-          const CategoriesSection(),
-          // Products section
-          ProductsSection(
-            searchController: _searchController,
-            onResetSearch: _resetSearch,
-          ),
-        ],
+      child: RefreshIndicator(
+        onRefresh: _refreshData,
+        color: Colors.green,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // Header
+            HomeAppBar(
+              searchController: _searchController,
+              searchFocusNode: _searchFocusNode,
+              onSearch: _handleSearch,
+              onResetSearch: _resetSearch,
+            ),
+            // Banner section
+            BannerSection(
+              pageController: _pageController,
+              banners: banners,
+            ),
+            // Categories section
+            const CategoriesSection(),
+            // Products section
+            ProductsSection(
+              searchController: _searchController,
+              onResetSearch: _resetSearch,
+            ),
+          ],
+        ),
       ),
     );
   }
