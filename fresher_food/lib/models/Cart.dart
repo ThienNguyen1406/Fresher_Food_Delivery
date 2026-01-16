@@ -34,11 +34,9 @@ class CartItem {
     if (json['ngayHetHan'] != null) {
       try {
         if (json['ngayHetHan'] is String) {
-          ngayHetHan = DateTime.parse(json['ngayHetHan'] as String);
+          ngayHetHan = DateTime.parse(json['ngayHetHan']);
         } else if (json['ngayHetHan'] is DateTime) {
           ngayHetHan = json['ngayHetHan'] as DateTime;
-        } else {
-          ngayHetHan = DateTime.parse(json['ngayHetHan'].toString());
         }
       } catch (e) {
         print('Lỗi parse ngayHetHan trong CartItem: $e');

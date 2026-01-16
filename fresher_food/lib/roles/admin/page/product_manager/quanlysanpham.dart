@@ -3,7 +3,6 @@ import 'package:fresher_food/models/Category.dart';
 import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/services/api/category_api.dart';
 import 'package:fresher_food/services/api/product_api.dart';
-import 'package:iconsax/iconsax.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_manager_header.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_search_bar.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_loading_screen.dart';
@@ -60,7 +59,7 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
     setState(() => _isLoading = true);
     try {
       final [products, categories] = await Future.wait([
-        _apiProduct.getProducts(originalPrice: true), // Admin: lấy giá gốc, không tính giảm giá
+        _apiProduct.getProducts(),
         _apiCategory.getCategories(),
       ]);
       setState(() {
@@ -234,31 +233,11 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Icon(Iconsax.warning_2, color: Colors.red[700], size: 24),
-            const SizedBox(width: 12),
-            const Text(
-              'Xóa vĩnh viễn',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Bạn có chắc muốn xóa vĩnh viễn sản phẩm "${trashProduct['tenSanPham']}"?\n\nHành động này không thể hoàn tác!',
-          style: const TextStyle(fontSize: 14),
-        ),
+        title: const Text('Xóa vĩnh viễn'),
+        content: Text('Bạn có chắc muốn xóa vĩnh viễn sản phẩm "${trashProduct['tenSanPham']}"?\n\nHành động này không thể hoàn tác!'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.grey[700],
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            ),
             child: const Text('Hủy'),
           ),
           ElevatedButton(
@@ -277,21 +256,11 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
                 }
               } catch (e) {
                 if (mounted) {
-                  // Lấy message lỗi từ exception và loại bỏ prefix "Exception: "
-                  String errorMessage = e.toString();
-                  if (errorMessage.contains('Exception: ')) {
-                    errorMessage = errorMessage.replaceFirst('Exception: ', '');
-                  }
-                  _showErrorDialog('Lỗi', errorMessage);
+                  _showErrorDialog('Lỗi', e.toString());
                 }
               }
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: const Text('Xóa vĩnh viễn'),
           ),
         ],

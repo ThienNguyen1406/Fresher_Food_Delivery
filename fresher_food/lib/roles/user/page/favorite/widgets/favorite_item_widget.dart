@@ -122,21 +122,6 @@ class FavoriteItemWidget extends StatelessWidget {
                               ),
                             ),
                           ),
-                          // Gạch chéo khi hết hàng hoặc hết hạn
-                          if (product.soLuongTon <= 0 || 
-                              (product.ngayHetHan != null && 
-                               product.ngayHetHan!.isBefore(DateTime.now())))
-                            CustomPaint(
-                              painter: DiagonalLinePainter(),
-                              child: Container(
-                                width: 90,
-                                height: 90,
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.3),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -251,26 +236,5 @@ class FavoriteItemWidget extends StatelessWidget {
       ),
     );
   }
-}
-
-// Custom Painter để vẽ đường gạch chéo
-class DiagonalLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
-    // Vẽ đường gạch chéo từ góc trên trái đến góc dưới phải
-    canvas.drawLine(
-      Offset(0, 0),
-      Offset(size.width, size.height),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

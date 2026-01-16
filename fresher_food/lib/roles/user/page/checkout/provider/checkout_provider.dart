@@ -155,22 +155,7 @@ class CheckoutProvider with ChangeNotifier {
   }
 
   void applyCoupon(PhieuGiamGia coupon) {
-    // Tính toán số tiền giảm giá dựa trên loại giảm giá
-    double newDiscountAmount = 0.0;
-    
-    if (coupon.loaiGiaTri == 'Percent') {
-      // Giảm giá theo phần trăm
-      newDiscountAmount = _state.totalAmount * (coupon.giaTri / 100);
-    } else {
-      // Giảm giá theo số tiền cố định (Amount)
-      newDiscountAmount = coupon.giaTri;
-    }
-    
-    // Đảm bảo số tiền giảm không vượt quá tổng đơn hàng
-    if (newDiscountAmount > _state.totalAmount) {
-      newDiscountAmount = _state.totalAmount;
-    }
-    
+    final newDiscountAmount = coupon.giaTri;
     final newFinalAmount = _service.calculateFinalAmount(
       _state.totalAmount,
       newDiscountAmount,

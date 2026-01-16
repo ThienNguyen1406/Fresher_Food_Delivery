@@ -40,51 +40,22 @@ class ProductItemWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hình ảnh sản phẩm
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                width: 80,
-                height: 80,
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
                 color: const Color(0xFFE8F5E8),
-                child: product.anh.isNotEmpty
-                    ? Image.network(
-                        product.anh,
-                        width: 80,
-                        height: 80,
+                image: product.anh.isNotEmpty
+                    ? DecorationImage(
+                        image: NetworkImage(product.anh),
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            width: 80,
-                            height: 80,
-                            color: const Color(0xFFE8F5E8),
-                            child: const Icon(
-                              Iconsax.box,
-                              color: Color(0xFF2E7D32),
-                              size: 24,
-                            ),
-                          );
-                        },
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Container(
-                            width: 80,
-                            height: 80,
-                            color: Colors.grey.shade200,
-                            child: Center(
-                              child: CircularProgressIndicator(
-                                value: loadingProgress.expectedTotalBytes != null
-                                    ? loadingProgress.cumulativeBytesLoaded /
-                                        loadingProgress.expectedTotalBytes!
-                                    : null,
-                                strokeWidth: 2,
-                                color: const Color(0xFF2E7D32),
-                              ),
-                            ),
-                          );
-                        },
                       )
-                    : const Icon(Iconsax.box, color: Color(0xFF2E7D32), size: 24),
+                    : null,
               ),
+              child: product.anh.isEmpty
+                  ? const Icon(Iconsax.box, color: Color(0xFF2E7D32), size: 24)
+                  : null,
             ),
             const SizedBox(width: 16),
 

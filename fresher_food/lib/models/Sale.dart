@@ -31,20 +31,17 @@ class Sale {
           : (json['GiaTriKhuyenMai'] is num)
               ? (json['GiaTriKhuyenMai'] as num).toDouble()
               : 0.0,
-      loaiGiaTri: json['loaiGiaTri']?.toString() ?? 
-                  json['LoaiGiaTri']?.toString() ?? 
-                  'Amount', // Default là Amount nếu không có
       moTaChuongTrinh: json['moTaChuongTrinh']?.toString() ?? 
                        json['MoTaChuongTrinh']?.toString(),
       ngayBatDau: json['ngayBatDau'] != null
-          ? DateTime.parse(json['ngayBatDau'].toString())
+          ? DateTime.parse(json['ngayBatDau'])
           : json['NgayBatDau'] != null
-              ? DateTime.parse(json['NgayBatDau'].toString())
+              ? DateTime.parse(json['NgayBatDau'])
               : DateTime.now(),
       ngayKetThuc: json['ngayKetThuc'] != null
-          ? DateTime.parse(json['ngayKetThuc'].toString())
+          ? DateTime.parse(json['ngayKetThuc'])
           : json['NgayKetThuc'] != null
-              ? DateTime.parse(json['NgayKetThuc'].toString())
+              ? DateTime.parse(json['NgayKetThuc'])
               : DateTime.now(),
       trangThai: json['trangThai']?.toString() ?? 
                  json['TrangThai']?.toString(),
