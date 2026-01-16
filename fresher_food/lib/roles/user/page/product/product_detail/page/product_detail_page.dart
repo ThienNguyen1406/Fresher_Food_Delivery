@@ -186,7 +186,6 @@ class _ProductDetailPageState extends State<ProductDetailPage>
               },
               productId: product.maSanPham,
               isOutOfStock: productDetailProvider.isOutOfStock,
-              isExpired: productDetailProvider.isExpired,
             ),
             SliverToBoxAdapter(
               child: Padding(
@@ -470,7 +469,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 ],
               ),
             ),
-          if (productDetailProvider.canAddToCart) const SizedBox(width: 16),
+          if (!productDetailProvider.isOutOfStock) const SizedBox(width: 16),
           Expanded(
             child: AnimatedBuilder(
               animation: _addToCartController,
@@ -484,49 +483,44 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 builder: (context) {
                   final theme = Theme.of(context);
                   final isDark = theme.brightness == Brightness.dark;
-                  final canAddToCart = productDetailProvider.canAddToCart;
                   return ElevatedButton(
-                    onPressed: canAddToCart
-                        ? () => _addToCart(productDetailProvider)
-                        : null,
+                    onPressed: productDetailProvider.isOutOfStock
+                        ? null
+                        : () => _addToCart(productDetailProvider),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: canAddToCart
-                          ? (isDark
+                      backgroundColor: productDetailProvider.isOutOfStock
+                          ? Colors.grey.shade400
+                          : (isDark
                               ? Colors.green.shade400
-                              : Colors.green.shade600)
-                          : Colors.grey.shade400,
+                              : Colors.green.shade600),
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      elevation: canAddToCart
-                          ? (isDark ? 6 : 4)
-                          : 0,
-                      shadowColor: canAddToCart
-                          ? (isDark
+                      elevation: productDetailProvider.isOutOfStock
+                          ? 0
+                          : (isDark ? 6 : 4),
+                      shadowColor: productDetailProvider.isOutOfStock
+                          ? Colors.transparent
+                          : (isDark
                               ? Colors.green.shade400.withOpacity(0.5)
-                              : Colors.green.withOpacity(0.3))
-                          : Colors.transparent,
+                              : Colors.green.withOpacity(0.3)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                            canAddToCart
-                                ? Icons.shopping_cart_outlined
-                                : (productDetailProvider.isOutOfStock
-                                    ? Icons.inventory_2_outlined
-                                    : Icons.warning_amber_rounded),
+                            productDetailProvider.isOutOfStock
+                                ? Icons.inventory_2_outlined
+                                : Icons.shopping_cart_outlined,
                             size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          canAddToCart
-                              ? "Thêm vào giỏ hàng"
-                              : (productDetailProvider.isOutOfStock
-                                  ? "HẾT HÀNG"
-                                  : "SẢN PHẨM HẾT HẠN"),
-                          style: const TextStyle(
+                          productDetailProvider.isOutOfStock
+                              ? "HẾT HÀNG"
+                              : "Thêm vào giỏ hàng",
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
