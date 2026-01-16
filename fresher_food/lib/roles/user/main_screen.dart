@@ -9,6 +9,8 @@ import 'package:fresher_food/roles/user/widgets/avatar_with_menu_widget.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:fresher_food/widgets/quick_chatbot_dialog.dart';
+import 'package:lottie/lottie.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -23,6 +25,10 @@ class _MainScreenState extends State<MainScreen> {
   Map<String, dynamic>? _userInfo;
   String? _avatarUrl;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  
+  // Position for draggable chatbot button
+  Offset _chatbotPosition = const Offset(0, 0);
+  bool _isInitialized = false;
 
   static final List<Widget> _pages = [
     const HomePage(),
@@ -173,12 +179,41 @@ class _MainScreenState extends State<MainScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final localizations = AppLocalizations.of(context)!;
+    final screenSize = MediaQuery.of(context).size;
+    final fabSize = 72.0; // Larger size
+
+    // Initialize position on first build
+    if (!_isInitialized) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            // Start at bottom right
+            _chatbotPosition = Offset(
+              screenSize.width - fabSize - 16,
+              screenSize.height - 100 - fabSize,
+            );
+            _isInitialized = true;
+          });
+        }
+      });
+    }
 
     return Scaffold(
       key: _scaffoldKey,
       appBar: _selectedIndex == 5 ? _buildAccountAppBar(context) : null,
       drawer: _buildDrawer(context),
-      body: _pages[_selectedIndex],
+      body: Stack(
+        children: [
+          _pages[_selectedIndex],
+          // Draggable chatbot button
+          if (_isInitialized)
+            Positioned(
+              left: _chatbotPosition.dx,
+              top: _chatbotPosition.dy,
+              child: _buildDraggableChatbotFAB(fabSize, screenSize),
+            ),
+        ],
+      ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
@@ -492,6 +527,72 @@ class _MainScreenState extends State<MainScreen> {
       backgroundColor:
           theme.appBarTheme.backgroundColor ?? theme.scaffoldBackgroundColor,
       elevation: 0,
+    );
+  }
+
+  /// Draggable FloatingActionButton với Lottie animation cho Quick Chatbot
+  Widget _buildDraggableChatbotFAB(double size, Size screenSize) {
+    return GestureDetector(
+      onPanUpdate: (details) {
+        setState(() {
+          double newX = _chatbotPosition.dx + details.delta.dx;
+          double newY = _chatbotPosition.dy + details.delta.dy;
+          
+          // Constrain to screen bounds
+          newX = newX.clamp(0.0, screenSize.width - size);
+          newY = newY.clamp(0.0, screenSize.height - size);
+          
+          // Constrain to left or right side (within 20% of screen width from edges)
+          final leftBoundary = screenSize.width * 0.2;
+          final rightBoundary = screenSize.width * 0.8;
+          
+          if (newX < leftBoundary) {
+            newX = 0.0; // Snap to left
+          } else if (newX > rightBoundary - size) {
+            newX = screenSize.width - size; // Snap to right
+          }
+          
+          _chatbotPosition = Offset(newX, newY);
+        });
+      },
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: () {
+              showDialog(
+                context: context,
+                barrierDismissible: true,
+                builder: (context) => const QuickChatbotDialog(),
+              );
+            },
+            borderRadius: BorderRadius.circular(size / 2),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              child: Lottie.asset(
+                'lib/assets/lottie/chatbot.json',
+                fit: BoxFit.contain,
+                repeat: true,
+                animate: true,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

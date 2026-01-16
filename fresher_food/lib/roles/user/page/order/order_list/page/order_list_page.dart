@@ -24,12 +24,22 @@ class _OrderListPageState extends State<OrderListPage> {
   }
 
   /// Khối giao diện chính: Hiển thị loading, error, empty hoặc danh sách đơn hàng
+  Future<void> _refreshOrders(OrderListProvider provider) async {
+    await provider.loadOrders();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFD),
-      body: CustomScrollView(
-        slivers: [
+      body: Consumer<OrderListProvider>(
+        builder: (context, provider, child) {
+          return RefreshIndicator(
+            onRefresh: () => _refreshOrders(provider),
+            color: const Color(0xFF4CAF50),
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
           SliverAppBar(
             expandedHeight: 120.0,
             floating: false,
@@ -71,20 +81,23 @@ class _OrderListPageState extends State<OrderListPage> {
             ),
           ),
 
-          Consumer<OrderListProvider>(
-            builder: (context, orderListProvider, child) {
-              if (orderListProvider.isLoading) {
-                return _buildLoadingSliver();
-              } else if (orderListProvider.errorMessage.isNotEmpty) {
-                return _buildErrorSliver(orderListProvider);
-              } else if (orderListProvider.orders.isEmpty) {
-                return _buildEmptySliver();
-              } else {
-                return _buildOrderListSliver(orderListProvider);
-              }
-            },
-          ),
-        ],
+                Consumer<OrderListProvider>(
+                  builder: (context, orderListProvider, child) {
+                    if (orderListProvider.isLoading) {
+                      return _buildLoadingSliver();
+                    } else if (orderListProvider.errorMessage.isNotEmpty) {
+                      return _buildErrorSliver(orderListProvider);
+                    } else if (orderListProvider.orders.isEmpty) {
+                      return _buildEmptySliver();
+                    } else {
+                      return _buildOrderListSliver(orderListProvider);
+                    }
+                  },
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

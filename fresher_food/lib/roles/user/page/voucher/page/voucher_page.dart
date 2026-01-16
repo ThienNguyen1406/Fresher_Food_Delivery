@@ -289,16 +289,21 @@ class _VoucherContent extends StatelessWidget {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: state.displayedCoupons.length,
-      itemBuilder: (context, index) {
-        final voucher = state.displayedCoupons[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: _buildVoucherCard(provider, voucher),
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: provider.loadCoupons,
+      color: const Color(0xFF00C896),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: state.displayedCoupons.length,
+        itemBuilder: (context, index) {
+          final voucher = state.displayedCoupons[index];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: _buildVoucherCard(provider, voucher),
+          );
+        },
+      ),
     );
   }
 

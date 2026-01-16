@@ -615,6 +615,100 @@ namespace FoodShop.Controllers
                                 }
                             }
 
+                            // KIỂM TRA VÀ XỬ LÝ VOUCHER NẾU CÓ
+                            if (!string.IsNullOrEmpty(request.Order.id_phieugiamgia))
+                            {
+                                // Kiểm tra voucher có tồn tại và còn sử dụng được không
+                                string checkVoucherQuery = @"SELECT SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung 
+                                                              FROM PhieuGiamGia 
+                                                              WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                                using (var checkVoucherCommand = new SqlCommand(checkVoucherQuery, connection, transaction))
+                                {
+                                    checkVoucherCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                    using (var voucherReader = checkVoucherCommand.ExecuteReader())
+                                    {
+                                        if (!voucherReader.Read())
+                                        {
+                                            transaction.Rollback();
+                                            return BadRequest(new { error = "Mã giảm giá không tồn tại" });
+                                        }
+
+                                        int? soLuongToiDa = voucherReader["SoLuongToiDa"] != DBNull.Value ? (int?)Convert.ToInt32(voucherReader["SoLuongToiDa"]) : null;
+                                        int soLuongDaSuDung = voucherReader["SoLuongDaSuDung"] != DBNull.Value ? Convert.ToInt32(voucherReader["SoLuongDaSuDung"]) : 0;
+
+                                        // Kiểm tra xem voucher còn sử dụng được không
+                                        if (soLuongToiDa.HasValue && soLuongDaSuDung >= soLuongToiDa.Value)
+                                        {
+                                            transaction.Rollback();
+                                            return BadRequest(new { error = "Mã giảm giá đã hết lượt sử dụng" });
+                                        }
+                                    }
+                                }
+
+                                // Kiểm tra xem user đã sử dụng voucher này chưa
+                                string checkUserUsedQuery = @"SELECT COUNT(*) FROM LichSuSuDungVoucher 
+                                                               WHERE MaTaiKhoan = @MaTaiKhoan 
+                                                                 AND Id_phieugiamgia = @Id_phieugiamgia";
+                                using (var checkUserCommand = new SqlCommand(checkUserUsedQuery, connection, transaction))
+                                {
+                                    // Convert MaTaiKhoan sang INT nếu cần
+                                    if (int.TryParse(request.Order.MaTaiKhoan, out int maTaiKhoanInt))
+                                    {
+                                        checkUserCommand.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoanInt);
+                                    }
+                                    else
+                                    {
+                                        checkUserCommand.Parameters.AddWithValue("@MaTaiKhoan", request.Order.MaTaiKhoan);
+                                    }
+                                    checkUserCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                    int userUsedCount = Convert.ToInt32(checkUserCommand.ExecuteScalar());
+                                    
+                                    if (userUsedCount > 0)
+                                    {
+                                        transaction.Rollback();
+                                        return BadRequest(new { error = "Bạn đã sử dụng mã giảm giá này rồi" });
+                                    }
+                                }
+
+                                // Tăng số lượng đã sử dụng
+                                string updateVoucherQuery = @"UPDATE PhieuGiamGia 
+                                                              SET SoLuongDaSuDung = ISNULL(SoLuongDaSuDung, 0) + 1 
+                                                              WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                                using (var updateVoucherCommand = new SqlCommand(updateVoucherQuery, connection, transaction))
+                                {
+                                    updateVoucherCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                    updateVoucherCommand.ExecuteNonQuery();
+                                }
+
+                                // Kiểm tra xem voucher đã hết chưa, nếu hết thì xóa
+                                string checkVoucherExhaustedQuery = @"SELECT SoLuongToiDa, ISNULL(SoLuongDaSuDung, 0) as SoLuongDaSuDung 
+                                                                      FROM PhieuGiamGia 
+                                                                      WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                                using (var checkExhaustedCommand = new SqlCommand(checkVoucherExhaustedQuery, connection, transaction))
+                                {
+                                    checkExhaustedCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                    using (var exhaustedReader = checkExhaustedCommand.ExecuteReader())
+                                    {
+                                        if (exhaustedReader.Read())
+                                        {
+                                            int? soLuongToiDa = exhaustedReader["SoLuongToiDa"] != DBNull.Value ? (int?)Convert.ToInt32(exhaustedReader["SoLuongToiDa"]) : null;
+                                            int soLuongDaSuDung = exhaustedReader["SoLuongDaSuDung"] != DBNull.Value ? Convert.ToInt32(exhaustedReader["SoLuongDaSuDung"]) : 0;
+
+                                            // Nếu voucher đã hết (SoLuongDaSuDung >= SoLuongToiDa), xóa voucher
+                                            if (soLuongToiDa.HasValue && soLuongDaSuDung >= soLuongToiDa.Value)
+                                            {
+                                                string deleteVoucherQuery = "DELETE FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                                                using (var deleteVoucherCommand = new SqlCommand(deleteVoucherQuery, connection, transaction))
+                                                {
+                                                    deleteVoucherCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                                    deleteVoucherCommand.ExecuteNonQuery();
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // XỬ LÝ LINH HOẠT CHO TRƯỜNG id_phieugiamgia CÓ THỂ NULL
                             string orderQuery;
                             SqlCommand command;
@@ -687,7 +781,49 @@ namespace FoodShop.Controllers
                                 GiamSoLuongTon(detail.MaSanPham, detail.SoLuong, connection, transaction);
                             }
 
+                            // Lưu lịch sử sử dụng voucher nếu có
+                            if (!string.IsNullOrEmpty(request.Order.id_phieugiamgia))
+                            {
+                                try
+                                {
+                                    string insertHistoryQuery = @"INSERT INTO LichSuSuDungVoucher (MaTaiKhoan, Id_phieugiamgia, MaDonHang, NgaySuDung)
+                                                                  VALUES (@MaTaiKhoan, @Id_phieugiamgia, @MaDonHang, GETDATE())";
+                                    using (var historyCommand = new SqlCommand(insertHistoryQuery, connection, transaction))
+                                    {
+                                        // Convert MaTaiKhoan sang INT nếu cần (vì có thể là string trong model nhưng INT trong DB)
+                                        if (int.TryParse(request.Order.MaTaiKhoan, out int maTaiKhoanInt))
+                                        {
+                                            historyCommand.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoanInt);
+                                        }
+                                        else
+                                        {
+                                            // Nếu không parse được, thử dùng trực tiếp (có thể là NVARCHAR)
+                                            historyCommand.Parameters.AddWithValue("@MaTaiKhoan", request.Order.MaTaiKhoan);
+                                        }
+                                        historyCommand.Parameters.AddWithValue("@Id_phieugiamgia", request.Order.id_phieugiamgia);
+                                        historyCommand.Parameters.AddWithValue("@MaDonHang", maDonHang);
+                                        historyCommand.ExecuteNonQuery();
+                                    }
+                                }
+                                catch (Exception historyEx)
+                                {
+                                    // Log lỗi nhưng không rollback transaction
+                                    Console.WriteLine($"Warning: Could not save voucher usage history: {historyEx.Message}");
+                                }
+                            }
+
                             transaction.Commit();
+
+                            // Tạo thông báo cho admin về đơn hàng mới
+                            try
+                            {
+                                TaoThongBaoDonHangMoi(maDonHang, request.Order.MaTaiKhoan, connectionString);
+                            }
+                            catch (Exception notifEx)
+                            {
+                                // Log lỗi nhưng không ảnh hưởng đến việc tạo đơn hàng
+                                System.Diagnostics.Debug.WriteLine($"Lỗi khi tạo thông báo: {notifEx.Message}");
+                            }
 
                             // Cập nhật mã đơn hàng cho response
                             request.Order.MaDonHang = maDonHang;
@@ -974,6 +1110,69 @@ namespace FoodShop.Controllers
                 if (rowsAffected == 0)
                 {
                     throw new Exception($"Không thể cập nhật tồn kho cho sản phẩm {maSanPham}. Số lượng tồn kho không đủ.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tạo thông báo cho tất cả admin về đơn hàng mới
+        /// </summary>
+        private void TaoThongBaoDonHangMoi(string maDonHang, string maTaiKhoan, string connectionString)
+        {
+            using (var connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                // Lấy thông tin khách hàng
+                string customerName = "";
+                string customerQuery = "SELECT HoTen, TenNguoiDung FROM NguoiDung WHERE MaTaiKhoan = @MaTaiKhoan";
+                using (var customerCmd = new SqlCommand(customerQuery, connection))
+                {
+                    customerCmd.Parameters.AddWithValue("@MaTaiKhoan", maTaiKhoan);
+                    using (var reader = customerCmd.ExecuteReader())
+                    {
+                        if (reader.Read())
+                        {
+                            customerName = reader["HoTen"]?.ToString() ?? reader["TenNguoiDung"]?.ToString() ?? "Khách hàng";
+                        }
+                    }
+                }
+
+                // Lấy danh sách tất cả admin
+                var adminList = new List<string>();
+                string adminQuery = "SELECT MaTaiKhoan FROM NguoiDung WHERE VaiTro = N'Admin' OR VaiTro = 'Admin'";
+                using (var adminCmd = new SqlCommand(adminQuery, connection))
+                {
+                    using (var reader = adminCmd.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            adminList.Add(reader["MaTaiKhoan"].ToString());
+                        }
+                    }
+                }
+
+                // Tạo thông báo cho mỗi admin
+                foreach (var adminId in adminList)
+                {
+                    string maThongBao = $"NOTIF_{maDonHang}_{adminId}_{DateTime.Now:yyyyMMddHHmmss}";
+                    string tieuDe = "Đơn hàng mới";
+                    string noiDung = $"Khách hàng {customerName} vừa đặt đơn hàng mới. Mã đơn hàng: {maDonHang}";
+
+                    string insertQuery = @"INSERT INTO Notification 
+                                          (MaThongBao, LoaiThongBao, MaDonHang, MaNguoiNhan, TieuDe, NoiDung, DaDoc, NgayTao)
+                                          VALUES (@MaThongBao, @LoaiThongBao, @MaDonHang, @MaNguoiNhan, @TieuDe, @NoiDung, 0, GETDATE())";
+
+                    using (var insertCmd = new SqlCommand(insertQuery, connection))
+                    {
+                        insertCmd.Parameters.AddWithValue("@MaThongBao", maThongBao);
+                        insertCmd.Parameters.AddWithValue("@LoaiThongBao", "NewOrder");
+                        insertCmd.Parameters.AddWithValue("@MaDonHang", maDonHang);
+                        insertCmd.Parameters.AddWithValue("@MaNguoiNhan", adminId);
+                        insertCmd.Parameters.AddWithValue("@TieuDe", tieuDe);
+                        insertCmd.Parameters.AddWithValue("@NoiDung", noiDung);
+                        insertCmd.ExecuteNonQuery();
+                    }
                 }
             }
         }

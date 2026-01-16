@@ -143,11 +143,11 @@ namespace FressFood.Controllers
                                     TrangThai = reader["TrangThai"].ToString(),
                                     NgayTao = reader.GetDateTime(reader.GetOrdinal("NgayTao")),
                                     NgayCapNhat = reader.IsDBNull(reader.GetOrdinal("NgayCapNhat")) 
-                                        ? null 
+                                        ? (DateTime?)null 
                                         : reader.GetDateTime(reader.GetOrdinal("NgayCapNhat")),
                                     TinNhanCuoi = reader["TinNhanCuoi"]?.ToString(),
                                     NgayTinNhanCuoi = reader.IsDBNull(reader.GetOrdinal("NgayTinNhanCuoi")) 
-                                        ? null 
+                                        ? (DateTime?)null 
                                         : reader.GetDateTime(reader.GetOrdinal("NgayTinNhanCuoi")),
                                     SoTinNhanChuaDoc = reader["SoTinNhanChuaDoc"] == DBNull.Value
                                         ? 0
@@ -206,11 +206,11 @@ namespace FressFood.Controllers
                                 TrangThai = reader["TrangThai"].ToString(),
                                 NgayTao = reader.GetDateTime(reader.GetOrdinal("NgayTao")),
                                 NgayCapNhat = reader.IsDBNull(reader.GetOrdinal("NgayCapNhat")) 
-                                    ? null 
+                                    ? (DateTime?)null 
                                     : reader.GetDateTime(reader.GetOrdinal("NgayCapNhat")),
                                 TinNhanCuoi = reader["TinNhanCuoi"]?.ToString(),
                                 NgayTinNhanCuoi = reader.IsDBNull(reader.GetOrdinal("NgayTinNhanCuoi")) 
-                                    ? null 
+                                    ? (DateTime?)null 
                                     : reader.GetDateTime(reader.GetOrdinal("NgayTinNhanCuoi")),
                                 SoTinNhanChuaDoc = reader["SoTinNhanChuaDoc"] == DBNull.Value
                                     ? 0
@@ -274,7 +274,7 @@ namespace FressFood.Controllers
                                     DaDoc = Convert.ToBoolean(reader["DaDoc"]),
                                     NgayGui = reader.GetDateTime(reader.GetOrdinal("NgayGui")),
                                     NgayDoc = reader.IsDBNull(reader.GetOrdinal("NgayDoc")) 
-                                        ? null 
+                                        ? (DateTime?)null 
                                         : reader.GetDateTime(reader.GetOrdinal("NgayDoc")),
                                     NguoiGui = reader["TenNguoiGui"] != DBNull.Value 
                                         ? new User { HoTen = reader["TenNguoiGui"].ToString() } 

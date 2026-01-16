@@ -2,18 +2,30 @@ import 'dart:convert';
 
 import 'package:fresher_food/models/Coupon.dart';
 import 'package:fresher_food/services/api_service.dart';
+import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/utils/constant.dart';
 import 'package:http/http.dart' as http;
 
 class CouponApi {
   //===================== COUPONS ====================
-  // GET: Lấy tất cả phiếu giảm giá
+  // GET: Lấy tất cả phiếu giảm giá (chỉ lấy những voucher user chưa sử dụng)
   Future<List<PhieuGiamGia>> getAllCoupons() async {
     try {
       final headers = await ApiService().getHeaders();
+      
+      // Lấy thông tin user hiện tại để lọc voucher đã sử dụng
+      final user = await UserApi().getCurrentUser();
+      String? maTaiKhoan = user?.maTaiKhoan;
+      
+      // Tạo URL với query parameter maTaiKhoan nếu có
+      String url = '${Constant().baseUrl}/Coupon';
+      if (maTaiKhoan != null && maTaiKhoan.isNotEmpty) {
+        url += '?maTaiKhoan=${Uri.encodeComponent(maTaiKhoan)}';
+      }
+      
       final response = await http
           .get(
-            Uri.parse('${Constant().baseUrl}/Coupon'),
+            Uri.parse(url),
             headers: headers,
           )
           .timeout(const Duration(seconds: 30));
@@ -23,7 +35,7 @@ class CouponApi {
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
-        print('Found ${data.length} coupons');
+        print('Found ${data.length} coupons for user: $maTaiKhoan');
 
         return data.map((e) => PhieuGiamGia.fromJson(e)).toList();
       } else {
@@ -135,6 +147,9 @@ class CouponApi {
       'code': coupon.code,
       'giaTri': coupon.giaTri,
       'moTa': coupon.moTa,
+      'loaiGiaTri': coupon.loaiGiaTri,
+      'soLuongToiDa': coupon.soLuongToiDa,
+      'soLuongDaSuDung': coupon.soLuongDaSuDung,
     };
 
     final response = await http
@@ -160,6 +175,9 @@ class CouponApi {
       'code': coupon.code,
       'giaTri': coupon.giaTri,
       'moTa': coupon.moTa,
+      'loaiGiaTri': coupon.loaiGiaTri,
+      'soLuongToiDa': coupon.soLuongToiDa,
+      'soLuongDaSuDung': coupon.soLuongDaSuDung,
     };
 
     final response = await http
@@ -207,12 +225,15 @@ class CouponApi {
         throw Exception('Mã giảm giá không hợp lệ');
       }
 
-      // Tính toán số tiền giảm giá
-      double discountAmount = coupon.giaTri;
+      // Tính toán số tiền giảm giá dựa trên loại giảm giá
+      double discountAmount = 0.0;
 
-      // Nếu giá trị giảm giá là phần trăm (giả sử nếu giá trị > 100 là phần trăm)
-      if (coupon.giaTri > 0 && coupon.giaTri <= 100) {
+      if (coupon.loaiGiaTri == 'Percent') {
+        // Giảm giá theo phần trăm
         discountAmount = totalAmount * (coupon.giaTri / 100);
+      } else {
+        // Giảm giá theo số tiền cố định (Amount)
+        discountAmount = coupon.giaTri;
       }
 
       // Đảm bảo số tiền giảm không vượt quá tổng đơn hàng

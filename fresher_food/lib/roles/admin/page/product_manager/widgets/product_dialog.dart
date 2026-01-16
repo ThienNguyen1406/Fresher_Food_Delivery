@@ -9,7 +9,6 @@ import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_im
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_form_field.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_category_dropdown.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_image_source_dialog.dart';
-import 'package:intl/intl.dart';
 
 class ProductDialog extends StatefulWidget {
   final ProductApi apiService;
@@ -118,12 +117,16 @@ class _ProductDialogState extends State<ProductDialog> {
     setState(() => _isUploadingImage = true);
 
     try {
+      // Parse giá và số lượng với validation đã kiểm tra ở _validateForm
+      final giaBan = double.parse(_controllers['giaBan']!.text);
+      final soLuongTon = int.parse(_controllers['soLuongTon']!.text);
+
       final newProduct = Product(
         maSanPham: widget.product?.maSanPham ?? DateTime.now().millisecondsSinceEpoch.toString(),
         tenSanPham: _controllers['tenSanPham']!.text,
-        giaBan: double.tryParse(_controllers['giaBan']!.text) ?? 0,
+        giaBan: giaBan,
         moTa: _controllers['moTa']!.text,
-        soLuongTon: int.tryParse(_controllers['soLuongTon']!.text) ?? 0,
+        soLuongTon: soLuongTon,
         donViTinh: _controllers['donViTinh']!.text,
         xuatXu: _controllers['xuatXu']!.text,
         maDanhMuc: _selectedCategoryId ?? '',
@@ -143,13 +146,23 @@ class _ProductDialogState extends State<ProductDialog> {
         throw Exception('Thao tác thất bại');
       }
     } catch (e) {
-      _showErrorDialog('Lỗi', e.toString());
+      // Xử lý lỗi từ backend hoặc lỗi parse
+      String errorMessage = 'Đã xảy ra lỗi';
+      if (e.toString().contains('Giá sản phẩm')) {
+        errorMessage = 'Giá sản phẩm không hợp lệ';
+      } else if (e.toString().contains('Số lượng')) {
+        errorMessage = 'Số lượng tồn không hợp lệ';
+      } else {
+        errorMessage = e.toString().replaceFirst('Exception: ', '');
+      }
+      _showErrorDialog('Lỗi', errorMessage);
     } finally {
       setState(() => _isUploadingImage = false);
     }
   }
 
   bool _validateForm() {
+    // Kiểm tra các trường bắt buộc
     if (_controllers['tenSanPham']!.text.isEmpty ||
         _controllers['giaBan']!.text.isEmpty ||
         _controllers['soLuongTon']!.text.isEmpty ||
@@ -158,6 +171,29 @@ class _ProductDialogState extends State<ProductDialog> {
       _showErrorDialog('Lỗi', 'Vui lòng nhập đầy đủ các trường bắt buộc (*)');
       return false;
     }
+
+    // Validation: Giá sản phẩm phải là số và không thể nhỏ hơn 0
+    final giaBanValue = double.tryParse(_controllers['giaBan']!.text);
+    if (giaBanValue == null) {
+      _showErrorDialog('Lỗi', 'Giá sản phẩm phải là số');
+      return false;
+    }
+    if (giaBanValue < 0) {
+      _showErrorDialog('Lỗi', 'Giá sản phẩm không thể nhỏ hơn 0');
+      return false;
+    }
+
+    // Validation: Số lượng tồn phải là số và >= 0
+    final soLuongTonValue = int.tryParse(_controllers['soLuongTon']!.text);
+    if (soLuongTonValue == null) {
+      _showErrorDialog('Lỗi', 'Số lượng tồn phải là số');
+      return false;
+    }
+    if (soLuongTonValue < 0) {
+      _showErrorDialog('Lỗi', 'Số lượng tồn phải lớn hơn hoặc bằng 0');
+      return false;
+    }
+
     return true;
   }
 
