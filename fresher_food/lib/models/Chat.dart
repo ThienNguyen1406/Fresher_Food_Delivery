@@ -35,14 +35,14 @@ class Chat {
       tieuDe: json['tieuDe']?.toString(),
       trangThai: json['trangThai']?.toString() ?? 'Open',
       ngayTao: json['ngayTao'] != null
-          ? DateTime.parse(json['ngayTao'].toString())
+          ? DateTime.parse(json['ngayTao'])
           : DateTime.now(),
       ngayCapNhat: json['ngayCapNhat'] != null
-          ? DateTime.parse(json['ngayCapNhat'].toString())
+          ? DateTime.parse(json['ngayCapNhat'])
           : null,
       tinNhanCuoi: json['tinNhanCuoi']?.toString(),
       ngayTinNhanCuoi: json['ngayTinNhanCuoi'] != null
-          ? DateTime.parse(json['ngayTinNhanCuoi'].toString())
+          ? DateTime.parse(json['ngayTinNhanCuoi'])
           : null,
       soTinNhanChuaDoc: json['soTinNhanChuaDoc'] != null
           ? int.tryParse(json['soTinNhanChuaDoc'].toString())
@@ -100,10 +100,10 @@ class Message {
       noiDung: json['noiDung']?.toString() ?? '',
       daDoc: json['daDoc'] == true || json['daDoc'] == 1,
       ngayGui: json['ngayGui'] != null
-          ? DateTime.parse(json['ngayGui'].toString())
+          ? DateTime.parse(json['ngayGui'])
           : DateTime.now(),
       ngayDoc: json['ngayDoc'] != null
-          ? DateTime.parse(json['ngayDoc'].toString())
+          ? DateTime.parse(json['ngayDoc'])
           : null,
       nguoiGui: json['nguoiGui'] != null
           ? User.fromJson(json['nguoiGui'])

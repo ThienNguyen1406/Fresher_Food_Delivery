@@ -52,15 +52,15 @@ class ProductTraceability {
       nhaSanXuat: json['nhaSanXuat']?.toString() ?? '',
       diaChiSanXuat: json['diaChiSanXuat']?.toString() ?? '',
       ngaySanXuat: json['ngaySanXuat'] != null
-          ? DateTime.parse(json['ngaySanXuat'].toString())
+          ? DateTime.parse(json['ngaySanXuat'])
           : DateTime.now(),
       ngayHetHan: json['ngayHetHan'] != null
-          ? DateTime.parse(json['ngayHetHan'].toString())
+          ? DateTime.parse(json['ngayHetHan'])
           : null,
       nhaCungCap: json['nhaCungCap']?.toString(),
       phuongTienVanChuyen: json['phuongTienVanChuyen']?.toString(),
       ngayNhapKho: json['ngayNhapKho'] != null
-          ? DateTime.parse(json['ngayNhapKho'].toString())
+          ? DateTime.parse(json['ngayNhapKho'])
           : null,
       chungNhanChatLuong: json['chungNhanChatLuong']?.toString(),
       soChungNhan: json['soChungNhan']?.toString(),
@@ -68,13 +68,13 @@ class ProductTraceability {
       blockchainHash: json['blockchainHash']?.toString(),
       blockchainTransactionId: json['blockchainTransactionId']?.toString(),
       ngayLuuBlockchain: json['ngayLuuBlockchain'] != null
-          ? DateTime.parse(json['ngayLuuBlockchain'].toString())
+          ? DateTime.parse(json['ngayLuuBlockchain'])
           : null,
       ngayTao: json['ngayTao'] != null
-          ? DateTime.parse(json['ngayTao'].toString())
+          ? DateTime.parse(json['ngayTao'])
           : DateTime.now(),
       ngayCapNhat: json['ngayCapNhat'] != null
-          ? DateTime.parse(json['ngayCapNhat'].toString())
+          ? DateTime.parse(json['ngayCapNhat'])
           : null,
     );
   }

@@ -170,24 +170,19 @@ class _CartPageState extends State<CartPage> {
     return Column(
       children: [
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: provider.refresh,
-            color: const Color(0xFFFF6B6B),
-            child: ListView.separated(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(16),
-              itemCount: state.cartItems.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final cartItem = state.cartItems[index];
-                return CartItemWidget(
-                  cartItem: cartItem,
-                  provider: provider,
-                  onUpdateQuantity: _updateQuantity,
-                  onDelete: (item) => _showDeleteConfirmation(item),
-                );
-              },
-            ),
+          child: ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: state.cartItems.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final cartItem = state.cartItems[index];
+              return CartItemWidget(
+                cartItem: cartItem,
+                provider: provider,
+                onUpdateQuantity: _updateQuantity,
+                onDelete: (item) => _showDeleteConfirmation(item),
+              );
+            },
           ),
         ),
         CartCheckoutBar(
