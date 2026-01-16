@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FressFood.Models;
 
 namespace FressFood.Services
 {
@@ -129,6 +130,208 @@ namespace FressFood.Services
 
             // Fallback: Câu trả lời mặc định nếu AI không khả dụng
             return "Cảm ơn bạn đã liên hệ! Tôi là trợ lý tự động và có thể giúp bạn về: sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Nếu câu hỏi của bạn phức tạp hơn, admin sẽ phản hồi sớm nhất có thể. Bạn có thể mô tả chi tiết hơn không?";
+        }
+
+        /// <summary>
+        /// Xử lý tin nhắn với RAG context
+        /// </summary>
+        public async Task<string?> ProcessMessageWithRAGAsync(string userMessage, string ragContext, string? maChat = null)
+        {
+            if (string.IsNullOrWhiteSpace(userMessage))
+                return null;
+
+            // Nếu có RAG context, ưu tiên dùng AI với context
+            if (!string.IsNullOrWhiteSpace(ragContext) && _aiService != null)
+            {
+                try
+                {
+                    var enhancedContext = $"Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food. Mã chat: {maChat}\n\n" +
+                                        $"Thông tin từ tài liệu:\n{ragContext}\n\n" +
+                                        $"Hãy trả lời câu hỏi của user dựa trên thông tin từ tài liệu trên. " +
+                                        $"Nếu thông tin trong tài liệu có đầy đủ để trả lời câu hỏi, hãy sử dụng thông tin đó để trả lời một cách chi tiết và chính xác. " +
+                                        $"Nếu thông tin trong tài liệu không đủ, hãy nói rõ và đề nghị khách hàng cung cấp thêm thông tin.";
+                    
+                    _logger.LogInformation($"Calling AI service with RAG context (length: {ragContext.Length} chars)");
+                    var aiResponse = await _aiService.GetAIResponseAsync(userMessage, enhancedContext);
+                    
+                    if (!string.IsNullOrEmpty(aiResponse))
+                    {
+                        _logger.LogInformation($"AI service provided RAG-enhanced response: {aiResponse.Length} chars");
+                        return aiResponse;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("AI service returned empty response for RAG query");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error calling AI service with RAG context: {ex.Message}");
+                }
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(ragContext))
+                {
+                    _logger.LogWarning("RAG context is empty in ProcessMessageWithRAGAsync");
+                }
+                if (_aiService == null)
+                {
+                    _logger.LogWarning("AI service is null in ProcessMessageWithRAGAsync");
+                }
+            }
+
+            // Fallback: xử lý như tin nhắn thường
+            _logger.LogInformation("Falling back to standard ProcessMessageAsync");
+            return await ProcessMessageAsync(userMessage, maChat);
+        }
+
+        /// <summary>
+        /// Xử lý tin nhắn với conversation history
+        /// </summary>
+        public async Task<string?> ProcessMessageWithHistoryAsync(string userMessage, string? maChat = null, List<Message>? conversationHistory = null)
+        {
+            if (string.IsNullOrWhiteSpace(userMessage))
+                return null;
+
+            // Nếu có AI service và conversation history, sử dụng AI với context
+            if (_aiService != null && conversationHistory != null && conversationHistory.Count > 0)
+            {
+                try
+                {
+                    // Xây dựng conversation context từ lịch sử
+                    var conversationContext = BuildConversationContext(conversationHistory);
+                    var enhancedContext = $"Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food. Mã chat: {maChat}\n\n" +
+                                         $"Lịch sử hội thoại:\n{conversationContext}\n\n" +
+                                         $"Hãy trả lời câu hỏi của user dựa trên lịch sử hội thoại trên. " +
+                                         $"Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó' hoặc các từ thay thế tương tự, " +
+                                         $"hãy tham chiếu đến thông tin từ các tin nhắn trước đó trong lịch sử hội thoại. " +
+                                         $"Ví dụ: Nếu user hỏi '1+1 = mấy' và bạn trả lời '2', sau đó user hỏi 'số đó + 10 = bao nhiêu', " +
+                                         $"bạn cần hiểu 'số đó' là 2 và trả lời '12'.";
+                    
+                    var aiResponse = await _aiService.GetAIResponseAsync(userMessage, enhancedContext);
+                    
+                    if (!string.IsNullOrEmpty(aiResponse))
+                    {
+                        _logger.LogInformation($"AI service provided response with conversation history");
+                        return aiResponse;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error calling AI service with conversation history");
+                }
+            }
+
+            // Fallback: xử lý như tin nhắn thường
+            return await ProcessMessageAsync(userMessage, maChat);
+        }
+
+        /// <summary>
+        /// Xử lý tin nhắn với RAG context và conversation history
+        /// </summary>
+        public async Task<string?> ProcessMessageWithRAGAndHistoryAsync(string userMessage, string ragContext, string? maChat = null, List<Message>? conversationHistory = null)
+        {
+            if (string.IsNullOrWhiteSpace(userMessage))
+                return null;
+
+            // Nếu có RAG context, luôn ưu tiên dùng RAG
+            if (!string.IsNullOrWhiteSpace(ragContext) && _aiService != null)
+            {
+                try
+                {
+                    var enhancedContext = new System.Text.StringBuilder();
+                    enhancedContext.AppendLine("Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food.");
+                    if (!string.IsNullOrEmpty(maChat))
+                    {
+                        enhancedContext.AppendLine($"Mã chat: {maChat}");
+                    }
+                    enhancedContext.AppendLine();
+                    
+                    // Thêm conversation history nếu có
+                    if (conversationHistory != null && conversationHistory.Count > 0)
+                    {
+                        var conversationContext = BuildConversationContext(conversationHistory);
+                        enhancedContext.AppendLine("Lịch sử hội thoại:");
+                        enhancedContext.AppendLine(conversationContext);
+                        enhancedContext.AppendLine();
+                    }
+                    
+                    // Thêm RAG context (quan trọng nhất)
+                    enhancedContext.AppendLine("=== THÔNG TIN TỪ TÀI LIỆU (QUAN TRỌNG - PHẢI SỬ DỤNG) ===");
+                    enhancedContext.AppendLine(ragContext);
+                    enhancedContext.AppendLine("=== KẾT THÚC THÔNG TIN TỪ TÀI LIỆU ===");
+                    enhancedContext.AppendLine();
+                    enhancedContext.AppendLine("QUAN TRỌNG: Bạn PHẢI trả lời câu hỏi của user dựa TRỰC TIẾP trên thông tin từ tài liệu ở trên. " +
+                                             "Thông tin trong tài liệu là CHÍNH XÁC và ĐÁNG TIN CẬY. " +
+                                             "Nếu câu hỏi của user liên quan đến thông tin trong tài liệu, bạn PHẢI sử dụng thông tin đó để trả lời một cách CHI TIẾT và CHÍNH XÁC. " +
+                                             "KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong tài liệu. " +
+                                             "Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó' hoặc các từ thay thế tương tự, " +
+                                             "hãy tham chiếu đến thông tin từ các tin nhắn trước đó trong lịch sử hội thoại (nếu có). " +
+                                             "CHỈ khi thông tin trong tài liệu THỰC SỰ không có, bạn mới nói rõ và đề nghị khách hàng cung cấp thêm thông tin.");
+                    
+                    _logger.LogInformation($"Calling AI service with RAG context (length: {ragContext.Length} chars) and {conversationHistory?.Count ?? 0} history messages");
+                    _logger.LogInformation($"Enhanced context preview (first 500 chars): {enhancedContext.ToString().Substring(0, Math.Min(500, enhancedContext.Length))}...");
+                    
+                    var aiResponse = await _aiService.GetAIResponseAsync(userMessage, enhancedContext.ToString());
+                    
+                    if (!string.IsNullOrEmpty(aiResponse))
+                    {
+                        _logger.LogInformation($"AI service provided RAG-enhanced response: {aiResponse.Length} chars. Preview: {aiResponse.Substring(0, Math.Min(100, aiResponse.Length))}...");
+                        return aiResponse;
+                    }
+                    else
+                    {
+                        _logger.LogWarning("AI service returned empty response. This might indicate OpenAI API is not configured or failed.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, $"Error calling AI service with RAG and conversation history: {ex.Message}");
+                    _logger.LogError(ex, $"Stack trace: {ex.StackTrace}");
+                }
+            }
+            else
+            {
+                if (string.IsNullOrWhiteSpace(ragContext))
+                {
+                    _logger.LogWarning("RAG context is empty, cannot process with RAG");
+                }
+                if (_aiService == null)
+                {
+                    _logger.LogWarning("AI service is null, cannot process message");
+                }
+            }
+
+            // Fallback: xử lý như tin nhắn với RAG (nếu có RAG context)
+            if (!string.IsNullOrWhiteSpace(ragContext))
+            {
+                _logger.LogInformation("Falling back to ProcessMessageWithRAGAsync (without history)");
+                return await ProcessMessageWithRAGAsync(userMessage, ragContext, maChat);
+            }
+
+            // Fallback cuối cùng: xử lý như tin nhắn thường
+            _logger.LogInformation("Falling back to ProcessMessageWithHistoryAsync (standard processing)");
+            return await ProcessMessageWithHistoryAsync(userMessage, maChat, conversationHistory);
+        }
+
+        /// <summary>
+        /// Xây dựng conversation context từ lịch sử tin nhắn
+        /// </summary>
+        private string BuildConversationContext(List<Message> messages)
+        {
+            if (messages == null || messages.Count == 0)
+                return string.Empty;
+
+            var contextBuilder = new System.Text.StringBuilder();
+            
+            foreach (var message in messages)
+            {
+                var sender = message.LoaiNguoiGui == "User" ? "User" : "Assistant";
+                contextBuilder.AppendLine($"{sender}: {message.NoiDung}");
+            }
+
+            return contextBuilder.ToString().Trim();
         }
 
         /// <summary>
