@@ -25,7 +25,22 @@ builder.Services.AddCors(options =>
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+    {
+        Title = "FressFood API",
+        Version = "v1",
+        Description = "API for Fresher Food Delivery System"
+    });
+    // Ignore lỗi khi generate schema - dùng FullName để tránh conflict
+    c.CustomSchemaIds(type => type.FullName?.Replace("+", ".") ?? type.Name);
+    // Ignore các model có vấn đề
+    c.IgnoreObsoleteActions();
+    c.IgnoreObsoleteProperties();
+    // Xử lý nullable reference types
+    c.SupportNonNullableReferenceTypes();
+});
 builder.Services.AddHttpContextAccessor();
 
 // Đăng ký BlockchainService
@@ -37,16 +52,58 @@ builder.Services.AddHttpClient();
 // Đăng ký AI Service (OpenAI)
 builder.Services.AddScoped<FressFood.Services.IAIService, FressFood.Services.OpenAIService>();
 
+// Đăng ký Python RAG Service (gọi Python service qua HTTP)
+builder.Services.AddScoped<FressFood.Services.PythonRAGService>();
+
 // Đăng ký ChatbotService
 builder.Services.AddScoped<FressFood.Services.ChatbotService>();
 
+// Đăng ký EmailService
+builder.Services.AddScoped<FressFood.Services.EmailService>();
+
 var app = builder.Build();
+
+// Thêm error handling middleware sớm để catch lỗi Swagger
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Unhandled exception: {Path}", context.Request.Path);
+        
+        if (context.Request.Path.StartsWithSegments("/swagger"))
+        {
+            context.Response.StatusCode = 500;
+            context.Response.ContentType = "application/json";
+            var errorJson = System.Text.Json.JsonSerializer.Serialize(new { 
+                error = "Swagger generation failed", 
+                message = ex.Message,
+                details = ex.ToString()
+            });
+            await context.Response.WriteAsync(errorJson);
+            return;
+        }
+        throw;
+    }
+});
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwagger(c =>
+    {
+        c.RouteTemplate = "swagger/{documentName}/swagger.json";
+    });
+    app.UseSwaggerUI(c =>
+    {
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "FressFood API v1");
+        c.RoutePrefix = "swagger";
+        c.DisplayRequestDuration();
+    });
 }
 
 app.UseHttpsRedirection();
@@ -60,5 +117,33 @@ app.UseAuthorization();
 app.UseStaticFiles();// Ảnh
 
 app.MapControllers();
+
+// Kiểm tra Python RAG service có đang chạy không (chạy bất đồng bộ trong background)
+_ = Task.Run(async () =>
+{
+    await Task.Delay(2000); // Đợi app khởi động xong
+    using (var scope = app.Services.CreateScope())
+    {
+        var ragService = scope.ServiceProvider.GetRequiredService<FressFood.Services.PythonRAGService>();
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        
+        try
+        {
+            var isAvailable = await ragService.IsServiceAvailableAsync();
+            if (isAvailable)
+            {
+                logger.LogInformation("Python RAG service is available");
+            }
+            else
+            {
+                logger.LogWarning("Python RAG service is not available. Please start the Python service at http://localhost:8000");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error checking Python RAG service availability");
+        }
+    }
+});
 
 app.Run();
