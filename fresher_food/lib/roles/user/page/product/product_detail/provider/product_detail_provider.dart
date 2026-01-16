@@ -157,4 +157,7 @@ class ProductDetailProvider with ChangeNotifier {
   // Helper methods
   bool get isOutOfStock => product!.soLuongTon <= 0;
   bool get isLowStock => (product?.soLuongTon ?? 0) < 10 && (product?.soLuongTon ?? 0) > 0;
+  bool get isExpired => product?.ngayHetHan != null && 
+      product!.ngayHetHan!.isBefore(DateTime.now());
+  bool get canAddToCart => !isOutOfStock && !isExpired;
 }

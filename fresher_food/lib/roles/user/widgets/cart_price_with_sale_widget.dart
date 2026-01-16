@@ -119,19 +119,36 @@ class _CartPriceWithSaleWidgetState extends State<CartPriceWithSaleWidget> {
     final originalPrice = widget.cartItem.giaBan;
     final hasSale = _activeSale != null;
     
-    // Kiểm tra nếu sản phẩm gần hết hạn (≤ 7 ngày) thì tự động giảm 30%
-    final isNearExpiry = _isNearExpiry(widget.cartItem);
-    final expiryDiscount = isNearExpiry ? originalPrice * 0.3 : 0.0;
-    
-    // Tính giá sau khuyến mãi (ưu tiên khuyến mãi từ Sale, sau đó mới đến giảm giá hết hạn)
+    // Tính giá sau khuyến mãi
+    // QUY TẮC: Nếu sản phẩm đã có Sale (khuyến mãi) thì CHỈ áp dụng Sale, KHÔNG áp dụng giảm giá hết hạn
+    // Nếu không có Sale, mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
     double salePrice = originalPrice;
-    if (hasSale) {
-      salePrice = (originalPrice - _activeSale!.giaTriKhuyenMai).clamp(0.0, double.infinity);
-    } else if (isNearExpiry) {
-      salePrice = (originalPrice - expiryDiscount).clamp(0.0, double.infinity);
-    }
+    bool hasAnyDiscount = false;
+    bool isNearExpiry = false;
     
-    final hasAnyDiscount = hasSale || isNearExpiry;
+    if (hasSale) {
+      // Có Sale -> CHỈ áp dụng Sale, KHÔNG áp dụng giảm giá hết hạn
+      final sale = _activeSale!;
+      if (sale.loaiGiaTri == 'Percent') {
+        // Giảm giá theo phần trăm: giá mới = giá gốc * (1 - phần trăm / 100)
+        // Ví dụ: giảm 15% -> giá mới = giá gốc * (1 - 15/100) = giá gốc * 0.85
+        final phanTramGiam = sale.giaTriKhuyenMai / 100.0;
+        final soTienGiam = originalPrice * phanTramGiam;
+        salePrice = (originalPrice - soTienGiam).clamp(0.0, double.infinity);
+      } else {
+        // Giảm giá theo số tiền cố định: giá mới = giá gốc - số tiền giảm
+        salePrice = (originalPrice - sale.giaTriKhuyenMai).clamp(0.0, double.infinity);
+      }
+      hasAnyDiscount = true;
+    } else {
+      // Không có Sale -> mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
+      isNearExpiry = _isNearExpiry(widget.cartItem);
+      if (isNearExpiry) {
+        final expiryDiscount = originalPrice * 0.3;
+        salePrice = (originalPrice - expiryDiscount).clamp(0.0, double.infinity);
+        hasAnyDiscount = true;
+      }
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

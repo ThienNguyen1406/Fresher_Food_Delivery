@@ -126,11 +126,16 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
     final codeCtrl = TextEditingController(text: coupon?.code ?? '');
     final valueCtrl = TextEditingController(text: coupon?.giaTri.toString() ?? '');
     final descCtrl = TextEditingController(text: coupon?.moTa ?? '');
-
+    final soLuongCtrl = TextEditingController(
+      text: coupon?.soLuongToiDa != null ? coupon!.soLuongToiDa.toString() : ''
+    );
+    String selectedLoaiGiaTri = coupon?.loaiGiaTri ?? 'Amount';
+    
     showDialog(
       context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         insetPadding: EdgeInsets.all(20),
         child: Container(
           padding: EdgeInsets.all(24),
@@ -167,12 +172,68 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
                 hintText: 'Nhập mã giảm giá...',
               ),
               SizedBox(height: 16),
+              // Dropdown chọn loại giảm giá
+              Text(
+                'Loại giảm giá',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _textPrimary,
+                ),
+              ),
+              SizedBox(height: 8),
+              Container(
+                decoration: BoxDecoration(
+                  color: _backgroundColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _borderColor),
+                ),
+                padding: EdgeInsets.symmetric(horizontal: 16),
+                child: DropdownButton<String>(
+                  value: selectedLoaiGiaTri,
+                  isExpanded: true,
+                  underline: SizedBox(),
+                  icon: Icon(Icons.arrow_drop_down, color: _textSecondary),
+                  items: [
+                    DropdownMenuItem(
+                      value: 'Amount',
+                      child: Row(
+                        children: [
+                          Icon(Icons.attach_money, size: 20, color: _textSecondary),
+                          SizedBox(width: 8),
+                          Text('Số tiền cố định (VNĐ)'),
+                        ],
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 'Percent',
+                      child: Row(
+                        children: [
+                          Icon(Icons.percent, size: 20, color: _textSecondary),
+                          SizedBox(width: 8),
+                          Text('Phần trăm (%)'),
+                        ],
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    setDialogState(() {
+                      selectedLoaiGiaTri = value ?? 'Amount';
+                    });
+                  },
+                ),
+              ),
+              SizedBox(height: 16),
               _buildTextField(
                 controller: valueCtrl,
-                label: 'Giá trị',
-                icon: Icons.attach_money_outlined,
+                label: selectedLoaiGiaTri == 'Percent' ? 'Giá trị (%)' : 'Giá trị (VNĐ)',
+                icon: selectedLoaiGiaTri == 'Percent' 
+                    ? Icons.percent 
+                    : Icons.attach_money_outlined,
                 keyboardType: TextInputType.number,
-                hintText: 'Nhập giá trị...',
+                hintText: selectedLoaiGiaTri == 'Percent' 
+                    ? 'Nhập phần trăm (0-100)...' 
+                    : 'Nhập số tiền...',
               ),
               SizedBox(height: 16),
               _buildTextField(
@@ -181,6 +242,14 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
                 icon: Icons.description_outlined,
                 maxLines: 2,
                 hintText: 'Nhập mô tả...',
+              ),
+              SizedBox(height: 16),
+              _buildTextField(
+                controller: soLuongCtrl,
+                label: 'Số lượng tối đa (để trống = không giới hạn)',
+                icon: Icons.people_outline,
+                keyboardType: TextInputType.number,
+                hintText: 'Ví dụ: 10 (cho 10 khách hàng)',
               ),
               SizedBox(height: 24),
               Row(
@@ -212,11 +281,30 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
                           return;
                         }
 
+                        // Validate giá trị phần trăm
+                        if (selectedLoaiGiaTri == 'Percent' && (giaTri < 0 || giaTri > 100)) {
+                          _showSnackbar('Phần trăm phải từ 0 đến 100', false);
+                          return;
+                        }
+
+                        // Parse số lượng tối đa
+                        int? soLuongToiDa;
+                        if (soLuongCtrl.text.trim().isNotEmpty) {
+                          soLuongToiDa = int.tryParse(soLuongCtrl.text.trim());
+                          if (soLuongToiDa == null || soLuongToiDa < 1) {
+                            _showSnackbar('Số lượng tối đa phải là số nguyên dương', false);
+                            return;
+                          }
+                        }
+
                         final newCoupon = PhieuGiamGia(
                           idPhieuGiamGia: coupon?.idPhieuGiamGia ?? '',
                           code: codeCtrl.text.trim(),
                           giaTri: giaTri,
                           moTa: descCtrl.text.trim(),
+                          loaiGiaTri: selectedLoaiGiaTri,
+                          soLuongToiDa: soLuongToiDa,
+                          soLuongDaSuDung: coupon?.soLuongDaSuDung ?? 0,
                         );
 
                         try {
@@ -252,7 +340,8 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
           ),
         ),
       ),
-    );
+        ),
+      );
   }
 
   Widget _buildTextField({
@@ -503,13 +592,18 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
   }
 
   Widget _buildVoucherList() {
-    return ListView.builder(
-      padding: EdgeInsets.all(24),
-      itemCount: _filteredCoupons.length,
-      itemBuilder: (context, index) {
-        final voucher = _filteredCoupons[index];
-        return _buildVoucherCard(voucher);
-      },
+    return RefreshIndicator(
+      onRefresh: _loadCoupons,
+      color: _primaryColor,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: EdgeInsets.all(24),
+        itemCount: _filteredCoupons.length,
+        itemBuilder: (context, index) {
+          final voucher = _filteredCoupons[index];
+          return _buildVoucherCard(voucher);
+        },
+      ),
     );
   }
 

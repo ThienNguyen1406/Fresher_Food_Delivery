@@ -7,11 +7,17 @@ import 'package:fresher_food/utils/constant.dart';
 import 'package:http/http.dart' as http;
 
 class ProductApi {
-  Future<List<Product>> getProducts() async {
+  /// Lấy danh sách sản phẩm
+  /// [originalPrice]: true = trả về giá gốc (cho admin), false = trả về giá đã giảm (cho user)
+  Future<List<Product>> getProducts({bool originalPrice = false}) async {
     try {
+      final uri = originalPrice 
+          ? Uri.parse('${Constant().baseUrl}/Product?originalPrice=true')
+          : Uri.parse('${Constant().baseUrl}/Product');
+      
       final res = await http
           .get(
-            Uri.parse('${Constant().baseUrl}/Product'),
+            uri,
             headers: await ApiService().getHeaders(),
           )
           .timeout(const Duration(seconds: 30));
@@ -98,10 +104,21 @@ class ProductApi {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(responseData);
         return jsonResponse['message'] == 'Thêm sản phẩm thành công';
+      } else if (response.statusCode == 400) {
+        // Xử lý lỗi validation từ backend
+        try {
+          final errorData = json.decode(responseData);
+          if (errorData['error'] != null) {
+            throw Exception(errorData['error']);
+          }
+        } catch (_) {
+          // Nếu không parse được JSON, dùng message mặc định
+        }
+        throw Exception('Dữ liệu không hợp lệ');
       }
       return false;
     } catch (e) {
-      throw Exception('Lỗi thêm sản phẩm: $e');
+      throw Exception(e.toString());
     }
   }
 
@@ -140,10 +157,21 @@ class ProductApi {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(responseData);
         return jsonResponse['message'] == 'Cập nhật sản phẩm thành công';
+      } else if (response.statusCode == 400) {
+        // Xử lý lỗi validation từ backend
+        try {
+          final errorData = json.decode(responseData);
+          if (errorData['error'] != null) {
+            throw Exception(errorData['error']);
+          }
+        } catch (_) {
+          // Nếu không parse được JSON, dùng message mặc định
+        }
+        throw Exception('Dữ liệu không hợp lệ');
       }
       return false;
     } catch (e) {
-      throw Exception('Lỗi cập nhật sản phẩm: $e');
+      throw Exception(e.toString());
     }
   }
 
@@ -247,13 +275,25 @@ class ProductApi {
         final jsonResponse = json.decode(response.body);
         return jsonResponse['message'] == 'Đã xóa vĩnh viễn sản phẩm';
       } else if (response.statusCode == 400 || response.statusCode == 404) {
-        final errorData = json.decode(response.body);
-        throw Exception(errorData['error'] ?? 'Không thể xóa vĩnh viễn sản phẩm');
+        // Xử lý lỗi validation từ backend
+        try {
+          final errorData = json.decode(response.body);
+          if (errorData['error'] != null) {
+            throw Exception(errorData['error']);
+          }
+        } catch (_) {
+          // Nếu không parse được JSON, dùng message mặc định
+        }
+        throw Exception('Không thể xóa vĩnh viễn sản phẩm');
       } else {
-        throw Exception('Failed to permanent delete product: ${response.statusCode}');
+        throw Exception('Lỗi xóa vĩnh viễn sản phẩm: ${response.statusCode}');
       }
     } catch (e) {
       print('Error permanent deleting product: $e');
+      // Nếu đã là Exception với message rõ ràng, throw lại
+      if (e is Exception) {
+        rethrow;
+      }
       throw Exception('Lỗi xóa vĩnh viễn sản phẩm: $e');
     }
   }
