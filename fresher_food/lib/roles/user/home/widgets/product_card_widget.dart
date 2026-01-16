@@ -4,7 +4,6 @@ import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
 import 'package:fresher_food/utils/date_formatter.dart';
-import 'package:fresher_food/roles/user/home/widgets/home_snackbar_widgets.dart';
 
 class ProductCardWidget extends StatelessWidget {
   final Product product;
@@ -61,94 +60,50 @@ class ProductCardWidget extends StatelessWidget {
                         topLeft: Radius.circular(20),
                         topRight: Radius.circular(20),
                       ),
-                      child: Builder(
-                        builder: (context) {
-                          final isExpired = product.ngayHetHan != null && 
-                              product.ngayHetHan!.isBefore(DateTime.now());
-                          return Stack(
-                            children: [
-                              Image.network(
-                                product.anh,
-                                width: double.infinity,
-                                height: 120,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Container(
-                                    color: Colors.grey.shade200,
-                                    child: Center(
-                                      child: CircularProgressIndicator(
-                                        value: loadingProgress.expectedTotalBytes !=
-                                                null
-                                            ? loadingProgress
-                                                    .cumulativeBytesLoaded /
-                                                loadingProgress.expectedTotalBytes!
-                                            : null,
-                                        color: Colors.green,
-                                      ),
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (_, __, ___) => Container(
-                                  color: Colors.grey.shade200,
-                                  child: const Icon(Icons.image,
-                                      color: Colors.grey, size: 40),
+                      child: Stack(
+                        children: [
+                          Image.network(
+                            product.anh,
+                            width: double.infinity,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Container(
+                                color: Colors.grey.shade200,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    color: Colors.green,
+                                  ),
                                 ),
+                              );
+                            },
+                            errorBuilder: (_, __, ___) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image,
+                                  color: Colors.grey, size: 40),
+                            ),
+                          ),
+                          // Gradient overlay
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  Colors.black.withOpacity(0.1),
+                                  Colors.transparent,
+                                ],
                               ),
-                              // Gradient overlay
-                              Container(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    begin: Alignment.bottomCenter,
-                                    end: Alignment.topCenter,
-                                    colors: [
-                                      Colors.black.withOpacity(0.1),
-                                      Colors.transparent,
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              // Gạch chéo khi hết hàng hoặc hết hạn
-                              if (product.soLuongTon <= 0 || isExpired)
-                                CustomPaint(
-                                  painter: DiagonalLinePainter(),
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.3),
-                                    ),
-                                  ),
-                                ),
-                              // Badge "Sản phẩm hết hạn"
-                              if (isExpired && product.soLuongTon > 0)
-                                Positioned(
-                                  top: 8,
-                                  left: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange.shade600,
-                                      borderRadius: BorderRadius.circular(8),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Colors.black.withOpacity(0.2),
-                                          blurRadius: 4,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Text(
-                                      'HẾT HẠN',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          );
-                        },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -289,49 +244,42 @@ class ProductCardWidget extends StatelessWidget {
                                 ),
                                 const SizedBox(width: 6),
                                 // Add Button
-                                Builder(
-                                  builder: (context) {
-                                    final isExpired = product.ngayHetHan != null && 
-                                        product.ngayHetHan!.isBefore(DateTime.now());
-                                    final canAddToCart = product.soLuongTon > 0 && !isExpired;
-                                    return AnimatedContainer(
-                                      duration: const Duration(milliseconds: 200),
-                                      width: 30,
-                                      height: 30,
-                                      decoration: BoxDecoration(
-                                        color: canAddToCart
-                                            ? Colors.green
-                                            : Colors.grey,
-                                        shape: BoxShape.circle,
-                                        boxShadow: canAddToCart
-                                            ? [
-                                                BoxShadow(
-                                                  color:
-                                                      Colors.green.withOpacity(0.4),
-                                                  blurRadius: 6,
-                                                  offset: const Offset(0, 3),
-                                                ),
-                                              ]
-                                            : null,
+                                AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  width: 30,
+                                  height: 30,
+                                  decoration: BoxDecoration(
+                                    color: product.soLuongTon > 0
+                                        ? Colors.green
+                                        : Colors.grey,
+                                    shape: BoxShape.circle,
+                                    boxShadow: product.soLuongTon > 0
+                                        ? [
+                                            BoxShadow(
+                                              color:
+                                                  Colors.green.withOpacity(0.4),
+                                              blurRadius: 6,
+                                              offset: const Offset(0, 3),
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: product.soLuongTon > 0
+                                          ? () => provider.addToCart(product)
+                                          : null,
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Icon(
+                                        product.soLuongTon > 0
+                                            ? Icons.add
+                                            : Icons.remove_shopping_cart,
+                                        color: Colors.white,
+                                        size: 16,
                                       ),
-                                      child: Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          onTap: canAddToCart
-                                              ? () => _handleAddToCart(context, product, provider)
-                                              : null,
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: Icon(
-                                            canAddToCart
-                                                ? Icons.add
-                                                : Icons.remove_shopping_cart,
-                                            color: Colors.white,
-                                            size: 16,
-                                          ),
-                                        ),
-                                      ),
-                                    );
-                                  },
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -448,48 +396,5 @@ class ProductCardWidget extends StatelessWidget {
     final daysUntilExpiry = expiryDate.difference(now).inDays;
     return expiryDate.isBefore(now) || daysUntilExpiry <= 7;
   }
-
-  // Handler để thêm vào giỏ hàng với thông báo
-  Future<void> _handleAddToCart(BuildContext context, Product product, HomeProvider provider) async {
-    try {
-      final success = await provider.addToCart(product);
-      if (success) {
-        HomeSnackbarWidgets.showSuccess(
-          context,
-          'Đã thêm "${product.tenSanPham}" vào giỏ hàng',
-        );
-      }
-    } catch (e) {
-      if (e.toString().contains('đăng nhập')) {
-        HomeSnackbarWidgets.showLoginRequired(context);
-      } else {
-        HomeSnackbarWidgets.showError(
-          context,
-          e.toString().replaceFirst('Exception: ', ''),
-        );
-      }
-    }
-  }
-}
-
-// Custom Painter để vẽ đường gạch chéo
-class DiagonalLinePainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.red
-      ..strokeWidth = 3.0
-      ..style = PaintingStyle.stroke;
-
-    // Vẽ đường gạch chéo từ góc trên trái đến góc dưới phải
-    canvas.drawLine(
-      Offset(0, 0),
-      Offset(size.width, size.height),
-      paint,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

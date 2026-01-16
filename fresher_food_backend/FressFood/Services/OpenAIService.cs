@@ -46,13 +46,13 @@ namespace FressFood.Services
             try
             {
                 var systemPrompt = @"Bạn là trợ lý tự động của Fresher Food - một ứng dụng giao thực phẩm tươi sống.
-                                        Trách nhiệm của bạn:
-                                        - Trả lời câu hỏi của khách hàng một cách thân thiện, chuyên nghiệp
-                                        - Cung cấp thông tin về sản phẩm, đơn hàng, giao hàng, thanh toán
-                                        - Hướng dẫn khách hàng sử dụng ứng dụng
-                                        - Nếu không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin
+Trách nhiệm của bạn:
+- Trả lời câu hỏi của khách hàng một cách thân thiện, chuyên nghiệp
+- Cung cấp thông tin về sản phẩm, đơn hàng, giao hàng, thanh toán
+- Hướng dẫn khách hàng sử dụng ứng dụng
+- Nếu không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin
 
-                                        Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu (tối đa 200 từ).";
+Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu (tối đa 200 từ).";
 
                 var messages = new List<object>
                 {
