@@ -30,7 +30,9 @@ class Order {
     return Order(
       maDonHang: json['maDonHang'] ?? '',
       maTaiKhoan: json['maTaiKhoan'] ?? '',
-      ngayDat: DateTime.parse(json['ngayDat']),
+      ngayDat: json['ngayDat'] != null
+          ? DateTime.parse(json['ngayDat'].toString())
+          : DateTime.now(),
       trangThai: json['trangThai'] ?? '',
       diaChiGiaoHang: json['diaChiGiaoHang'],
       soDienThoai: json['soDienThoai'],

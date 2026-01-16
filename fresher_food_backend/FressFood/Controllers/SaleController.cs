@@ -83,8 +83,8 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, MoTaChuongTrinh, 
-                                   NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
+                    string query = @"SELECT Id_sale, GiaTriKhuyenMai, ISNULL(LoaiGiaTri, 'Amount') as LoaiGiaTri, 
+                                   MoTaChuongTrinh, NgayBatDau, NgayKetThuc, TrangThai, MaSanPham
                                    FROM KhuyenMai 
                                    WHERE Id_sale = @Id_sale";
 
@@ -142,6 +142,9 @@ namespace FressFood.Controllers
         {
             try
             {
+                // Log để debug
+                System.Diagnostics.Debug.WriteLine($"[CreateSale] Received: MaSanPham='{sale.MaSanPham}', GiaTriKhuyenMai={sale.GiaTriKhuyenMai}, LoaiGiaTri='{sale.LoaiGiaTri ?? "NULL"}', LoaiGiaTri value='{sale.LoaiGiaTri}'");
+
                 // Validation
                 if (sale.NgayKetThuc <= sale.NgayBatDau)
                 {
@@ -200,6 +203,58 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
+
+                    // Kiểm tra mã sản phẩm có tồn tại không (trừ khi là 'ALL')
+                    if (sale.MaSanPham != "ALL")
+                    {
+                        string checkProductQuery = @"SELECT COUNT(*) FROM SanPham 
+                                                    WHERE MaSanPham = @MaSanPham 
+                                                    AND (IsDeleted = 0 OR IsDeleted IS NULL)";
+                        using (var checkCommand = new SqlCommand(checkProductQuery, connection))
+                        {
+                            checkCommand.Parameters.AddWithValue("@MaSanPham", sale.MaSanPham);
+                            int productCount = Convert.ToInt32(checkCommand.ExecuteScalar());
+                            
+                            if (productCount == 0)
+                            {
+                                return BadRequest(new
+                                {
+                                    success = false,
+                                    error = $"Mã sản phẩm '{sale.MaSanPham}' không tồn tại trong hệ thống"
+                                });
+                            }
+                        }
+
+                        // Kiểm tra xem sản phẩm đã có khuyến mãi đang hoạt động trong khoảng thời gian này chưa
+                        // Kiểm tra overlap: 2 khoảng thời gian overlap nếu không tách biệt hoàn toàn
+                        string checkOverlapQuery = @"SELECT COUNT(*) FROM KhuyenMai 
+                                                    WHERE MaSanPham = @MaSanPham 
+                                                    AND TrangThai = 'Active'
+                                                    AND NOT (
+                                                        @NgayKetThuc < NgayBatDau OR @NgayBatDau > NgayKetThuc
+                                                    )";
+                        using (var checkOverlapCommand = new SqlCommand(checkOverlapQuery, connection))
+                        {
+                            checkOverlapCommand.Parameters.AddWithValue("@MaSanPham", sale.MaSanPham);
+                            checkOverlapCommand.Parameters.AddWithValue("@NgayBatDau", sale.NgayBatDau);
+                            checkOverlapCommand.Parameters.AddWithValue("@NgayKetThuc", sale.NgayKetThuc);
+                            
+                            int overlapCount = Convert.ToInt32(checkOverlapCommand.ExecuteScalar());
+                            
+                            System.Diagnostics.Debug.WriteLine($"[CreateSale] Overlap count: {overlapCount}");
+                            
+                            if (overlapCount > 0)
+                            {
+                                return BadRequest(new
+                                {
+                                    success = false,
+                                    error = $"Sản phẩm '{sale.MaSanPham}' đã có khuyến mãi đang hoạt động trong khoảng thời gian này. Vui lòng chọn khoảng thời gian khác hoặc cập nhật khuyến mãi hiện có."
+                                });
+                            }
+                        }
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[CreateSale] All validations passed, inserting sale for MaSanPham='{sale.MaSanPham}'");
 
                     // Sử dụng NEWID() để tạo ID mới
                     string query = @"INSERT INTO KhuyenMai (GiaTriKhuyenMai, LoaiGiaTri, MoTaChuongTrinh, 
@@ -247,6 +302,9 @@ namespace FressFood.Controllers
         {
             try
             {
+                // Log để debug
+                System.Diagnostics.Debug.WriteLine($"[UpdateSale] ID={id}, Received: MaSanPham='{sale.MaSanPham}', GiaTriKhuyenMai={sale.GiaTriKhuyenMai}, LoaiGiaTri='{sale.LoaiGiaTri}'");
+
                 // Validation
                 if (sale.NgayKetThuc <= sale.NgayBatDau)
                 {
@@ -291,7 +349,7 @@ namespace FressFood.Controllers
                 }
 
                 // MaSanPham có thể là 'ALL' để áp dụng cho toàn bộ sản phẩm
-                if (string.IsNullOrEmpty(sale.MaSanPham))
+                if (string.IsNullOrEmpty(sale.MaSanPham) || string.IsNullOrWhiteSpace(sale.MaSanPham))
                 {
                     return BadRequest(new
                     {
@@ -300,11 +358,73 @@ namespace FressFood.Controllers
                     });
                 }
 
+                // Trim và normalize mã sản phẩm
+                sale.MaSanPham = sale.MaSanPham.Trim();
+
                 var connectionString = _configuration.GetConnectionString("DefaultConnection");
 
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
+
+                    // Kiểm tra mã sản phẩm có tồn tại không (trừ khi là 'ALL')
+                    if (sale.MaSanPham != "ALL")
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[UpdateSale] Checking product existence: '{sale.MaSanPham}'");
+                        
+                        string checkProductQuery = @"SELECT COUNT(*) FROM SanPham 
+                                                    WHERE MaSanPham = @MaSanPham 
+                                                    AND (IsDeleted = 0 OR IsDeleted IS NULL)";
+                        using (var checkCommand = new SqlCommand(checkProductQuery, connection))
+                        {
+                            checkCommand.Parameters.AddWithValue("@MaSanPham", sale.MaSanPham);
+                            int productCount = Convert.ToInt32(checkCommand.ExecuteScalar());
+                            
+                            System.Diagnostics.Debug.WriteLine($"[UpdateSale] Product count: {productCount}");
+                            
+                            if (productCount == 0)
+                            {
+                                return BadRequest(new
+                                {
+                                    success = false,
+                                    error = $"Mã sản phẩm '{sale.MaSanPham}' không tồn tại trong hệ thống. Vui lòng kiểm tra lại mã sản phẩm."
+                                });
+                            }
+                        }
+
+                        // Kiểm tra xem sản phẩm đã có khuyến mãi khác đang hoạt động trong khoảng thời gian này chưa (trừ chính khuyến mãi đang sửa)
+                        // Kiểm tra overlap: 2 khoảng thời gian overlap nếu không tách biệt hoàn toàn
+                        string checkOverlapQuery = @"SELECT COUNT(*) FROM KhuyenMai 
+                                                    WHERE MaSanPham = @MaSanPham 
+                                                    AND Id_sale != @Id_sale
+                                                    AND TrangThai = 'Active'
+                                                    AND NOT (
+                                                        @NgayKetThuc < NgayBatDau OR @NgayBatDau > NgayKetThuc
+                                                    )";
+                        using (var checkOverlapCommand = new SqlCommand(checkOverlapQuery, connection))
+                        {
+                            checkOverlapCommand.Parameters.AddWithValue("@MaSanPham", sale.MaSanPham);
+                            checkOverlapCommand.Parameters.AddWithValue("@Id_sale", id);
+                            checkOverlapCommand.Parameters.AddWithValue("@NgayBatDau", sale.NgayBatDau);
+                            checkOverlapCommand.Parameters.AddWithValue("@NgayKetThuc", sale.NgayKetThuc);
+                            
+                            int overlapCount = Convert.ToInt32(checkOverlapCommand.ExecuteScalar());
+                            
+                            System.Diagnostics.Debug.WriteLine($"[UpdateSale] Overlap count: {overlapCount}");
+                            
+                            if (overlapCount > 0)
+                            {
+                                return BadRequest(new
+                                {
+                                    success = false,
+                                    error = $"Sản phẩm '{sale.MaSanPham}' đã có khuyến mãi khác đang hoạt động trong khoảng thời gian này. Vui lòng chọn khoảng thời gian khác."
+                                });
+                            }
+                        }
+                    }
+
+                    System.Diagnostics.Debug.WriteLine($"[UpdateSale] All validations passed, updating sale ID={id} for MaSanPham='{sale.MaSanPham}'");
+
                     string query = @"UPDATE KhuyenMai 
                                    SET GiaTriKhuyenMai = @GiaTriKhuyenMai,
                                        LoaiGiaTri = @LoaiGiaTri,

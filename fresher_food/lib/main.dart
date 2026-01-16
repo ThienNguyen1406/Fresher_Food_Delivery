@@ -19,10 +19,7 @@ import 'package:provider/provider.dart';
 import "package:flutter_stripe/flutter_stripe.dart";
 import 'package:fresher_food/services/api/stripe_api.dart';
 
-/// Override HttpClient để cho phép kết nối với SSL certificate không hợp lệ
-/// 
-/// Class này được sử dụng trong môi trường development để bỏ qua lỗi SSL certificate
-/// LƯU Ý: Không nên sử dụng trong production
+
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -32,21 +29,12 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-/// Hàm main - điểm khởi đầu của ứng dụng
-/// 
-/// Thực hiện các bước khởi tạo:
-/// 1. Khởi tạo Flutter binding
-/// 2. Cấu hình HttpOverrides để bỏ qua SSL certificate (chỉ dùng trong development)
-/// 3. Khởi tạo Stripe payment gateway
-/// 4. Chạy ứng dụng
 void main() async {
-  // Đảm bảo Flutter binding đã được khởi tạo trước khi sử dụng các Flutter APIs
+
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Cấu hình để bỏ qua lỗi SSL certificate (chỉ dùng trong development)
   HttpOverrides.global = MyHttpOverrides();
 
-  // Khởi tạo Stripe Payment Gateway - lấy publishable key từ backend
   try {
     print(' Initializing Stripe...');
     final stripeApi = StripeApi();
@@ -55,19 +43,16 @@ void main() async {
     if (publishableKey.isEmpty) {
       print(' Warning: Publishable key is empty');
     } else {
-      // Thiết lập publishable key cho Stripe
+
       Stripe.publishableKey = publishableKey;
       print(
           ' Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
-      
-      // Khởi tạo native SDK của Stripe bằng cách gọi một method đơn giản
+         
       try {
-        // Gọi applySettings để đảm bảo native SDK được khởi tạo đúng cách
         await Stripe.instance.applySettings();
         print(' Stripe native SDK initialized via applySettings');
       } catch (e) {
         print(' Warning: Could not call applySettings: $e');
-        // Đợi một chút để native SDK được khởi tạo tự động
         await Future.delayed(const Duration(milliseconds: 1000));
         print(' Stripe native SDK should be ready now (after delay)');
       }
@@ -82,13 +67,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// Widget gốc của ứng dụng
-/// 
-/// Quản lý:
-/// - Tất cả các Provider (State Management)
-/// - Theme (Light/Dark mode)
-/// - Localization (Đa ngôn ngữ: Tiếng Việt, Tiếng Anh)
-/// - Routing (Điều hướng giữa các màn hình)
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -151,11 +129,8 @@ class MyApp extends StatelessWidget {
                 tertiary: Color(0xFF2E7D32),
               ),
             ),
-            // Chế độ theme hiện tại (Light/Dark/System)
             themeMode: themeProvider.themeMode,
-            // Ngôn ngữ hiện tại
             locale: languageProvider.locale,
-            // Các delegate để hỗ trợ đa ngôn ngữ
             localizationsDelegates: const [
               AppLocalizations.delegate, // Custom localization cho app
               GlobalMaterialLocalizations.delegate, // Material Design localization

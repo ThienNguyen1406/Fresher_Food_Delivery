@@ -262,10 +262,9 @@ namespace FoodShop.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-
                     string query = @"
                         DELETE FROM SanPham_GioHang 
-                        WHERE MaGioHang IN (SELECT MaGioHang FROM GioHang WHERE MaTaiKhoan = @MaTaiKhoan)";
+                          WHERE MaGioHang IN (SELECT MaGioHang FROM GioHang WHERE MaTaiKhoan = @MaTaiKhoan)";
 
                     using (var command = new SqlCommand(query, connection))
                     {
@@ -274,6 +273,7 @@ namespace FoodShop.Controllers
 
                         return Ok(new { message = $"Đã xóa {affectedRows} sản phẩm khỏi giỏ hàng" });
                     }
+
                 }
             }
             catch (Exception ex)
@@ -286,28 +286,19 @@ namespace FoodShop.Controllers
 
         /// <summary>
         /// Tính giá thực tế của sản phẩm (có Sale và giảm giá hết hạn)
+        ///    // @"
+        //  DELETE FROM SanPham_GioHang 
+        // WHERE MaGioHang IN (SELECT MaGioHang FROM GioHang WHERE MaTaiKhoan = @MaTaiKhoan)";
         /// </summary>
+        /// 
         private decimal TinhGiaThucTe(string maSanPham, decimal giaBan, DateTime? ngayHetHan, SqlConnection connection)
         {
             decimal giaThucTe = giaBan;
-            decimal giamGiaHetHan = 0;
-            bool coGiamGiaHetHan = false;
             
-            // Kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
-            if (ngayHetHan.HasValue)
-            {
-                var now = DateTime.Now;
-                var daysUntilExpiry = (ngayHetHan.Value.Date - now.Date).Days;
-                Console.WriteLine($"[Cart Price] {maSanPham}: NgayHetHan={ngayHetHan.Value:yyyy-MM-dd}, DaysUntilExpiry={daysUntilExpiry}");
-                if (daysUntilExpiry >= 0 && daysUntilExpiry <= 7)
-                {
-                    giamGiaHetHan = giaBan * 0.3m;
-                    coGiamGiaHetHan = true;
-                    Console.WriteLine($"[Cart Price] {maSanPham}: Co giam gia het han 30% = {giamGiaHetHan}");
-                }
-            }
+            // QUY TẮC: Kiểm tra Sale TRƯỚC. Nếu có Sale thì KHÔNG kiểm tra giảm giá hết hạn nữa
+            // Nếu không có Sale, mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
             
-            // Kiểm tra Sale (khuyến mãi) - ưu tiên Sale hơn giảm giá hết hạn
+            // Kiểm tra Sale (khuyến mãi) TRƯỚC
             decimal? giaTriKhuyenMai = null;
             string? loaiGiaTri = null;
             try
@@ -347,10 +338,10 @@ namespace FoodShop.Controllers
                 System.Diagnostics.Debug.WriteLine($"[Cart] Error getting sale for {maSanPham}: {ex.Message}");
             }
             
-            // Áp dụng giảm giá: Ưu tiên Sale, sau đó mới đến giảm giá hết hạn
+            // Áp dụng giảm giá: Nếu có Sale thì CHỈ áp dụng Sale, KHÔNG kiểm tra giảm giá hết hạn
             if (giaTriKhuyenMai.HasValue && giaTriKhuyenMai.Value > 0)
             {
-                // Có Sale -> tính giá theo loại (Amount hoặc Percent)
+                // Có Sale -> CHỈ tính giá theo Sale, KHÔNG áp dụng giảm giá hết hạn
                 if (loaiGiaTri == "Percent")
                 {
                     // Giảm giá theo phần trăm: GiaThucTe = GiaBan * (1 - GiaTriKhuyenMai / 100)
@@ -367,15 +358,29 @@ namespace FoodShop.Controllers
                     Console.WriteLine($"[Cart Price] {maSanPham}: Dung Sale AMOUNT, GiaBan={giaBan}, GiaTriKhuyenMai={giaTriKhuyenMai.Value}, GiaThucTe={giaThucTe}");
                 }
             }
-            else if (coGiamGiaHetHan && giamGiaHetHan > 0)
-            {
-                // Không có Sale -> dùng giảm giá hết hạn
-                giaThucTe = Math.Max(0, giaBan - giamGiaHetHan);
-                Console.WriteLine($"[Cart Price] {maSanPham}: Dung giam gia het han, GiaBan={giaBan}, GiamGiaHetHan={giamGiaHetHan}, GiaThucTe={giaThucTe}");
-            }
             else
             {
-                Console.WriteLine($"[Cart Price] {maSanPham}: Khong co giam gia, GiaThucTe={giaThucTe} (giaBan)");
+                // KHÔNG có Sale -> mới kiểm tra giảm giá hết hạn (30% nếu còn ≤ 7 ngày)
+                if (ngayHetHan.HasValue)
+                {
+                    var now = DateTime.Now;
+                    var daysUntilExpiry = (ngayHetHan.Value.Date - now.Date).Days;
+                    Console.WriteLine($"[Cart Price] {maSanPham}: NgayHetHan={ngayHetHan.Value:yyyy-MM-dd}, DaysUntilExpiry={daysUntilExpiry}");
+                    if (daysUntilExpiry >= 0 && daysUntilExpiry <= 7)
+                    {
+                        decimal giamGiaHetHan = giaBan * 0.3m;
+                        giaThucTe = Math.Max(0, giaBan - giamGiaHetHan);
+                        Console.WriteLine($"[Cart Price] {maSanPham}: Dung giam gia het han 30%, GiaBan={giaBan}, GiamGiaHetHan={giamGiaHetHan}, GiaThucTe={giaThucTe}");
+                    }
+                    else
+                    {
+                        Console.WriteLine($"[Cart Price] {maSanPham}: Khong co giam gia, GiaThucTe={giaThucTe} (giaBan)");
+                    }
+                }
+                else
+                {
+                    Console.WriteLine($"[Cart Price] {maSanPham}: Khong co giam gia, GiaThucTe={giaThucTe} (giaBan)");
+                }
             }
             
             var finalPrice = Math.Max(0, giaThucTe);

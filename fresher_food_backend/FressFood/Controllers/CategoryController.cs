@@ -109,7 +109,18 @@ namespace FoodShop.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-                    string query = "SELECT MaDanhMuc, TenDanhMuc, Icon FROM DanhMuc";
+                    // Query để lấy danh mục kèm số lượng sản phẩm (chỉ đếm sản phẩm chưa bị xóa)
+                    string query = @"
+                        SELECT 
+                            dm.MaDanhMuc, 
+                            dm.TenDanhMuc, 
+                            dm.Icon,
+                            ISNULL(COUNT(sp.MaSanPham), 0) AS SoLuongSanPham
+                        FROM DanhMuc dm
+                        LEFT JOIN SanPham sp ON dm.MaDanhMuc = sp.MaDanhMuc 
+                            AND (sp.IsDeleted = 0 OR sp.IsDeleted IS NULL)
+                        GROUP BY dm.MaDanhMuc, dm.TenDanhMuc, dm.Icon
+                        ORDER BY dm.TenDanhMuc";
 
                     using (var command = new SqlCommand(query, connection))
                     using (var reader = command.ExecuteReader())
@@ -121,7 +132,8 @@ namespace FoodShop.Controllers
                             {
                                 MaDanhMuc = reader["MaDanhMuc"].ToString(),
                                 TenDanhMuc = reader["TenDanhMuc"].ToString() ?? "",
-                                Icon = !string.IsNullOrEmpty(iconPath) ? GetFullImageUrl(iconPath) : null
+                                Icon = !string.IsNullOrEmpty(iconPath) ? GetFullImageUrl(iconPath) : null,
+                                SoLuongSanPham = Convert.ToInt32(reader["SoLuongSanPham"])
                             };
                             categories.Add(category);
                         }
@@ -345,16 +357,34 @@ namespace FoodShop.Controllers
                         iconPath = result?.ToString();
                     }
 
-                    // Kiểm tra xem danh mục có sản phẩm không trước khi xóa (chỉ đếm sản phẩm chưa bị xóa)
-                    string checkQuery = "SELECT COUNT(*) FROM SanPham WHERE MaDanhMuc = @MaDanhMuc AND (IsDeleted = 0 OR IsDeleted IS NULL)";
+                    // Kiểm tra xem danh mục có sản phẩm không trước khi xóa
+                    // Lưu ý: Foreign key constraint kiểm tra TẤT CẢ sản phẩm (kể cả đã soft delete)
+                    // nên cần kiểm tra tất cả sản phẩm, không chỉ sản phẩm chưa bị xóa
+                    string checkQuery = "SELECT COUNT(*) FROM SanPham WHERE MaDanhMuc = @MaDanhMuc";
                     using (var checkCommand = new SqlCommand(checkQuery, connection))
                     {
                         checkCommand.Parameters.AddWithValue("@MaDanhMuc", id);
-                        int productCount = Convert.ToInt32(checkCommand.ExecuteScalar());
+                        int totalProductCount = Convert.ToInt32(checkCommand.ExecuteScalar());
 
-                        if (productCount > 0)
+                        if (totalProductCount > 0)
                         {
-                            return BadRequest(new { error = "Không thể xóa danh mục vì có sản phẩm thuộc danh mục này" });
+                            // Đếm số sản phẩm chưa bị xóa để hiển thị thông báo chính xác
+                            string activeProductQuery = "SELECT COUNT(*) FROM SanPham WHERE MaDanhMuc = @MaDanhMuc AND (IsDeleted = 0 OR IsDeleted IS NULL)";
+                            using (var activeCommand = new SqlCommand(activeProductQuery, connection))
+                            {
+                                activeCommand.Parameters.AddWithValue("@MaDanhMuc", id);
+                                int activeProductCount = Convert.ToInt32(activeCommand.ExecuteScalar());
+                                
+                                if (activeProductCount > 0)
+                                {
+                                    return BadRequest(new { error = $"Không thể xóa danh mục. Danh mục này đang có {activeProductCount} sản phẩm. Vui lòng xóa hoặc di chuyển các sản phẩm trước khi xóa danh mục." });
+                                }
+                                else
+                                {
+                                    // Có sản phẩm nhưng đã bị soft delete, cần xóa vĩnh viễn trước
+                                    return BadRequest(new { error = $"Không thể xóa danh mục. Danh mục này vẫn còn {totalProductCount} sản phẩm đã bị xóa trong thùng rác. Vui lòng xóa vĩnh viễn các sản phẩm trong thùng rác trước khi xóa danh mục." });
+                                }
+                            }
                         }
                     }
 

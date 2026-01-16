@@ -422,16 +422,21 @@ class _VoucherPageState extends State<VoucherPage> {
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _displayedCoupons.length,
-      itemBuilder: (context, index) {
-        final voucher = _displayedCoupons[index];
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: _buildVoucherCard(voucher),
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: _loadCoupons,
+      color: const Color(0xFF00C896),
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _displayedCoupons.length,
+        itemBuilder: (context, index) {
+          final voucher = _displayedCoupons[index];
+          return Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: _buildVoucherCard(voucher),
+          );
+        },
+      ),
     );
   }
 
