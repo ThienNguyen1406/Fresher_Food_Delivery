@@ -31,19 +31,19 @@ class StripeCardInputState extends State<StripeCardInput> {
   }
 
   Future<void> _initializeController() async {
-    print('🔵 StripeCardInput: Starting initialization...');
-    print('🔵 StripeCardInput: PublishableKey isNotEmpty: ${Stripe.publishableKey.isNotEmpty}');
-    print('🔵 StripeCardInput: PublishableKey length: ${Stripe.publishableKey.length}');
+    print(' StripeCardInput: Starting initialization...');
+    print(' StripeCardInput: PublishableKey isNotEmpty: ${Stripe.publishableKey.isNotEmpty}');
+    print(' StripeCardInput: PublishableKey length: ${Stripe.publishableKey.length}');
     
     // Đợi lâu hơn và đảm bảo native SDK đã sẵn sàng
     // Thử gọi applySettings để khởi tạo native SDK
     if (Stripe.publishableKey.isNotEmpty) {
       try {
-        print('🔵 StripeCardInput: Calling applySettings to initialize native SDK...');
+        print(' StripeCardInput: Calling applySettings to initialize native SDK...');
         await Stripe.instance.applySettings();
-        print('🔵 StripeCardInput: ✅ applySettings completed');
+        print(' StripeCardInput:  applySettings completed');
       } catch (e) {
-        print('⚠️ StripeCardInput: applySettings failed: $e');
+        print(' StripeCardInput: applySettings failed: $e');
       }
     }
     
@@ -51,16 +51,16 @@ class StripeCardInputState extends State<StripeCardInput> {
     await Future.delayed(const Duration(milliseconds: 1000));
     
     if (!mounted) {
-      print('🔵 StripeCardInput: Widget not mounted, returning');
+      print(' StripeCardInput: Widget not mounted, returning');
       return;
     }
     
     // Chỉ khởi tạo controller khi Stripe đã được khởi tạo
     if (Stripe.publishableKey.isNotEmpty) {
       try {
-        print('🔵 StripeCardInput: Attempting to create CardFormEditController...');
+        print(' StripeCardInput: Attempting to create CardFormEditController...');
         _cardFormEditController = CardFormEditController();
-        print('🔵 StripeCardInput: ✅ CardFormEditController created successfully');
+        print(' StripeCardInput:  CardFormEditController created successfully');
         
         // Đợi thêm một chút trước khi hiển thị form
         await Future.delayed(const Duration(milliseconds: 500));
@@ -69,18 +69,18 @@ class StripeCardInputState extends State<StripeCardInput> {
           setState(() {
             _isInitializing = false;
           });
-          print('🔵 StripeCardInput: State updated, _isInitializing = false');
+          print(' StripeCardInput: State updated, _isInitializing = false');
         }
       } catch (e) {
-        print('❌ StripeCardInput: Error initializing CardFormEditController: $e');
-        print('❌ StripeCardInput: Stack trace: ${StackTrace.current}');
+        print(' StripeCardInput: Error initializing CardFormEditController: $e');
+        print(' StripeCardInput: Stack trace: ${StackTrace.current}');
         // Thử lại sau một chút
         await Future.delayed(const Duration(milliseconds: 2000));
         if (mounted && Stripe.publishableKey.isNotEmpty) {
           try {
-            print('🔵 StripeCardInput: Retrying CardFormEditController creation...');
+            print(' StripeCardInput: Retrying CardFormEditController creation...');
             _cardFormEditController = CardFormEditController();
-            print('🔵 StripeCardInput: ✅ CardFormEditController created on retry');
+            print(' StripeCardInput:  CardFormEditController created on retry');
             await Future.delayed(const Duration(milliseconds: 500));
             if (mounted) {
               setState(() {
@@ -88,7 +88,7 @@ class StripeCardInputState extends State<StripeCardInput> {
               });
             }
           } catch (e2) {
-            print('❌ StripeCardInput: Error retrying CardFormEditController: $e2');
+            print(' StripeCardInput: Error retrying CardFormEditController: $e2');
             if (mounted) {
               setState(() {
                 _isInitializing = false;
@@ -98,14 +98,14 @@ class StripeCardInputState extends State<StripeCardInput> {
         }
       }
     } else {
-      print('⚠️ StripeCardInput: PublishableKey is empty, waiting...');
+      print(' StripeCardInput: PublishableKey is empty, waiting...');
       // Nếu Stripe chưa khởi tạo, thử lại sau một chút
       await Future.delayed(const Duration(milliseconds: 2000));
       if (mounted && Stripe.publishableKey.isNotEmpty && _cardFormEditController == null) {
-        print('🔵 StripeCardInput: Retrying initialization after delay...');
+        print(' StripeCardInput: Retrying initialization after delay...');
         _initializeController();
       } else if (mounted) {
-        print('⚠️ StripeCardInput: Still no publishable key, giving up');
+        print(' StripeCardInput: Still no publishable key, giving up');
         setState(() {
           _isInitializing = false;
         });
@@ -165,7 +165,7 @@ class StripeCardInputState extends State<StripeCardInput> {
                     !_isInitializing && 
                     Stripe.publishableKey.isNotEmpty;
                 
-                print('🔵 StripeCardInput build: canShow=$canShow, controller=${_cardFormEditController != null}, isInitializing=$_isInitializing, hasKey=${Stripe.publishableKey.isNotEmpty}');
+                print(' StripeCardInput build: canShow=$canShow, controller=${_cardFormEditController != null}, isInitializing=$_isInitializing, hasKey=${Stripe.publishableKey.isNotEmpty}');
                 
                 if (canShow) {
                   return Container(

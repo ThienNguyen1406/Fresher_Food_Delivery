@@ -51,7 +51,7 @@ class _VoucherPageState extends State<VoucherPage> {
 
       if (!mounted) return;
 
-      print('✅ Tải thành công ${coupons.length} mã giảm giá');
+      print(' Tải thành công ${coupons.length} mã giảm giá');
 
       setState(() {
         _allCoupons = coupons;
@@ -60,7 +60,7 @@ class _VoucherPageState extends State<VoucherPage> {
         _hasError = false;
       });
     } catch (e) {
-      print('❌ Lỗi tải mã giảm giá: $e');
+      print(' Lỗi tải mã giảm giá: $e');
       if (!mounted) return;
 
       setState(() {
@@ -134,9 +134,9 @@ class _VoucherPageState extends State<VoucherPage> {
         _isLoading = false;
       });
 
-      print('✅ Tìm thấy ${searchResults.length} kết quả');
+      print(' Tìm thấy ${searchResults.length} kết quả');
     } catch (e) {
-      print('❌ Lỗi tìm kiếm mã giảm giá: $e');
+      print(' Lỗi tìm kiếm mã giảm giá: $e');
       setState(() {
         _isLoading = false;
         _hasError = true;

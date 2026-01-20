@@ -10,14 +10,14 @@ class StripeApi {
       final headers = await ApiService().getHeaders();
       final url = Uri.parse('${Constant().baseUrl}/Stripe/publishable-key');
 
-      print('🔑 Fetching Stripe publishable key from: $url');
+      print('Fetching Stripe publishable key from: $url');
 
       final response = await http
           .get(url, headers: headers)
           .timeout(const Duration(seconds: 30));
 
-      print('🔑 Publishable Key API Response: ${response.statusCode}');
-      print('🔑 Publishable Key API Body: ${response.body}');
+      print('Publishable Key API Response: ${response.statusCode}');
+      print('Publishable Key API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -28,14 +28,14 @@ class StripeApi {
         }
 
         print(
-            '🔑 Successfully retrieved publishable key: ${key.substring(0, 20)}...');
+            'Successfully retrieved publishable key: ${key.substring(0, 20)}...');
         return key;
       } else {
         throw Exception(
             'Failed to get publishable key: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('❌ Error getting publishable key: $e');
+      print('Error getting publishable key: $e');
       throw Exception('Error getting publishable key: $e');
     }
   }

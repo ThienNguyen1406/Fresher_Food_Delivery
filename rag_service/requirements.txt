@@ -1,0 +1,28 @@
+# FastAPI và server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Document processing
+python-docx>=1.1.0
+PyPDF2>=3.0.0
+openpyxl>=3.1.0
+
+# Embeddings
+sentence-transformers>=2.2.0
+openai>=1.3.0  # Optional: nếu muốn dùng OpenAI embeddings
+
+# Vector stores
+chromadb>=0.4.0  # Chroma vector database
+# pymilvus>=2.3.0  # Uncomment nếu muốn dùng Milvus thay vì Chroma
+
+# Utilities
+numpy>=1.24.0,<2.0.0
+pydantic>=2.5.0
+
+# Logging
+python-json-logger>=2.0.0
+
+# Database export (optional - chỉ cần khi chạy export_database_to_markdown.py)
+pyodbc>=5.0.0
+

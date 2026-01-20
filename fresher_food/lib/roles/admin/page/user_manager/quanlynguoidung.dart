@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/admin/page/user_manager/chitietnguoidung.dart';
+import 'package:fresher_food/roles/admin/page/user_manager/password_reset_requests_page.dart';
 import 'package:fresher_food/services/api/user_api.dart';
+import 'package:iconsax/iconsax.dart';
 
 /// Màn hình quản lý người dùng - xem, tìm kiếm và xóa tài khoản người dùng
 class QuanLyNguoiDungScreen extends StatefulWidget {
@@ -373,6 +375,23 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
         backgroundColor: _cardColor,
         elevation: 0,
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              Iconsax.key,
+              color: _textColor,
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PasswordResetRequestsPage(),
+                ),
+              );
+            },
+            tooltip: 'Yêu cầu đặt lại mật khẩu',
+          ),
+        ],
       ),
       body: Column(
         children: [

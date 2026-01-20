@@ -34,9 +34,11 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
   void initState() {
     super.initState();
     _loadMessages();
-    // Auto refresh every 3 seconds
-    _refreshTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _loadMessages(silent: true);
+    // Auto refresh every 5 seconds để giảm tải (tăng từ 3 lên 5 giây)
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      if (mounted) {
+        _loadMessages(silent: true);
+      }
     });
   }
 
@@ -56,7 +58,8 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
     }
 
     try {
-      final messages = await _chatApi.getMessages(widget.maChat);
+      final result = await _chatApi.getMessages(maChat: widget.maChat, limit: 50);
+      final messages = result['messages'] as List<Message>;
       
       if (mounted) {
         setState(() {
@@ -191,6 +194,37 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
   Widget _buildMessageBubble(Message message, ThemeData theme) {
     final isFromAdmin = message.isFromAdmin;
     final timeFormat = DateFormat('HH:mm');
+    final dateFormat = DateFormat('dd/MM/yyyy');
+    final now = DateTime.now();
+    final messageDate = message.ngayGui;
+    final isToday = messageDate.year == now.year && 
+                    messageDate.month == now.month && 
+                    messageDate.day == now.day;
+    
+    // Tính thời gian phản hồi nếu đây là tin nhắn từ admin (phản hồi)
+    String? responseTimeText;
+    if (isFromAdmin && _messages.isNotEmpty) {
+      // Tìm tin nhắn user gần nhất trước tin nhắn này
+      final messageIndex = _messages.indexOf(message);
+      if (messageIndex > 0) {
+        for (int i = messageIndex - 1; i >= 0; i--) {
+          if (_messages[i].isFromUser) {
+            final userMessageTime = _messages[i].ngayGui;
+            final responseTime = messageDate.difference(userMessageTime);
+            if (responseTime.inSeconds < 60) {
+              responseTimeText = '${responseTime.inSeconds}s';
+            } else if (responseTime.inMinutes < 60) {
+              responseTimeText = '${responseTime.inMinutes} phút';
+            } else if (responseTime.inHours < 24) {
+              responseTimeText = '${responseTime.inHours} giờ';
+            } else {
+              responseTimeText = '${responseTime.inDays} ngày';
+            }
+            break;
+          }
+        }
+      }
+    }
 
     return Align(
       alignment: isFromAdmin ? Alignment.centerRight : Alignment.centerLeft,
@@ -239,14 +273,43 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      timeFormat.format(message.ngayGui),
-                      style: TextStyle(
-                        color: isFromAdmin
-                            ? Colors.white70
-                            : Colors.grey[600],
-                        fontSize: 11,
-                      ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          isToday 
+                              ? timeFormat.format(messageDate)
+                              : '${dateFormat.format(messageDate)} ${timeFormat.format(messageDate)}',
+                          style: TextStyle(
+                            color: isFromAdmin
+                                ? Colors.white70
+                                : Colors.grey[600],
+                            fontSize: 11,
+                          ),
+                        ),
+                        if (responseTimeText != null) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: isFromAdmin 
+                                  ? Colors.white.withOpacity(0.2)
+                                  : Colors.green.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '⏱️ $responseTimeText',
+                              style: TextStyle(
+                                color: isFromAdmin
+                                    ? Colors.white
+                                    : Colors.green[700],
+                                fontSize: 10,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

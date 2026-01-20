@@ -5,6 +5,9 @@ import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/utils/constant.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
+import 'dart:io' show Platform, Directory, File;
 
 class ProductApi {
   Future<List<Product>> getProducts() async {
@@ -255,6 +258,197 @@ class ProductApi {
     } catch (e) {
       print('Error permanent deleting product: $e');
       throw Exception('Lỗi xóa vĩnh viễn sản phẩm: $e');
+    }
+  }
+
+  /// Xuất danh sách sản phẩm ra file Excel
+  Future<Map<String, dynamic>> exportToExcel() async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http.get(
+        Uri.parse('${Constant().baseUrl}/Product/export-excel'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        // Lấy tên file từ header hoặc tạo tên mặc định
+        String fileName = 'DanhSachSanPham_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition != null && contentDisposition.contains('filename=')) {
+          // Parse filename từ Content-Disposition header
+          final filenameIndex = contentDisposition.indexOf('filename=');
+          if (filenameIndex != -1) {
+            var startIndex = filenameIndex + 9; // length of "filename="
+            
+            // Skip optional encoding prefix
+            if (contentDisposition.substring(startIndex).startsWith("UTF-8''")) {
+              startIndex += 7;
+            }
+            
+            var valueStart = startIndex;
+            if (valueStart < contentDisposition.length && 
+                (contentDisposition[valueStart] == '"' || contentDisposition[valueStart] == "'")) {
+              valueStart++;
+            }
+            
+            var valueEnd = valueStart;
+            while (valueEnd < contentDisposition.length) {
+              final char = contentDisposition[valueEnd];
+              if (char == ';' || char == '"' || char == "'") {
+                break;
+              }
+              valueEnd++;
+            }
+            
+            if (valueEnd > valueStart) {
+              fileName = contentDisposition.substring(valueStart, valueEnd).trim();
+              fileName = fileName.replaceAll('"', '').replaceAll("'", '');
+            }
+          }
+        }
+        
+        // Clean filename - remove invalid characters
+        final invalidCharsPattern = RegExp(r'[<>:"/\\|?*]');
+        fileName = fileName.replaceAll(invalidCharsPattern, '_');
+        if (!fileName.endsWith('.xlsx')) {
+          fileName = '$fileName.xlsx';
+        }
+
+        // Save file to Downloads folder on mobile devices
+        Directory? directory;
+        try {
+          if (Platform.isAndroid) {
+            // Android: Try multiple methods to get Downloads folder
+            try {
+              // Method 1: Try public Downloads directory
+              final downloadsDir = Directory('/storage/emulated/0/Download');
+              if (await downloadsDir.exists() || await downloadsDir.parent.exists()) {
+                // Create if doesn't exist
+                if (!await downloadsDir.exists()) {
+                  await downloadsDir.create(recursive: true);
+                }
+                directory = downloadsDir;
+              } else {
+                // Method 2: Try alternative path
+                final altDownloadsDir = Directory('/sdcard/Download');
+                if (await altDownloadsDir.exists() || await altDownloadsDir.parent.exists()) {
+                  if (!await altDownloadsDir.exists()) {
+                    await altDownloadsDir.create(recursive: true);
+                  }
+                  directory = altDownloadsDir;
+                } else {
+                  // Method 3: Use external storage directory and create Download subfolder
+                  final externalDir = await getExternalStorageDirectory();
+                  if (externalDir != null) {
+                    // Try to use Downloads from external storage
+                    final appDownloadsDir = Directory('${externalDir.path}/Download');
+                    if (!await appDownloadsDir.exists()) {
+                      await appDownloadsDir.create(recursive: true);
+                    }
+                    directory = appDownloadsDir;
+                  } else {
+                    throw Exception('Cannot access external storage');
+                  }
+                }
+              }
+            } catch (e) {
+              print('Error accessing Downloads: $e');
+              // Fallback: use external storage directory
+              try {
+                final externalDir = await getExternalStorageDirectory();
+                if (externalDir != null) {
+                  // Create Download folder in app's external directory
+                  final appDownloadsDir = Directory('${externalDir.path}/Download');
+                  if (!await appDownloadsDir.exists()) {
+                    await appDownloadsDir.create(recursive: true);
+                  }
+                  directory = appDownloadsDir;
+                } else {
+                  directory = await getApplicationDocumentsDirectory();
+                }
+              } catch (e2) {
+                // Final fallback
+                directory = await getApplicationDocumentsDirectory();
+              }
+            }
+          } else if (Platform.isIOS) {
+            // iOS: Use Documents directory
+            directory = await getApplicationDocumentsDirectory();
+          } else {
+            // Other platforms: Try Downloads first, then Documents
+            directory = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+          }
+        } catch (e) {
+          print('Error determining directory: $e');
+          // Final fallback to application documents directory
+          directory = await getApplicationDocumentsDirectory();
+        }
+        
+        // Directory is guaranteed to be non-null at this point
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        
+        // Check if file bytes are valid
+        if (response.bodyBytes.isEmpty) {
+          return {
+            'success': false,
+            'error': 'File Excel rỗng. Backend có thể đã lỗi khi tạo file.',
+          };
+        }
+        
+        // Write file
+        try {
+          await file.writeAsBytes(response.bodyBytes);
+        } catch (e) {
+          return {
+            'success': false,
+            'error': 'Lỗi khi ghi file: $e',
+          };
+        }
+        
+        // Verify file was written
+        if (!await file.exists()) {
+          return {
+            'success': false,
+            'error': 'File không được tạo. Vui lòng kiểm tra quyền truy cập bộ nhớ.',
+          };
+        }
+        
+        // Get file size
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          return {
+            'success': false,
+            'error': 'File được tạo nhưng rỗng.',
+          };
+        }
+        
+        // Try to open file
+        try {
+          await OpenFile.open(filePath);
+        } catch (e) {
+          // File saved successfully but couldn't open - this is OK
+          print('File đã lưu nhưng không thể mở tự động: $e');
+        }
+        
+        return {
+          'success': true,
+          'filePath': filePath,
+          'fileName': fileName,
+          'fileSize': fileSize,
+        };
+      } else {
+        final errorBody = response.body;
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: ${errorBody.length > 200 ? errorBody.substring(0, 200) : errorBody}',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Lỗi xuất file Excel: $e',
+      };
     }
   }
 }

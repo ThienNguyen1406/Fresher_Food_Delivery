@@ -180,7 +180,7 @@ class _MainScreenState extends State<MainScreen> {
     final isDark = theme.brightness == Brightness.dark;
     final localizations = AppLocalizations.of(context)!;
     final screenSize = MediaQuery.of(context).size;
-    final fabSize = 72.0; // Larger size
+    final fabSize = 76.0; // Larger size
 
     // Initialize position on first build
     if (!_isInitialized) {
@@ -542,16 +542,6 @@ class _MainScreenState extends State<MainScreen> {
           newX = newX.clamp(0.0, screenSize.width - size);
           newY = newY.clamp(0.0, screenSize.height - size);
           
-          // Constrain to left or right side (within 20% of screen width from edges)
-          final leftBoundary = screenSize.width * 0.2;
-          final rightBoundary = screenSize.width * 0.8;
-          
-          if (newX < leftBoundary) {
-            newX = 0.0; // Snap to left
-          } else if (newX > rightBoundary - size) {
-            newX = screenSize.width - size; // Snap to right
-          }
-          
           _chatbotPosition = Offset(newX, newY);
         });
       },
@@ -582,7 +572,7 @@ class _MainScreenState extends State<MainScreen> {
             },
             borderRadius: BorderRadius.circular(size / 2),
             child: Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               child: Lottie.asset(
                 'lib/assets/lottie/chatbot.json',
                 fit: BoxFit.contain,

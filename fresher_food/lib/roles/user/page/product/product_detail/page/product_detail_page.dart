@@ -427,7 +427,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
       ),
       child: Row(
         children: [
-          if (!productDetailProvider.isOutOfStock)
+          if (productDetailProvider.canAddToCart)
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
@@ -469,7 +469,7 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                 ],
               ),
             ),
-          if (!productDetailProvider.isOutOfStock) const SizedBox(width: 16),
+          if (productDetailProvider.canAddToCart) const SizedBox(width: 16),
           Expanded(
             child: AnimatedBuilder(
               animation: _addToCartController,
@@ -484,42 +484,47 @@ class _ProductDetailPageState extends State<ProductDetailPage>
                   final theme = Theme.of(context);
                   final isDark = theme.brightness == Brightness.dark;
                   return ElevatedButton(
-                    onPressed: productDetailProvider.isOutOfStock
-                        ? null
-                        : () => _addToCart(productDetailProvider),
+                    onPressed: productDetailProvider.canAddToCart
+                        ? () => _addToCart(productDetailProvider)
+                        : null,
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 18),
-                      backgroundColor: productDetailProvider.isOutOfStock
-                          ? Colors.grey.shade400
-                          : (isDark
+                      backgroundColor: productDetailProvider.canAddToCart
+                          ? (isDark
                               ? Colors.green.shade400
-                              : Colors.green.shade600),
+                              : Colors.green.shade600)
+                          : Colors.grey.shade400,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      elevation: productDetailProvider.isOutOfStock
-                          ? 0
-                          : (isDark ? 6 : 4),
-                      shadowColor: productDetailProvider.isOutOfStock
-                          ? Colors.transparent
-                          : (isDark
+                      elevation: productDetailProvider.canAddToCart
+                          ? (isDark ? 6 : 4)
+                          : 0,
+                      shadowColor: productDetailProvider.canAddToCart
+                          ? (isDark
                               ? Colors.green.shade400.withOpacity(0.5)
-                              : Colors.green.withOpacity(0.3)),
+                              : Colors.green.withOpacity(0.3))
+                          : Colors.transparent,
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                            productDetailProvider.isOutOfStock
-                                ? Icons.inventory_2_outlined
-                                : Icons.shopping_cart_outlined,
-                            size: 20),
+                          productDetailProvider.isExpired
+                              ? Icons.warning_amber_rounded
+                              : productDetailProvider.isOutOfStock
+                                  ? Icons.inventory_2_outlined
+                                  : Icons.shopping_cart_outlined,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          productDetailProvider.isOutOfStock
-                              ? "HẾT HÀNG"
-                              : "Thêm vào giỏ hàng",
+                          productDetailProvider.isExpired
+                              ? "SẢN PHẨM HẾT HẠN"
+                              : productDetailProvider.isOutOfStock
+                                  ? "HẾT HÀNG"
+                                  : "Thêm vào giỏ hàng",
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

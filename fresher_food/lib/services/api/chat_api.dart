@@ -22,7 +22,7 @@ class ChatApi {
               'noiDungTinNhanDau': noiDungTinNhanDau,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to create chat: ${res.statusCode}');
@@ -44,7 +44,7 @@ class ChatApi {
             Uri.parse('${Constant().baseUrl}/Chat/user/$maNguoiDung'),
             headers: await ApiService().getHeaders(),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to get user chats: ${res.statusCode}');
@@ -78,7 +78,7 @@ class ChatApi {
             Uri.parse('${Constant().baseUrl}/Chat/admin'),
             headers: await ApiService().getHeaders(),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to get admin chats: ${res.statusCode}');
@@ -93,26 +93,53 @@ class ChatApi {
     }
   }
 
-  /// Lấy tin nhắn của một chat
-  Future<List<Message>> getMessages(String maChat) async {
+  /// Lấy tin nhắn của một chat với pagination
+  /// [limit] - Số tin nhắn cần lấy (mặc định 10)
+  /// [beforeMessageId] - ID tin nhắn để lấy tin nhắn cũ hơn (null = lấy mới nhất)
+  Future<Map<String, dynamic>> getMessages({
+    required String maChat,
+    int limit = 10,
+    String? beforeMessageId,
+  }) async {
     try {
+      final uri = Uri.parse('${Constant().baseUrl}/Chat/$maChat/messages')
+          .replace(queryParameters: {
+        'limit': limit.toString(),
+        if (beforeMessageId != null) 'beforeMessageId': beforeMessageId,
+      });
+
       final res = await http
           .get(
-            Uri.parse('${Constant().baseUrl}/Chat/$maChat/messages'),
+            uri,
             headers: await ApiService().getHeaders(),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to get messages: ${res.statusCode}');
-        return [];
+        return {
+          'messages': <Message>[],
+          'hasMore': false,
+          'totalCount': 0,
+        };
       }
 
-      final List<dynamic> data = jsonDecode(res.body);
-      return data.map((json) => Message.fromJson(json)).toList();
+      final data = jsonDecode(res.body);
+      final List<dynamic> messagesData = data['messages'] ?? [];
+      final messages = messagesData.map((json) => Message.fromJson(json)).toList();
+
+      return {
+        'messages': messages,
+        'hasMore': data['hasMore'] ?? false,
+        'totalCount': data['totalCount'] ?? 0,
+      };
     } catch (e) {
       print('Error getting messages: $e');
-      return [];
+      return {
+        'messages': <Message>[],
+        'hasMore': false,
+        'totalCount': 0,
+      };
     }
   }
 
@@ -135,7 +162,7 @@ class ChatApi {
               'noiDung': noiDung,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to send message: ${res.statusCode}');
@@ -162,7 +189,7 @@ class ChatApi {
               'maNguoiDoc': maNguoiDoc,
             }),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to mark as read: ${res.statusCode}');
@@ -183,7 +210,7 @@ class ChatApi {
             Uri.parse('${Constant().baseUrl}/Chat/$maChat/close'),
             headers: await ApiService().getHeaders(),
           )
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 60));
 
       if (res.statusCode != 200) {
         print('Failed to close chat: ${res.statusCode}');
@@ -192,6 +219,28 @@ class ChatApi {
       return true;
     } catch (e) {
       print('Error closing chat: $e');
+      return false;
+    }
+  }
+
+  /// Xóa cuộc trò chuyện
+  Future<bool> deleteChat(String maChat) async {
+    try {
+      final res = await http
+          .delete(
+            Uri.parse('${Constant().baseUrl}/Chat/$maChat'),
+            headers: await ApiService().getHeaders(),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (res.statusCode != 200) {
+        print('Failed to delete chat: ${res.statusCode}');
+        print('Response body: ${res.body}');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      print('Error deleting chat: $e');
       return false;
     }
   }

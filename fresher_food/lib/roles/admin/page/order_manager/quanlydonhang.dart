@@ -210,6 +210,64 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     return filteredOrders;
   }
 
+  /// Khối chức năng: Xuất danh sách đơn hàng ra Excel
+  Future<void> _exportToExcel() async {
+    try {
+      // Hiển thị loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final apiService = OrderApi();
+      final result = await apiService.exportToExcel();
+
+      // Đóng loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (result['success'] == true) {
+        if (mounted) {
+          final filePath = result['filePath'] ?? '';
+          final fileName = result['fileName'] ?? '';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('✅ Đã xuất file Excel thành công!'),
+                  const SizedBox(height: 4),
+                  Text('File: $fileName', style: const TextStyle(fontSize: 12)),
+                  if (filePath.isNotEmpty)
+                    Text('Vị trí: $filePath', 
+                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                ],
+              ),
+              backgroundColor: _primaryColor,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          final errorMsg = result['error'] ?? 'Không xác định';
+          _showErrorSnackbar('Lỗi xuất Excel: $errorMsg');
+        }
+      }
+    } catch (e) {
+      // Đóng loading dialog nếu có
+      if (mounted) {
+        Navigator.of(context).pop();
+        _showErrorSnackbar('Lỗi xuất Excel: $e');
+      }
+    }
+  }
+
   void _showErrorSnackbar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -316,6 +374,28 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Export Excel button
+              Container(
+                height: 52,
+                width: 52,
+                decoration: BoxDecoration(
+                  color: _accentColor,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _accentColor.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  icon: const Icon(Iconsax.document_download, color: Colors.white),
+                  tooltip: 'Xuất Excel',
+                  onPressed: _exportToExcel,
                 ),
               ),
               const SizedBox(width: 12),

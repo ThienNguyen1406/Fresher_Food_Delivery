@@ -234,68 +234,169 @@ class _ChatListPageState extends State<ChatListPage> {
   Widget _buildChatItem(Chat chat, AppLocalizations localizations) {
     final theme = Theme.of(context);
     final hasUnread = (chat.soTinNhanChuaDoc ?? 0) > 0;
-    final dateFormat = DateFormat('MMM dd, yyyy');
+    final dateFormat = DateFormat('dd/MM/yyyy');
     final timeFormat = DateFormat('HH:mm');
+    
+    // Tạo tiêu đề phân biệt: nếu TieuDe là null hoặc "Cuộc trò chuyện mới", dùng preview tin nhắn
+    String displayTitle;
+    if (chat.tieuDe == null || 
+        chat.tieuDe!.isEmpty || 
+        chat.tieuDe == 'Cuộc trò chuyện mới' ||
+        chat.tieuDe == localizations.supportChat) {
+      // Dùng preview tin nhắn cuối hoặc tin nhắn đầu tiên
+      if (chat.tinNhanCuoi != null && chat.tinNhanCuoi!.isNotEmpty) {
+        displayTitle = chat.tinNhanCuoi!.length > 40 
+            ? '${chat.tinNhanCuoi!.substring(0, 40)}...' 
+            : chat.tinNhanCuoi!;
+      } else {
+        // Nếu không có tin nhắn, dùng ngày tạo để phân biệt
+        displayTitle = 'Cuộc trò chuyện ${dateFormat.format(chat.ngayTao)}';
+      }
+    } else {
+      displayTitle = chat.tieuDe!;
+    }
+    
+    // Tạo màu avatar khác nhau dựa trên maChat để phân biệt
+    final avatarColor = _getAvatarColor(chat.maChat);
+    final avatarIcon = _getAvatarIcon(chat.maChat);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: hasUnread ? 2 : 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: hasUnread 
+            ? BorderSide(color: theme.primaryColor.withOpacity(0.3), width: 1.5)
+            : BorderSide.none,
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.all(16),
-        leading: CircleAvatar(
-          backgroundColor: theme.primaryColor.withOpacity(0.1),
-          child: Icon(
-            Icons.support_agent,
-            color: theme.primaryColor,
-          ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        leading: Stack(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: avatarColor.withOpacity(0.15),
+              child: Icon(
+                avatarIcon,
+                color: avatarColor,
+                size: 28,
+              ),
+            ),
+            if (hasUnread)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                ),
+              ),
+          ],
         ),
-        title: Text(
-          chat.tieuDe ?? localizations.supportChat,
-          style: TextStyle(
-            fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                displayTitle,
+                style: TextStyle(
+                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 16,
+                  color: hasUnread ? theme.primaryColor : Colors.black87,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (chat.ngayTinNhanCuoi != null || chat.ngayTao != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8),
+                child: Text(
+                  chat.ngayTinNhanCuoi != null
+                      ? timeFormat.format(chat.ngayTinNhanCuoi!)
+                      : timeFormat.format(chat.ngayTao),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: hasUnread ? FontWeight.w600 : FontWeight.normal,
+                  ),
+                ),
+              ),
+          ],
         ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 4),
-            Text(
-              chat.tinNhanCuoi ?? localizations.noMessages,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
+            const SizedBox(height: 6),
+            if (chat.tinNhanCuoi != null && chat.tinNhanCuoi!.isNotEmpty)
+              Text(
+                chat.tinNhanCuoi!,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.grey[700],
+                  fontSize: 14,
+                  fontWeight: hasUnread ? FontWeight.w500 : FontWeight.normal,
+                ),
+              )
+            else
+              Text(
+                localizations.noMessages,
+                style: TextStyle(
+                  color: Colors.grey[500],
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic,
+                ),
               ),
-            ),
             const SizedBox(height: 4),
-            Text(
-              chat.ngayTinNhanCuoi != null
-                  ? '${dateFormat.format(chat.ngayTinNhanCuoi!)} ${timeFormat.format(chat.ngayTinNhanCuoi!)}'
-                  : dateFormat.format(chat.ngayTao),
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[500],
-              ),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 12, color: Colors.grey[500]),
+                const SizedBox(width: 4),
+                Text(
+                  chat.ngayTinNhanCuoi != null
+                      ? '${dateFormat.format(chat.ngayTinNhanCuoi!)}'
+                      : 'Tạo: ${dateFormat.format(chat.ngayTao)}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[500],
+                  ),
+                ),
+                if (hasUnread) ...[
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.red,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${chat.soTinNhanChuaDoc}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ],
         ),
         trailing: hasUnread
-            ? Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${chat.soTinNhanChuaDoc}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+            ? Icon(
+                Icons.chevron_right,
+                color: theme.primaryColor,
               )
-            : null,
+            : Icon(
+                Icons.chevron_right,
+                color: Colors.grey[400],
+              ),
         onTap: () {
           Navigator.push(
             context,
@@ -309,6 +410,38 @@ class _ChatListPageState extends State<ChatListPage> {
         },
       ),
     );
+  }
+
+  // Tạo màu avatar khác nhau dựa trên maChat để phân biệt
+  Color _getAvatarColor(String maChat) {
+    final colors = [
+      Colors.green,
+      Colors.blue,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+      Colors.pink,
+      Colors.indigo,
+      Colors.amber,
+    ];
+    final hash = maChat.hashCode;
+    return colors[hash.abs() % colors.length];
+  }
+
+  // Tạo icon khác nhau dựa trên maChat để phân biệt
+  IconData _getAvatarIcon(String maChat) {
+    final icons = [
+      Icons.chat_bubble,
+      Icons.support_agent,
+      Icons.help_outline,
+      Icons.question_answer,
+      Icons.forum,
+      Icons.message,
+      Icons.chat_bubble_outline,
+      Icons.contact_support,
+    ];
+    final hash = maChat.hashCode;
+    return icons[hash.abs() % icons.length];
   }
 
   /// Widget input field để nhập tin nhắn

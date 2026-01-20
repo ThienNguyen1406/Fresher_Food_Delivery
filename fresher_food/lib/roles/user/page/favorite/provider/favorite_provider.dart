@@ -23,8 +23,12 @@ class FavoriteProvider with ChangeNotifier {
 
   // State management methods
   void _updateState(FavoriteState newState) {
+    print('FavoriteProvider: _updateState called');
+    print('FavoriteProvider: Old state - products: ${_state.favoriteProducts.length}, isLoading: ${_state.isLoading}');
+    print('FavoriteProvider: New state - products: ${newState.favoriteProducts.length}, isLoading: ${newState.isLoading}');
     _state = newState;
     notifyListeners();
+    print('FavoriteProvider: notifyListeners() called');
   }
 
   // Business logic methods
@@ -46,10 +50,18 @@ class FavoriteProvider with ChangeNotifier {
 
   Future<void> loadFavorites() async {
     try {
+      print('FavoriteProvider: Starting to load favorites...');
       _updateState(_state.loading());
       final favorites = await _service.loadFavorites();
-      _updateState(_state.success(favorites));
-    } catch (e) {
+      print('FavoriteProvider: Loaded ${favorites.length} favorites from service');
+      print('FavoriteProvider: Products details: ${favorites.map((p) => p.tenSanPham).toList()}');
+      final newState = _state.success(favorites);
+      _updateState(newState);
+      print('FavoriteProvider: State updated - favoriteProducts.length = ${_state.favoriteProducts.length}');
+      print('FavoriteProvider: State updated - isEmpty = ${isEmpty}');
+    } catch (e, stackTrace) {
+      print('FavoriteProvider: Error loading favorites: $e');
+      print('FavoriteProvider: Stack trace: $stackTrace');
       _updateState(_state.errorState('Lỗi tải danh sách yêu thích: $e'));
     }
   }

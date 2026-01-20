@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/utils/constant.dart';
@@ -6,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/User.dart';
+import '../../models/PasswordResetRequest.dart';
 
 class UserApi {
   Future<User?> login(String email, String matKhau) async {
@@ -205,6 +207,58 @@ class UserApi {
     }
   }
 
+  /// Upload avatar
+  Future<Map<String, dynamic>?> uploadAvatar(String maTaiKhoan, File imageFile) async {
+    try {
+      final uri = Uri.parse('${Constant().baseUrl}/User/$maTaiKhoan/avatar');
+      final request = http.MultipartRequest('POST', uri);
+      
+      // Thêm headers
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token');
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      // Thêm file
+      request.files.add(
+        await http.MultipartFile.fromPath('file', imageFile.path),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        
+        // Lưu avatar URL vào SharedPreferences
+        if (data['avatarPath'] != null) {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('avatar', data['avatarPath']);
+        }
+        
+        return {
+          'success': true,
+          'avatarUrl': data['avatarUrl'],
+          'avatarPath': data['avatarPath'],
+          'message': data['message'],
+        };
+      } else {
+        final error = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': error['error'] ?? 'Upload avatar thất bại',
+        };
+      }
+    } catch (e) {
+      print('Error uploading avatar: $e');
+      return {
+        'success': false,
+        'error': 'Lỗi: $e',
+      };
+    }
+  }
+
   // Cập nhật thông tin người dùng
   Future<bool> updateUserInfo(Map<String, dynamic> userData) async {
     try {
@@ -342,7 +396,7 @@ class UserApi {
     }
   }
 
-  // Delete Avatar
+  /// Xóa avatar của user hiện tại
   Future<bool> deleteAvatar() async {
     try {
       final user = await getCurrentUser();
@@ -351,9 +405,7 @@ class UserApi {
       final response = await http
           .delete(
             Uri.parse('${Constant().baseUrl}/User/${user.maTaiKhoan}/avatar'),
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: await ApiService().getHeaders(),
           )
           .timeout(const Duration(seconds: 30));
 
@@ -362,11 +414,196 @@ class UserApi {
         await prefs.remove('avatar');
         return true;
       } else {
-        throw Exception('Xóa avatar thất bại: ${response.statusCode}');
+        return false;
       }
     } catch (e) {
       print('Error deleting avatar: $e');
-      throw Exception('Lỗi xóa avatar: $e');
+      return false;
+    }
+  }
+
+  // Request Password Reset - Yêu cầu đặt lại mật khẩu bằng email
+  Future<Map<String, dynamic>> requestPasswordReset(String email) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${Constant().baseUrl}/User/request-password-reset'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'email': email,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Request Password Reset API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Yêu cầu đã được gửi thành công',
+          'maYeuCau': data['maYeuCau'],
+        };
+      } else {
+        final errorBody = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorBody['error'] ?? 'Có lỗi xảy ra',
+        };
+      }
+    } catch (e) {
+      print('Error requesting password reset: $e');
+      return {
+        'success': false,
+        'error': 'Lỗi: $e',
+      };
+    }
+  }
+
+  // Reset Password - Cập nhật mật khẩu mới sau khi verify OTP (deprecated)
+  Future<bool> resetPassword(String phoneNumber, String newPassword) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('${Constant().baseUrl}/User/reset-password'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'phoneNumber': phoneNumber,
+              'newPassword': newPassword,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Reset Password API Response: ${response.statusCode} - ${response.body}');
+
+      if (response.statusCode == 200) {
+        return true;
+      } else {
+        final errorBody = response.body;
+        throw Exception('Đặt lại mật khẩu thất bại: ${response.statusCode} - $errorBody');
+      }
+    } catch (e) {
+      print('Error resetting password: $e');
+      throw Exception('Lỗi đặt lại mật khẩu: $e');
+    }
+  }
+
+  // ==================== CHANGE PASSWORD ====================
+
+  /// Đổi mật khẩu (cần mật khẩu cũ)
+  Future<Map<String, dynamic>> changePassword({
+    required String maTaiKhoan,
+    required String matKhauCu,
+    required String matKhauMoi,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('${Constant().baseUrl}/User/change-password'),
+            headers: headers,
+            body: jsonEncode({
+              'maTaiKhoan': maTaiKhoan,
+              'matKhauCu': matKhauCu,
+              'matKhauMoi': matKhauMoi,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Đổi mật khẩu thành công',
+        };
+      } else {
+        final errorBody = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorBody['error'] ?? 'Có lỗi xảy ra',
+        };
+      }
+    } catch (e) {
+      print('Error changing password: $e');
+      return {
+        'success': false,
+        'error': 'Lỗi: $e',
+      };
+    }
+  }
+
+  // ==================== PASSWORD RESET REQUESTS (ADMIN) ====================
+
+  /// Lấy danh sách yêu cầu đặt lại mật khẩu (Admin)
+  Future<List<PasswordResetRequest>> getPasswordResetRequests({String? trangThai}) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final url = trangThai != null
+          ? '${Constant().baseUrl}/User/password-reset-requests?trangThai=$trangThai'
+          : '${Constant().baseUrl}/User/password-reset-requests';
+
+      final response = await http
+          .get(
+            Uri.parse(url),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = jsonDecode(response.body);
+        return data.map((json) => PasswordResetRequest.fromJson(json)).toList();
+      } else {
+        throw Exception('HTTP ${response.statusCode}: ${response.body}');
+      }
+    } catch (e) {
+      print('Error getting password reset requests: $e');
+      throw Exception('Lỗi lấy danh sách yêu cầu: $e');
+    }
+  }
+
+  /// Xử lý yêu cầu đặt lại mật khẩu (Admin: Approve hoặc Reject)
+  Future<Map<String, dynamic>> processPasswordReset({
+    required String maYeuCau,
+    required String action, // "Approve" hoặc "Reject"
+    String? maAdmin,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('${Constant().baseUrl}/User/process-password-reset'),
+            headers: headers,
+            body: jsonEncode({
+              'maYeuCau': maYeuCau,
+              'action': action,
+              'maAdmin': maAdmin,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Xử lý thành công',
+        };
+      } else {
+        final errorBody = jsonDecode(response.body);
+        return {
+          'success': false,
+          'error': errorBody['error'] ?? 'Có lỗi xảy ra',
+        };
+      }
+    } catch (e) {
+      print('Error processing password reset: $e');
+      return {
+        'success': false,
+        'error': 'Lỗi: $e',
+      };
     }
   }
 }

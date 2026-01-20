@@ -22,4 +22,13 @@ class AppConfig {
     // Ví dụ: "http://192.168.1.100:7240" hoặc "https://your-ngrok-url.ngrok.io"
     return "http://localhost:7240"; // Thay bằng IP công khai nếu cần
   }
+
+  // RAG Service URL (Python service)
+  static const String devRagServiceUrl = "http://10.0.2.2:8000"; // Android emulator
+  // static const String devRagServiceUrl = "http://localhost:8000"; // iOS simulator hoặc web
+  // static const String devRagServiceUrl = "http://192.168.1.100:8000"; // Physical device (thay bằng IP máy tính)
+  
+  static const String prodRagServiceUrl = "https://your-rag-service.com";
+  
+  static String? get ragServiceUrl => isProduction ? prodRagServiceUrl : devRagServiceUrl;
 }

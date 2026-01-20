@@ -229,6 +229,70 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
     );
   }
 
+  /// Khối chức năng: Xuất danh sách sản phẩm ra Excel
+  Future<void> _exportToExcel() async {
+    try {
+      // Hiển thị loading dialog
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      final result = await _apiProduct.exportToExcel();
+
+      // Đóng loading dialog
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (result['success'] == true) {
+        if (mounted) {
+          final filePath = result['filePath'] ?? '';
+          final fileName = result['fileName'] ?? '';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('✅ Đã xuất file Excel thành công!'),
+                  const SizedBox(height: 4),
+                  Text('File: $fileName', style: const TextStyle(fontSize: 12)),
+                  if (filePath.isNotEmpty)
+                    Text('Vị trí: $filePath', 
+                      style: const TextStyle(fontSize: 11, fontStyle: FontStyle.italic)),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Mở file',
+                textColor: Colors.white,
+                onPressed: () {
+                  // File đã được mở tự động, nhưng có thể mở lại nếu cần
+                },
+              ),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          final errorMsg = result['error'] ?? 'Không xác định';
+          _showErrorDialog('Lỗi xuất Excel', errorMsg);
+        }
+      }
+    } catch (e) {
+      // Đóng loading dialog nếu có
+      if (mounted) {
+        Navigator.of(context).pop();
+        _showErrorDialog('Lỗi xuất Excel', e.toString());
+      }
+    }
+  }
+
   void _showPermanentDeleteConfirmation(Map<String, dynamic> trashProduct) {
     showDialog(
       context: context,
@@ -277,6 +341,7 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
           ProductManagerHeader(
             productCount: _tabController.index == 0 ? _filteredProducts.length : _trashProducts.length,
             onAddProduct: _showAddProductDialog,
+            onExportExcel: _tabController.index == 0 ? _exportToExcel : null,
           ),
           // Tab Bar
           Container(

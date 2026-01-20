@@ -14,6 +14,7 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
+    print('SplashScreen: initState called');
     _checkAuthStatus();
   }
 
@@ -23,21 +24,28 @@ class _SplashScreenState extends State<SplashScreen> {
   /// - Nếu đã đăng nhập: chuyển đến Main hoặc Admin Dashboard
   /// - Nếu chưa đăng nhập: chuyển đến màn hình đăng nhập
   Future<void> _checkAuthStatus() async {
+    print('SplashScreen: _checkAuthStatus started');
     await Future.delayed(const Duration(seconds: 2));
+    print('SplashScreen: Delay completed, checking auth status...');
 
     try {
       final isLoggedIn = await UserApi().isLoggedIn();
+      print('SplashScreen: isLoggedIn = $isLoggedIn');
 
       if (!mounted) return;
 
       if (isLoggedIn) {
         final isAdmin = await UserApi().isAdmin();
+        print('SplashScreen: isAdmin = $isAdmin');
         if (isAdmin) {
+          print('SplashScreen: Navigating to admin dashboard');
           AppRoute.pushReplacement(context, AppRoute.adminDashboard);
         } else {
+          print('SplashScreen: Navigating to main screen');
           AppRoute.pushReplacement(context, AppRoute.main);
         }
       } else {
+        print('SplashScreen: Navigating to login screen');
         AppRoute.pushReplacement(context, AppRoute.login);
       }
     } catch (e) {
@@ -51,6 +59,7 @@ class _SplashScreenState extends State<SplashScreen> {
   /// Khối giao diện: Hiển thị logo và loading indicator
   @override
   Widget build(BuildContext context) {
+    print('SplashScreen: build called');
     return Scaffold(
       backgroundColor: Colors.green,
       body: Center(

@@ -4,11 +4,13 @@ import 'package:iconsax/iconsax.dart';
 class ProductManagerHeader extends StatelessWidget {
   final int productCount;
   final VoidCallback onAddProduct;
+  final VoidCallback? onExportExcel;
 
   const ProductManagerHeader({
     super.key,
     required this.productCount,
     required this.onAddProduct,
+    this.onExportExcel,
   });
 
   @override
@@ -45,6 +47,14 @@ class ProductManagerHeader extends StatelessWidget {
             ),
           ),
           const Spacer(),
+          // Export Excel button
+          if (onExportExcel != null)
+            IconButton(
+              icon: const Icon(Iconsax.document_download, color: Color(0xFF2E7D32)),
+              tooltip: 'Xuất Excel',
+              onPressed: onExportExcel,
+            ),
+          const SizedBox(width: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
