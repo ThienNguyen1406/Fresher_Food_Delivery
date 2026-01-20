@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -18,11 +19,10 @@ import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:provider/provider.dart';
 import "package:flutter_stripe/flutter_stripe.dart";
 import 'package:fresher_food/services/api/stripe_api.dart';
+import 'package:fresher_food/services/firebase_service.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
-/// Override HttpClient để cho phép kết nối với SSL certificate không hợp lệ
-/// 
-/// Class này được sử dụng trong môi trường development để bỏ qua lỗi SSL certificate
-/// LƯU Ý: Không nên sử dụng trong production
+
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -32,49 +32,62 @@ class MyHttpOverrides extends HttpOverrides {
   }
 }
 
-/// Hàm main - điểm khởi đầu của ứng dụng
-/// 
-/// Thực hiện các bước khởi tạo:
-/// 1. Khởi tạo Flutter binding
-/// 2. Cấu hình HttpOverrides để bỏ qua SSL certificate (chỉ dùng trong development)
-/// 3. Khởi tạo Stripe payment gateway
-/// 4. Chạy ứng dụng
 void main() async {
-  // Đảm bảo Flutter binding đã được khởi tạo trước khi sử dụng các Flutter APIs
+  // Catch và log tất cả Flutter errors
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    print('Flutter Error: ${details.exception}');
+    print('Stack trace: ${details.stack}');
+  };
+
+  // Catch và log tất cả Dart errors (async errors)
+  PlatformDispatcher.instance.onError = (error, stack) {
+    print('Dart Error: $error');
+    print('Stack trace: $stack');
+    return true;
+  };
+
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Cấu hình để bỏ qua lỗi SSL certificate (chỉ dùng trong development)
   HttpOverrides.global = MyHttpOverrides();
 
-  // Khởi tạo Stripe Payment Gateway - lấy publishable key từ backend
+  // Khởi tạo Firebase
   try {
-    print(' Initializing Stripe...');
+    print('Initializing Firebase...');
+    await FirebaseService.initialize();
+    
+    // Set background message handler
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    // Nếu không thể khởi tạo Firebase, app vẫn chạy nhưng tính năng Firebase sẽ không hoạt động
+    print('Warning: Could not initialize Firebase: $e');
+    print('Firebase features will not be available');
+  }
+
+  try {
+    print('Initializing Stripe...');
     final stripeApi = StripeApi();
     final publishableKey = await stripeApi.getPublishableKey();
 
     if (publishableKey.isEmpty) {
-      print(' Warning: Publishable key is empty');
+      print('Warning: Publishable key is empty');
     } else {
-      // Thiết lập publishable key cho Stripe
+
       Stripe.publishableKey = publishableKey;
-      print(
-          ' Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
-      
-      // Khởi tạo native SDK của Stripe bằng cách gọi một method đơn giản
+      print('Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
+         
       try {
-        // Gọi applySettings để đảm bảo native SDK được khởi tạo đúng cách
         await Stripe.instance.applySettings();
-        print(' Stripe native SDK initialized via applySettings');
+        print('Stripe native SDK initialized via applySettings');
       } catch (e) {
-        print(' Warning: Could not call applySettings: $e');
-        // Đợi một chút để native SDK được khởi tạo tự động
+        print('Warning: Could not call applySettings: $e');
         await Future.delayed(const Duration(milliseconds: 1000));
-        print(' Stripe native SDK should be ready now (after delay)');
+        print('Stripe native SDK should be ready now (after delay)');
       }
     }
   } catch (e) {
     // Nếu không thể khởi tạo Stripe, app vẫn chạy nhưng tính năng thanh toán sẽ không hoạt động
-    print(' Warning: Could not initialize Stripe: $e');
+      print('Warning: Could not initialize Stripe: $e');
     print('Stripe payment will not be available');
   }
 
@@ -82,13 +95,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-/// Widget gốc của ứng dụng
-/// 
-/// Quản lý:
-/// - Tất cả các Provider (State Management)
-/// - Theme (Light/Dark mode)
-/// - Localization (Đa ngôn ngữ: Tiếng Việt, Tiếng Anh)
-/// - Routing (Điều hướng giữa các màn hình)
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
@@ -106,7 +112,14 @@ class MyApp extends StatelessWidget {
         // Provider quản lý ngôn ngữ (Tiếng Việt/Tiếng Anh)
         ChangeNotifierProvider(create: (context) => LanguageProvider()),
         // Provider quản lý danh sách yêu thích
-        ChangeNotifierProvider(create: (context) => FavoriteProvider()),
+        ChangeNotifierProvider(create: (context) {
+          try {
+            return FavoriteProvider();
+          } catch (e) {
+            print('Error creating FavoriteProvider: $e');
+            return FavoriteProvider(); // Return default instance
+          }
+        }),
         // Provider quản lý trang chủ
         ChangeNotifierProvider(create: (context) => HomeProvider()),
         // Provider quản lý tài khoản người dùng
@@ -123,7 +136,8 @@ class MyApp extends StatelessWidget {
       // Sử dụng Consumer2 để lắng nghe thay đổi từ ThemeProvider và LanguageProvider
       child: Consumer2<ThemeProvider, LanguageProvider>(
         builder: (context, themeProvider, languageProvider, child) {
-          return MaterialApp(
+          try {
+            return MaterialApp(
             title: 'FreshFood App',
             // Theme cho chế độ sáng (Light mode)
             theme: ThemeData(
@@ -151,11 +165,8 @@ class MyApp extends StatelessWidget {
                 tertiary: Color(0xFF2E7D32),
               ),
             ),
-            // Chế độ theme hiện tại (Light/Dark/System)
             themeMode: themeProvider.themeMode,
-            // Ngôn ngữ hiện tại
             locale: languageProvider.locale,
-            // Các delegate để hỗ trợ đa ngôn ngữ
             localizationsDelegates: const [
               AppLocalizations.delegate, // Custom localization cho app
               GlobalMaterialLocalizations.delegate, // Material Design localization
@@ -173,7 +184,41 @@ class MyApp extends StatelessWidget {
             onGenerateRoute: AppRoute.generateRoute,
             // Ẩn banner debug ở góc trên bên phải
             debugShowCheckedModeBanner: false,
+            // Error builder để hiển thị lỗi thay vì crash
+            builder: (context, child) {
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+                child: child ?? const SizedBox(),
+              );
+            },
           );
+          } catch (e, stackTrace) {
+            print('Error building MaterialApp: $e');
+            print('Stack trace: $stackTrace');
+            // Return a simple error screen instead of crashing
+            return MaterialApp(
+              home: Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      const SizedBox(height: 16),
+                      Text('Error: $e'),
+                      const SizedBox(height: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          // Try to restart
+                          runApp(const MyApp());
+                        },
+                        child: const Text('Restart App'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
         },
       ),
     );

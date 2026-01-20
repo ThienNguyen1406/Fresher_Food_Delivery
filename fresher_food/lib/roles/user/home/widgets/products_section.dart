@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:fresher_food/roles/user/home/widgets/product_card_widget.dart';
+import 'package:fresher_food/utils/screen_size.dart';
 
 class ProductsSection extends StatelessWidget {
   final TextEditingController searchController;
@@ -26,7 +27,7 @@ class ProductsSection extends StatelessWidget {
           } else if (state.filteredProducts.isEmpty) {
             return _buildEmptyProducts(provider);
           } else {
-            return _buildProductsGrid(provider);
+            return _buildProductsGrid(context, provider);
           }
         },
       ),
@@ -108,13 +109,20 @@ class ProductsSection extends StatelessWidget {
     );
   }
 
-  SliverGrid _buildProductsGrid(HomeProvider provider) {
+  SliverGrid _buildProductsGrid(BuildContext context, HomeProvider provider) {
+    final screenSize = ScreenSize.fromContext(context);
+    final crossAxisCount = screenSize.getGridColumnCount(
+      phoneColumns: 2,
+      tabletColumns: 3,
+    );
+    final aspectRatio = screenSize.getProductCardAspectRatio();
+    
     return SliverGrid(
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.75,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: screenSize.getSpacing(base: 16),
+        mainAxisSpacing: screenSize.getSpacing(base: 16),
+        childAspectRatio: aspectRatio,
       ),
       delegate: SliverChildBuilderDelegate(
         (context, index) {

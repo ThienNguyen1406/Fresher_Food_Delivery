@@ -11,10 +11,10 @@ class VoucherService {
     try {
       print('🔄 Service: Bắt đầu tải danh sách mã giảm giá...');
       final coupons = await _couponApi.getAllCoupons();
-      print('✅ Service: Tải thành công ${coupons.length} mã giảm giá');
+      print(' Service: Tải thành công ${coupons.length} mã giảm giá');
       return coupons;
     } catch (e) {
-      print('❌ Service: Lỗi tải mã giảm giá: $e');
+      print(' Service: Lỗi tải mã giảm giá: $e');
       throw Exception('Không thể tải danh sách mã giảm giá: $e');
     }
   }
@@ -23,10 +23,10 @@ class VoucherService {
     try {
       print('🔍 Service: Tìm kiếm mã giảm giá với từ khóa: $query');
       final searchResults = await _couponApi.searchCoupons(query);
-      print('✅ Service: Tìm thấy ${searchResults.length} kết quả');
+      print(' Service: Tìm thấy ${searchResults.length} kết quả');
       return searchResults;
     } catch (e) {
-      print('❌ Service: Lỗi tìm kiếm mã giảm giá: $e');
+      print(' Service: Lỗi tìm kiếm mã giảm giá: $e');
       throw Exception('Không thể tìm kiếm mã giảm giá: $e');
     }
   }

@@ -51,16 +51,21 @@ class _FavoritePageState extends State<FavoritePage> {
         ),
         body: Consumer<FavoriteProvider>(
           builder: (context, provider, child) {
+            print('FavoritePage: Consumer rebuild - isLoading=${provider.isLoading}, hasError=${provider.hasError}, isLoggedIn=${provider.isLoggedIn}, products=${provider.favoriteProducts.length}');
+            
             // Xử lý các trạng thái loading, error, etc.
             if (provider.isLoading) {
+              print('FavoritePage: Showing loading screen');
               return const FavoriteLoadingScreen();
             }
 
             if (provider.hasError) {
+              print('FavoritePage: Showing error screen - ${provider.error}');
               return FavoriteErrorScreen(provider: provider);
             }
 
             if (!provider.isLoggedIn) {
+              print('FavoritePage: Showing login required screen');
               return const FavoriteLoginRequired();
             }
 
@@ -74,9 +79,18 @@ class _FavoritePageState extends State<FavoritePage> {
 
   /// Khối giao diện: Xây dựng danh sách sản phẩm yêu thích với pull-to-refresh
   Widget _buildFavoriteList(FavoriteProvider provider) {
+    print('FavoritePage: _buildFavoriteList called');
+    print('FavoritePage: favoriteProducts.length = ${provider.favoriteProducts.length}');
+    print('FavoritePage: isEmpty = ${provider.isEmpty}');
+    print('FavoritePage: isLoading = ${provider.isLoading}');
+    print('FavoritePage: hasError = ${provider.hasError}');
+    
     if (provider.isEmpty) {
+      print('FavoritePage: Showing empty screen');
       return const FavoriteEmptyScreen();
     }
+    
+    print('FavoritePage: Building list with ${provider.favoriteProducts.length} items');
 
     return RefreshIndicator(
       onRefresh: () => provider.loadFavorites(),

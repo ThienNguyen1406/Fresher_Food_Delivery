@@ -7,6 +7,8 @@ import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/roles/admin/page/order_manager/quanlydonhang.dart';
 import 'package:fresher_food/roles/admin/page/user_manager/quanlynguoidung.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/quanlysanpham.dart';
+import 'package:fresher_food/services/api/statistics_api.dart';
+import 'package:iconsax/iconsax.dart';
 
 /// Màn hình thống kê - hiển thị các số liệu và biểu đồ thống kê doanh thu, đơn hàng
 class ThongKeScreen extends StatefulWidget {
@@ -150,14 +152,14 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
 
     try {
       print(
-          '📊 Loading revenue statistics from ${_startDate!.toIso8601String().split('T')[0]} to ${_endDate!.toIso8601String().split('T')[0]}');
+          ' Loading revenue statistics from ${_startDate!.toIso8601String().split('T')[0]} to ${_endDate!.toIso8601String().split('T')[0]}');
 
       final statistics = await OrderApi().getRevenueStatistics(
         startDate: _startDate,
         endDate: _endDate,
       );
 
-      print('📊 Statistics received: $statistics');
+      print(' Statistics received: $statistics');
 
       setState(() {
         _revenueByDateRange =
@@ -173,7 +175,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
       await loadStatusDistribution();
 
       print(
-          '📊 Final values: Revenue=${_revenueByDateRange}, Orders=${_ordersByDateRange}, Customers=${_customersByDateRange}');
+          ' Final values: Revenue=${_revenueByDateRange}, Orders=${_ordersByDateRange}, Customers=${_customersByDateRange}');
     } catch (e) {
       debugPrint("❌ Lỗi fetch thống kê doanh thu: $e");
       ScaffoldMessenger.of(context).showSnackBar(
@@ -194,7 +196,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
     });
 
     try {
-      print('📊 Loading monthly revenue for year: $_selectedYear');
+      print(' Loading monthly revenue for year: $_selectedYear');
       final monthlyData = await OrderApi().getMonthlyRevenue(year: _selectedYear);
       
       setState(() {
@@ -202,7 +204,7 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
         _loadingMonthlyRevenue = false;
       });
 
-      print('📊 Monthly revenue loaded: ${_monthlyRevenue.length} months');
+      print(' Monthly revenue loaded: ${_monthlyRevenue.length} months');
     } catch (e) {
       debugPrint("❌ Lỗi fetch thống kê doanh thu theo tháng: $e");
       setState(() {
@@ -345,27 +347,181 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
 
   Widget _buildHeader() {
     final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          "Thống Kê",
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            color: theme.textTheme.titleLarge?.color,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Thống Kê",
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: theme.textTheme.titleLarge?.color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                "Tổng quan hiệu suất kinh doanh",
+                style: TextStyle(
+                  fontSize: 16,
+                  color: theme.textTheme.bodyMedium?.color,
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          "Tổng quan hiệu suất kinh doanh",
-          style: TextStyle(
-            fontSize: 16,
-            color: theme.textTheme.bodyMedium?.color,
-          ),
-        ),
+        // Export Excel button
+        _isExporting
+            ? const SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            : IconButton(
+                onPressed: _exportToExcel,
+                icon: const Icon(Iconsax.document_download),
+                tooltip: 'Xuất báo cáo Excel',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.all(12),
+                ),
+              ),
       ],
     );
+  }
+
+  bool _isExporting = false;
+
+  final StatisticsApi _statisticsApi = StatisticsApi();
+
+  Future<void> _exportToExcel() async {
+    setState(() {
+      _isExporting = true;
+    });
+
+    try {
+      final result = await _statisticsApi.exportToExcel(
+        year: _selectedYear,
+        startDate: _startDate,
+        endDate: _endDate,
+      );
+
+      if (mounted) {
+        final success = result['success'] as bool;
+        final filePath = result['filePath'] as String?;
+        final fileName = result['fileName'] as String?;
+        final error = result['error'] as String?;
+        
+        if (success && filePath != null) {
+          final fileSize = result['fileSize'] as int?;
+          final fileSizeMB = fileSize != null ? (fileSize / 1024 / 1024).toStringAsFixed(2) : 'N/A';
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('✅ Xuất báo cáo Excel thành công!'),
+                  const SizedBox(height: 4),
+                  Text(
+                    'File: $fileName',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  if (fileSize != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Kích thước: ${fileSizeMB} MB',
+                      style: const TextStyle(fontSize: 11, color: Colors.white70),
+                    ),
+                  ],
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Xem đường dẫn',
+                textColor: Colors.white,
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Thông tin file'),
+                      content: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('Tên file:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            SelectableText(fileName ?? 'N/A'),
+                            const SizedBox(height: 12),
+                            const Text('Đường dẫn:', style: TextStyle(fontWeight: FontWeight.bold)),
+                            SelectableText(filePath),
+                            if (fileSize != null) ...[
+                              const SizedBox(height: 12),
+                              Text('Kích thước: ${fileSizeMB} MB', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ],
+                          ],
+                        ),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Đóng'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('❌ Xuất báo cáo thất bại'),
+                  if (error != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      error,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Lỗi khi xuất báo cáo: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isExporting = false;
+        });
+      }
+    }
   }
 
   Widget _buildStatsGrid(List<Map<String, dynamic>> stats) {

@@ -174,7 +174,12 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                             throw Exception('Xóa thất bại');
                           }
                         } catch (e) {
-                          _showErrorDialog('Lỗi', e.toString());
+                          // Loại bỏ "Exception: " prefix nếu có
+                          String errorMessage = e.toString();
+                          if (errorMessage.startsWith('Exception: ')) {
+                            errorMessage = errorMessage.substring(11);
+                          }
+                          _showErrorDialog('Lỗi', errorMessage);
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -467,9 +472,9 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                                         topLeft: Radius.circular(16),
                                         topRight: Radius.circular(16),
                                       ),
-                                      child: category.icon.isNotEmpty
+                                      child: category.icon != null && category.icon!.isNotEmpty
                                           ? Image.network(
-                                              _getImageUrl(category.icon),
+                                              _getImageUrl(category.icon!),
                                               width: double.infinity,
                                               height: double.infinity,
                                               fit: BoxFit.cover,
@@ -551,13 +556,13 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
                                                   color: Colors.green.withOpacity(0.1),
                                                   borderRadius: BorderRadius.circular(6),
                                                 ),
-                                                child: const Row(
+                                                child: Row(
                                                   children: [
-                                                    Icon(Iconsax.box, size: 12, color: Colors.green),
-                                                    SizedBox(width: 2),
+                                                    const Icon(Iconsax.box, size: 12, color: Colors.green),
+                                                    const SizedBox(width: 2),
                                                     Text(
-                                                      '0 SP',
-                                                      style: TextStyle(
+                                                      '${category.soLuongSanPham} SP',
+                                                      style: const TextStyle(
                                                         color: Colors.green,
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.w600,
@@ -841,7 +846,7 @@ class _CategoryDialogState extends State<CategoryDialog> {
   }
 
   Widget _buildImageUploadSection() {
-    final hasExistingImage = widget.category?.icon != null && widget.category!.icon.isNotEmpty;
+    final hasExistingImage = widget.category?.icon != null && widget.category!.icon!.isNotEmpty;
     final hasNewImage = _selectedImage != null;
 
     return Container(
@@ -852,12 +857,12 @@ class _CategoryDialogState extends State<CategoryDialog> {
       ),
       child: Column(
         children: [
-          const Row(
+          Row(
             children: [
               Icon(Iconsax.gallery, size: 16, color: Colors.grey),
-              SizedBox(width: 8),
-              Text(
-                'Hình ảnh danh mục',
+              const SizedBox(width: 8),
+              const Text(
+                'Hình ảnh danh mục (tùy chọn)',
                 style: TextStyle(
                   fontWeight: FontWeight.w500,
                   color: Colors.grey,
@@ -879,7 +884,7 @@ class _CategoryDialogState extends State<CategoryDialog> {
                     )
                   : hasExistingImage
                       ? DecorationImage(
-                          image: NetworkImage(_getImageUrl(widget.category!.icon)),
+                          image: NetworkImage(_getImageUrl(widget.category!.icon!)),
                           fit: BoxFit.cover,
                         )
                       : DecorationImage(

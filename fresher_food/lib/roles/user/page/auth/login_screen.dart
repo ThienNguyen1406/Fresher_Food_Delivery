@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
+import 'package:fresher_food/roles/user/page/auth/forgot_password_screen.dart';
 
 /// Widget màn hình đăng nhập
-/// 
+///
 /// Màn hình này cho phép người dùng đăng nhập vào hệ thống với:
 /// - Chọn vai trò: Khách Hàng hoặc Admin (thông qua TabBar)
 /// - Nhập email và mật khẩu
@@ -13,18 +14,19 @@ import 'package:fresher_food/utils/app_localizations.dart';
 class LoginScreen extends StatefulWidget {
   /// Vai trò hiện tại được chọn ('user' hoặc 'admin')
   final String role;
-  
+
   /// Tên hiển thị của vai trò
   final String roleName;
-  
+
   /// Màu chủ đạo cho giao diện
   final Color primaryColor;
-  
+
   /// Callback khi người dùng muốn chuyển sang màn hình đăng ký
   final VoidCallback? onSwitchToRegister;
-  
+
   /// Callback khi người dùng thay đổi vai trò (Admin/User)
-  final Function(String role, String roleName, Color primaryColor)? onRoleChanged;
+  final Function(String role, String roleName, Color primaryColor)?
+      onRoleChanged;
 
   const LoginScreen({
     super.key,
@@ -40,25 +42,26 @@ class LoginScreen extends StatefulWidget {
 }
 
 /// State class quản lý trạng thái và logic của màn hình đăng nhập
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   /// Key để quản lý form validation
   final _formKey = GlobalKey<FormState>();
-  
+
   /// Controller cho trường nhập email
   final TextEditingController _emailController = TextEditingController();
-  
+
   /// Controller cho trường nhập mật khẩu
   final TextEditingController _passwordController = TextEditingController();
-  
+
   /// Controller để quản lý TabBar chọn vai trò (Khách Hàng/Admin)
   late TabController _roleTabController;
 
   /// Trạng thái đang xử lý đăng nhập (hiển thị loading)
   bool _isLoading = false;
-  
+
   /// Ẩn/hiện mật khẩu
   bool _obscurePassword = true;
-  
+
   /// Trạng thái checkbox "Nhớ đăng nhập"
   bool _rememberMe = false;
 
@@ -78,7 +81,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   /// Xử lý sự kiện khi người dùng chuyển đổi giữa tab Khách Hàng và Admin
-  /// 
+  ///
   /// Cập nhật role, roleName và primaryColor tương ứng với tab được chọn
   void _onRoleTabChanged() {
     // Bỏ qua nếu đang trong quá trình chuyển tab (tránh gọi callback nhiều lần)
@@ -149,7 +152,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               'Đăng nhập để tiếp tục',
               style: TextStyle(
                 fontSize: 16,
-                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.grey.shade600,
+                color: theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ??
+                    Colors.grey.shade600,
                 height: 1.4,
               ),
               textAlign: TextAlign.center,
@@ -158,7 +162,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
             // TabBar để chọn vai trò: Khách Hàng hoặc Admin
             Container(
-              margin: EdgeInsets.only(bottom: MediaQuery.of(context).size.height * 0.015),
+              margin: EdgeInsets.only(
+                  bottom: MediaQuery.of(context).size.height * 0.015),
               decoration: BoxDecoration(
                 color: Colors.grey.shade200,
                 borderRadius: BorderRadius.circular(16),
@@ -201,10 +206,12 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               decoration: InputDecoration(
                 labelText: localizations.email,
                 hintText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined, color: widget.primaryColor, size: 22),
+                prefixIcon: Icon(Icons.email_outlined,
+                    color: widget.primaryColor, size: 22),
                 suffixIcon: _emailController.text.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.cancel_outlined, color: Colors.grey.shade400, size: 20),
+                        icon: Icon(Icons.cancel_outlined,
+                            color: Colors.grey.shade400, size: 20),
                         onPressed: () {
                           setState(() {
                             _emailController.clear();
@@ -214,14 +221,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     : null,
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                  borderSide:
+                      BorderSide(color: Colors.grey.shade300, width: 1.5),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                  borderSide:
+                      BorderSide(color: Colors.grey.shade300, width: 1.5),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -235,7 +245,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: Colors.red, width: 2),
                 ),
-                labelStyle: TextStyle(fontSize: 16, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                labelStyle: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500),
                 hintStyle: TextStyle(fontSize: 16, color: Colors.grey.shade400),
               ),
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
@@ -263,13 +276,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
               decoration: InputDecoration(
                 labelText: localizations.password,
                 hintText: 'Mật khẩu',
-                prefixIcon: Icon(Icons.lock_outlined, color: widget.primaryColor, size: 22),
+                prefixIcon: Icon(Icons.lock_outlined,
+                    color: widget.primaryColor, size: 22),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_passwordController.text.isNotEmpty)
                       IconButton(
-                        icon: Icon(Icons.cancel_outlined, color: Colors.grey.shade400, size: 20),
+                        icon: Icon(Icons.cancel_outlined,
+                            color: Colors.grey.shade400, size: 20),
                         onPressed: () {
                           setState(() {
                             _passwordController.clear();
@@ -278,7 +293,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                       ),
                     IconButton(
                       icon: Icon(
-                        _obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                        _obscurePassword
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined,
                         color: Colors.grey.shade600,
                         size: 22,
                       ),
@@ -292,14 +309,17 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 ),
                 filled: true,
                 fillColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                  borderSide:
+                      BorderSide(color: Colors.grey.shade300, width: 1.5),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide(color: Colors.grey.shade300, width: 1.5),
+                  borderSide:
+                      BorderSide(color: Colors.grey.shade300, width: 1.5),
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -313,7 +333,10 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   borderRadius: BorderRadius.circular(16),
                   borderSide: const BorderSide(color: Colors.red, width: 2),
                 ),
-                labelStyle: TextStyle(fontSize: 16, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                labelStyle: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500),
                 hintStyle: TextStyle(fontSize: 16, color: Colors.grey.shade400),
               ),
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
@@ -362,7 +385,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                             });
                           },
                           activeColor: widget.primaryColor,
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -376,18 +400,19 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                     ],
                   ),
                 ),
-                // Link "Quên mật khẩu" - hiện tại chỉ hiển thị thông báo tính năng đang phát triển
+                // Link "Quên mật khẩu"
                 TextButton(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Tính năng quên mật khẩu đang được phát triển'),
-                        backgroundColor: Colors.orange,
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordScreen(),
                       ),
                     );
                   },
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     minimumSize: const Size(44, 44),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -425,7 +450,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                         height: 26,
                         child: CircularProgressIndicator(
                           strokeWidth: 3,
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
                     : Text(
@@ -455,7 +481,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 TextButton(
                   onPressed: widget.onSwitchToRegister,
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     minimumSize: const Size(44, 44),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
@@ -478,15 +505,6 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     );
   }
 
-  /// Xử lý sự kiện đăng nhập
-  /// 
-  /// 1. Validate form (email và mật khẩu)
-  /// 2. Gọi API đăng nhập với email và mật khẩu
-  /// 3. Kiểm tra role của user có khớp với tab được chọn không
-  /// 4. Chuyển hướng đến màn hình tương ứng:
-  ///    - Admin -> Admin Dashboard
-  ///    - User -> Main Screen (màn hình chính của người dùng)
-  /// 5. Hiển thị thông báo lỗi nếu có
   Future<void> _handleLogin() async {
     // Kiểm tra validation của form trước khi submit
     if (_formKey.currentState!.validate()) {

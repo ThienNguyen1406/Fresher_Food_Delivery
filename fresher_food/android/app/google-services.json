@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "607348371991",
+    "project_id": "datn-fresher-food",
+    "storage_bucket": "datn-fresher-food.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:607348371991:android:79d6072ce61e2276bf2252",
+        "android_client_info": {
+          "package_name": "com.example.fresher_food"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCjqMaC7yrDxaDtDRVe3qjx6wzRME1taUI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

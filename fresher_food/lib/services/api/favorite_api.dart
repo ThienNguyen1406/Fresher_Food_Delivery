@@ -58,8 +58,21 @@ class FavoriteApi {
 
         final List<String> productIds = [];
         for (var item in data) {
-          if (item is Map<String, dynamic> && item.containsKey('maSanPham')) {
-            productIds.add(item['maSanPham'].toString());
+          if (item is Map<String, dynamic>) {
+            // Try both camelCase and PascalCase
+            String? productId;
+            if (item.containsKey('maSanPham')) {
+              productId = item['maSanPham']?.toString();
+            } else if (item.containsKey('MaSanPham')) {
+              productId = item['MaSanPham']?.toString();
+            }
+            
+            if (productId != null && productId.isNotEmpty) {
+              productIds.add(productId);
+              print('Found product ID: $productId');
+            } else {
+              print('Warning: Item missing maSanPham: $item');
+            }
           }
         }
 

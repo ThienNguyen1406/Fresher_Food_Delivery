@@ -156,8 +156,8 @@ class RatingApi {
           )
           .timeout(const Duration(seconds: 30));
 
-      print('📦 Update Rating API Response: ${response.statusCode}');
-      print('📦 Update Rating API Body: ${response.body}');
+      print(' Update Rating API Response: ${response.statusCode}');
+      print(' Update Rating API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         return true;
@@ -171,7 +171,7 @@ class RatingApi {
         throw Exception('Failed to update rating: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
-      print('❌ Error updating rating: $e');
+      print(' Error updating rating: $e');
       throw Exception('Error updating rating: $e');
     }
   }

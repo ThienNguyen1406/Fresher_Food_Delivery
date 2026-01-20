@@ -35,7 +35,7 @@ class ProductBottomActionBar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          if (!provider.isOutOfStock)
+          if (provider.canAddToCart)
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade50,
@@ -76,7 +76,7 @@ class ProductBottomActionBar extends StatelessWidget {
                 ],
               ),
             ),
-          if (!provider.isOutOfStock) const SizedBox(width: 16),
+          if (provider.canAddToCart) const SizedBox(width: 16),
           Expanded(
             child: AnimatedBuilder(
               animation: addToCartController,
@@ -87,32 +87,39 @@ class ProductBottomActionBar extends StatelessWidget {
                 );
               },
               child: ElevatedButton(
-                onPressed: provider.isOutOfStock ? null : onAddToCart,
+                onPressed: provider.canAddToCart ? onAddToCart : null,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 18),
-                  backgroundColor: provider.isOutOfStock
-                      ? Colors.grey.shade400
-                      : Colors.green.shade600,
+                  backgroundColor: provider.canAddToCart
+                      ? Colors.green.shade600
+                      : Colors.grey.shade400,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
                   ),
-                  elevation: provider.isOutOfStock ? 0 : 4,
-                  shadowColor: provider.isOutOfStock
-                      ? Colors.transparent
-                      : Colors.green.withOpacity(0.3),
+                  elevation: provider.canAddToCart ? 4 : 0,
+                  shadowColor: provider.canAddToCart
+                      ? Colors.green.withOpacity(0.3)
+                      : Colors.transparent,
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                        provider.isOutOfStock
-                            ? Icons.inventory_2_outlined
-                            : Icons.shopping_cart_outlined,
-                        size: 20),
+                      provider.isExpired
+                          ? Icons.warning_amber_rounded
+                          : provider.isOutOfStock
+                              ? Icons.inventory_2_outlined
+                              : Icons.shopping_cart_outlined,
+                      size: 20,
+                    ),
                     const SizedBox(width: 8),
                     Text(
-                      provider.isOutOfStock ? "HẾT HÀNG" : "Thêm vào giỏ hàng",
+                      provider.isExpired
+                          ? "SẢN PHẨM HẾT HẠN"
+                          : provider.isOutOfStock
+                              ? "HẾT HÀNG"
+                              : "Thêm vào giỏ hàng",
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,

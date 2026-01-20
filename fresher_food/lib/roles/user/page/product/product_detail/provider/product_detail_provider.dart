@@ -157,4 +157,21 @@ class ProductDetailProvider with ChangeNotifier {
   // Helper methods
   bool get isOutOfStock => product!.soLuongTon <= 0;
   bool get isLowStock => (product?.soLuongTon ?? 0) < 10 && (product?.soLuongTon ?? 0) > 0;
+  
+  // Kiểm tra sản phẩm đã hết hạn
+  bool get isExpired {
+    if (product?.ngayHetHan == null) return false;
+    final now = DateTime.now();
+    // So sánh chỉ ngày, không so sánh giờ
+    final expiryDate = DateTime(
+      product!.ngayHetHan!.year,
+      product!.ngayHetHan!.month,
+      product!.ngayHetHan!.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    return expiryDate.isBefore(today);
+  }
+  
+  // Kiểm tra có thể thêm vào giỏ hàng không (không hết hàng và không hết hạn)
+  bool get canAddToCart => !isOutOfStock && !isExpired;
 }

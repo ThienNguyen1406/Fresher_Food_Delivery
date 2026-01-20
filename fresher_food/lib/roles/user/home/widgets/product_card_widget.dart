@@ -4,6 +4,7 @@ import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
 import 'package:fresher_food/utils/date_formatter.dart';
+import 'package:fresher_food/utils/screen_size.dart';
 
 class ProductCardWidget extends StatelessWidget {
   final Product product;
@@ -19,6 +20,10 @@ class ProductCardWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final isFavorite =
         provider.state.favoriteProductIds.contains(product.maSanPham);
+    final screenSize = ScreenSize.fromContext(context);
+    final isExpired = _isExpired();
+    final isOutOfStock = product.soLuongTon <= 0;
+    final canAddToCart = !isExpired && !isOutOfStock;
 
     return Container(
       decoration: BoxDecoration(
@@ -46,7 +51,7 @@ class ProductCardWidget extends StatelessWidget {
                 children: [
                   // Product Image
                   Container(
-                    height: 120,
+                    height: screenSize.getProductImageHeight(),
                     width: double.infinity,
                     decoration: BoxDecoration(
                       borderRadius: const BorderRadius.only(
@@ -65,7 +70,7 @@ class ProductCardWidget extends StatelessWidget {
                           Image.network(
                             product.anh,
                             width: double.infinity,
-                            height: 120,
+                            height: screenSize.getProductImageHeight(),
                             fit: BoxFit.cover,
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;
@@ -111,7 +116,7 @@ class ProductCardWidget extends StatelessWidget {
                   // Product Info
                   Expanded(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: screenSize.getProductCardPadding(),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -125,31 +130,31 @@ class ProductCardWidget extends StatelessWidget {
                                 // Product Name
                                 Text(
                                   product.tenSanPham,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontWeight: FontWeight.w600,
-                                    fontSize: 13,
+                                    fontSize: screenSize.getProductNameFontSize(),
                                     color: Colors.black87,
                                     height: 1.2,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                const SizedBox(height: 3),
+                                SizedBox(height: screenSize.getSpacing(base: 3)),
 
                                 // Origin
                                 Row(
                                   children: [
                                     Icon(
                                       Icons.location_on_outlined,
-                                      size: 11,
+                                      size: screenSize.width < 360 ? 10 : 11,
                                       color: Colors.grey.shade500,
                                     ),
-                                    const SizedBox(width: 3),
+                                    SizedBox(width: screenSize.getSpacing(base: 3)),
                                     Expanded(
                                       child: Text(
                                         product.xuatXu,
                                         style: TextStyle(
-                                          fontSize: 10,
+                                          fontSize: screenSize.width < 360 ? 9 : 10,
                                           color: Colors.grey.shade600,
                                         ),
                                         maxLines: 1,
@@ -158,13 +163,13 @@ class ProductCardWidget extends StatelessWidget {
                                     ),
                                   ],
                                 ),
-                                const SizedBox(height: 2),
+                                SizedBox(height: screenSize.getSpacing(base: 2)),
 
                                 // Stock
                                 Text(
                                   "Còn: ${product.soLuongTon} sp",
                                   style: TextStyle(
-                                    fontSize: 10,
+                                    fontSize: screenSize.width < 360 ? 9 : 10,
                                     color: product.soLuongTon > 0
                                         ? Colors.grey.shade600
                                         : Colors.red,
@@ -175,10 +180,10 @@ class ProductCardWidget extends StatelessWidget {
                                 ),
                                 // Production Date and Expiry Date - gộp trên 1 dòng để tiết kiệm không gian
                                 if (product.ngaySanXuat != null || product.ngayHetHan != null) ...[
-                                  const SizedBox(height: 3),
+                                  SizedBox(height: screenSize.getSpacing(base: 2)),
                                   Wrap(
-                                    spacing: 8,
-                                    runSpacing: 2,
+                                    spacing: screenSize.width < 360 ? 6 : 8,
+                                    runSpacing: 1,
                                     children: [
                                       if (product.ngaySanXuat != null)
                                         Row(
@@ -186,14 +191,14 @@ class ProductCardWidget extends StatelessWidget {
                                           children: [
                                             Icon(
                                               Icons.calendar_today_outlined,
-                                              size: 9,
+                                              size: screenSize.width < 360 ? 8 : 9,
                                               color: Colors.grey.shade500,
                                             ),
-                                            const SizedBox(width: 2),
+                                            SizedBox(width: screenSize.getSpacing(base: 2)),
                                             Text(
                                               "SX: ${DateFormatter.formatDate(product.ngaySanXuat!)}",
                                               style: TextStyle(
-                                                fontSize: 9,
+                                                fontSize: screenSize.width < 360 ? 8 : 9,
                                                 color: Colors.grey.shade600,
                                               ),
                                             ),
@@ -205,14 +210,14 @@ class ProductCardWidget extends StatelessWidget {
                                           children: [
                                             Icon(
                                               _getExpiryIcon(product.ngayHetHan!),
-                                              size: 9,
+                                              size: screenSize.width < 360 ? 8 : 9,
                                               color: _getExpiryColor(product.ngayHetHan!),
                                             ),
-                                            const SizedBox(width: 2),
+                                            SizedBox(width: screenSize.getSpacing(base: 2)),
                                             Text(
                                               "HH: ${DateFormatter.formatDate(product.ngayHetHan!)}",
                                               style: TextStyle(
-                                                fontSize: 9,
+                                                fontSize: screenSize.width < 360 ? 8 : 9,
                                                 color: _getExpiryColor(product.ngayHetHan!),
                                                 fontWeight: _isExpiredOrNearExpiry(product.ngayHetHan!)
                                                     ? FontWeight.w600
@@ -230,7 +235,7 @@ class ProductCardWidget extends StatelessWidget {
 
                           // Price and Add Button
                           Padding(
-                            padding: const EdgeInsets.only(top: 4),
+                            padding: EdgeInsets.only(top: screenSize.getSpacing(base: 4)),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -238,22 +243,22 @@ class ProductCardWidget extends StatelessWidget {
                                 Expanded(
                                   child: PriceWithSaleWidget(
                                     product: product,
-                                    fontSize: 13,
+                                    fontSize: screenSize.width < 360 ? 12 : 13,
                                     priceColor: Colors.green,
                                   ),
                                 ),
-                                const SizedBox(width: 6),
+                                SizedBox(width: screenSize.getSpacing(base: 6)),
                                 // Add Button
                                 AnimatedContainer(
                                   duration: const Duration(milliseconds: 200),
-                                  width: 30,
-                                  height: 30,
+                                  width: screenSize.width < 360 ? 28 : 30,
+                                  height: screenSize.width < 360 ? 28 : 30,
                                   decoration: BoxDecoration(
-                                    color: product.soLuongTon > 0
+                                    color: canAddToCart
                                         ? Colors.green
                                         : Colors.grey,
                                     shape: BoxShape.circle,
-                                    boxShadow: product.soLuongTon > 0
+                                    boxShadow: canAddToCart
                                         ? [
                                             BoxShadow(
                                               color:
@@ -267,16 +272,16 @@ class ProductCardWidget extends StatelessWidget {
                                   child: Material(
                                     color: Colors.transparent,
                                     child: InkWell(
-                                      onTap: product.soLuongTon > 0
+                                      onTap: canAddToCart
                                           ? () => provider.addToCart(product)
                                           : null,
                                       borderRadius: BorderRadius.circular(16),
                                       child: Icon(
-                                        product.soLuongTon > 0
+                                        canAddToCart
                                             ? Icons.add
                                             : Icons.remove_shopping_cart,
                                         color: Colors.white,
-                                        size: 16,
+                                        size: screenSize.width < 360 ? 14 : 16,
                                       ),
                                     ),
                                   ),
@@ -293,14 +298,14 @@ class ProductCardWidget extends StatelessWidget {
 
               // Favorite Button
               Positioned(
-                top: 8,
-                right: 8,
+                top: screenSize.getSpacing(base: 8),
+                right: screenSize.getSpacing(base: 8),
                 child: GestureDetector(
                   onTap: () => provider.toggleFavorite(product),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
-                    width: 30,
-                    height: 30,
+                    width: screenSize.width < 360 ? 28 : 30,
+                    height: screenSize.width < 360 ? 28 : 30,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       shape: BoxShape.circle,
@@ -315,14 +320,62 @@ class ProductCardWidget extends StatelessWidget {
                     child: Icon(
                       isFavorite ? Icons.favorite : Icons.favorite_border,
                       color: isFavorite ? Colors.red : Colors.grey,
-                      size: 16,
+                      size: screenSize.width < 360 ? 14 : 16,
                     ),
                   ),
                 ),
               ),
 
-              // Out of stock badge
-              if (product.soLuongTon <= 0)
+              // Expired product overlay with red line (only on image)
+              if (isExpired)
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    height: screenSize.getProductImageHeight(),
+                    child: Stack(
+                      children: [
+                        // Red diagonal line
+                        CustomPaint(
+                          painter: _DiagonalLinePainter(),
+                          child: Container(),
+                        ),
+                        // Expired badge on image
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade700,
+                              borderRadius: BorderRadius.circular(8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.red.withOpacity(0.5),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                            child: const Text(
+                              'SẢN PHẨM HẾT HẠN',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+              // Out of stock badge (only show if not expired)
+              if (isOutOfStock && !isExpired)
                 Positioned(
                   top: 0,
                   left: 0,
@@ -396,5 +449,40 @@ class ProductCardWidget extends StatelessWidget {
     final daysUntilExpiry = expiryDate.difference(now).inDays;
     return expiryDate.isBefore(now) || daysUntilExpiry <= 7;
   }
+
+  // Helper method để kiểm tra sản phẩm đã hết hạn
+  bool _isExpired() {
+    if (product.ngayHetHan == null) return false;
+    final now = DateTime.now();
+    // So sánh chỉ ngày, không so sánh giờ
+    final expiryDate = DateTime(
+      product.ngayHetHan!.year,
+      product.ngayHetHan!.month,
+      product.ngayHetHan!.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    return expiryDate.isBefore(today);
+  }
+}
+
+// Custom painter để vẽ đường gạch chéo đỏ
+class _DiagonalLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.red.shade700
+      ..strokeWidth = 3.0
+      ..style = PaintingStyle.stroke;
+
+    // Vẽ đường chéo từ góc trên trái đến góc dưới phải
+    canvas.drawLine(
+      const Offset(0, 0),
+      Offset(size.width, size.height),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 

@@ -51,7 +51,7 @@ class CheckoutService {
       try {
         await CartApi().clearCart();
       } catch (e) {
-        print('⚠️ Lỗi khi clear giỏ hàng: $e');
+        print(' Lỗi khi clear giỏ hàng: $e');
         // Still return true because order was created successfully
       }
       

@@ -1,22 +1,25 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/utils/constant.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class OrderApi {
   // ==================== ORDER ====================
   Future<List<Order>> getOrders() async {
     try {
-      print('📦 Fetching all orders from API...');
+      print(' Fetching all orders from API...');
       final res = await http
           .get(Uri.parse('${Constant().baseUrl}/Orders'))
           .timeout(const Duration(seconds: 30));
 
-      print('📦 Orders API Response: ${res.statusCode}');
-      print('📦 Orders API Body: ${res.body}');
+      print(' Orders API Response: ${res.statusCode}');
+      print(' Orders API Body: ${res.body}');
 
       if (res.statusCode == 200) {
         final dynamic data = jsonDecode(res.body);
@@ -26,22 +29,22 @@ class OrderApi {
           // Tìm key chứa danh sách orders (có thể là 'data', 'orders', 'items', v.v.)
           if (data.containsKey('data') && data['data'] is List) {
             final List<dynamic> orderList = data['data'];
-            print('✅ Found ${orderList.length} orders in data key');
+            print(' Found ${orderList.length} orders in data key');
             return orderList.map((e) => Order.fromJson(e)).toList();
           } else if (data.containsKey('orders') && data['orders'] is List) {
             final List<dynamic> orderList = data['orders'];
-            print('✅ Found ${orderList.length} orders in orders key');
+            print(' Found ${orderList.length} orders in orders key');
             return orderList.map((e) => Order.fromJson(e)).toList();
           } else if (data.containsKey('items') && data['items'] is List) {
             final List<dynamic> orderList = data['items'];
-            print('✅ Found ${orderList.length} orders in items key');
+            print(' Found ${orderList.length} orders in items key');
             return orderList.map((e) => Order.fromJson(e)).toList();
           } else {
             // Nếu không tìm thấy key nào phù hợp, thử lấy giá trị đầu tiên là List
             if (data.isNotEmpty) {
               final dynamic firstValue = data.values.first;
               if (firstValue is List) {
-                print('✅ Found ${firstValue.length} orders in first value');
+                print(' Found ${firstValue.length} orders in first value');
                 return firstValue.map((e) => Order.fromJson(e)).toList();
               }
             }
@@ -50,7 +53,7 @@ class OrderApi {
         }
         // Nếu data là List thì xử lý bình thường
         else if (data is List) {
-          print('✅ Found ${data.length} orders in list format');
+          print(' Found ${data.length} orders in list format');
           return data.map((e) => Order.fromJson(e)).toList();
         } else {
           throw Exception(
@@ -61,7 +64,7 @@ class OrderApi {
             'Không thể tải danh sách đơn hàng: ${res.statusCode} - ${res.body}');
       }
     } catch (e) {
-      print('❌ Error getting orders: $e');
+      print(' Error getting orders: $e');
       throw Exception('Lỗi tải danh sách đơn hàng: $e');
     }
   }
@@ -88,12 +91,12 @@ class OrderApi {
           )
           .timeout(const Duration(seconds: 30));
 
-      print('📦 Update Order Status API Response: ${response.statusCode}');
-      print('📦 Update Order Status API Body: ${response.body}');
+      print(' Update Order Status API Response: ${response.statusCode}');
+      print(' Update Order Status API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('✅ Order status updated successfully: $data');
+        print(' Order status updated successfully: $data');
         return true;
       } else {
         final errorData = jsonDecode(response.body);
@@ -101,7 +104,7 @@ class OrderApi {
             'Failed to update order status: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error updating order status: $e');
+      print(' Error updating order status: $e');
       throw Exception('Error updating order status: $e');
     }
   }
@@ -115,7 +118,7 @@ class OrderApi {
         'orderDetails': orderDetails.map((detail) => detail.toJson()).toList(),
       };
 
-      print('🛒 Creating order with data: $requestData');
+      print(' Creating order with data: $requestData');
 
       final response = await http
           .post(
@@ -125,12 +128,12 @@ class OrderApi {
           )
           .timeout(const Duration(seconds: 30));
 
-      print('📦 Create Order API Response: ${response.statusCode}');
-      print('📦 Create Order API Body: ${response.body}');
+      print(' Create Order API Response: ${response.statusCode}');
+      print(' Create Order API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('✅ Order created successfully: $data');
+        print(' Order created successfully: $data');
         return true;
       } else {
         final errorData = jsonDecode(response.body);
@@ -138,7 +141,7 @@ class OrderApi {
             'Failed to create order: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error creating order: $e');
+      print(' Error creating order: $e');
       throw Exception('Error creating order: $e');
     }
   }
@@ -242,7 +245,7 @@ class OrderApi {
     DateTime? endDate,
   }) async {
     try {
-      print('📊 Fetching revenue statistics...');
+      print(' Fetching revenue statistics...');
 
       // Xây dựng URL với query parameters
       final uri =
@@ -255,16 +258,16 @@ class OrderApi {
         },
       );
 
-      print('📊 Revenue Statistics URL: $uri');
+      print(' Revenue Statistics URL: $uri');
 
       final response = await http.get(uri).timeout(const Duration(seconds: 30));
 
-      print('📊 Revenue Statistics API Response: ${response.statusCode}');
-      print('📊 Revenue Statistics API Body: ${response.body}');
+      print(' Revenue Statistics API Response: ${response.statusCode}');
+      print(' Revenue Statistics API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('📊 Revenue Statistics Data: $data');
+        print(' Revenue Statistics Data: $data');
 
         // Kiểm tra cấu trúc response
         if (data is Map && data.containsKey('data')) {
@@ -278,7 +281,7 @@ class OrderApi {
             'Failed to load revenue statistics: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting revenue statistics: $e');
+      print(' Error getting revenue statistics: $e');
       throw Exception('Error getting revenue statistics: $e');
     }
   }
@@ -310,7 +313,7 @@ class OrderApi {
         throw Exception('Failed to load status distribution: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting status distribution: $e');
+      print(' Error getting status distribution: $e');
       throw Exception('Error getting status distribution: $e');
     }
   }
@@ -336,7 +339,7 @@ class OrderApi {
         throw Exception('Failed to load monthly growth: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting monthly growth: $e');
+      print(' Error getting monthly growth: $e');
       throw Exception('Error getting monthly growth: $e');
     }
   }
@@ -349,7 +352,7 @@ class OrderApi {
 
       if (user == null) throw Exception('User not logged in');
 
-      print('📦 Fetching completed order products for user: ${user.maTaiKhoan}');
+      print(' Fetching completed order products for user: ${user.maTaiKhoan}');
       final response = await http
           .get(
             Uri.parse('${Constant().baseUrl}/Orders/completed-products/${user.maTaiKhoan}'),
@@ -357,15 +360,15 @@ class OrderApi {
           )
           .timeout(const Duration(seconds: 30));
 
-      print('📦 Completed Products API Response: ${response.statusCode}');
-      print('📦 Completed Products API Body: ${response.body}');
+      print(' Completed Products API Response: ${response.statusCode}');
+      print(' Completed Products API Body: ${response.body}');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         
         if (data is Map && data.containsKey('data')) {
           final List<dynamic> productsData = data['data'];
-          print('✅ Found ${productsData.length} products from completed orders');
+          print(' Found ${productsData.length} products from completed orders');
           
           return productsData.cast<Map<String, dynamic>>();
         } else {
@@ -379,7 +382,7 @@ class OrderApi {
         throw Exception('Failed to load completed order products: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting completed order products: $e');
+      print(' Error getting completed order products: $e');
       throw Exception('Error getting completed order products: $e');
     }
   }
@@ -387,14 +390,14 @@ class OrderApi {
   // Hủy đơn hàng
   Future<bool> cancelOrder(String orderId) async {
     try {
-      print('❌ Cancelling order: $orderId');
+      print(' Cancelling order: $orderId');
       final success = await updateOrderStatus(orderId, 'Đã hủy');
       if (success) {
-        print('✅ Order cancelled successfully');
+        print(' Order cancelled successfully');
       }
       return success;
     } catch (e) {
-      print('❌ Error cancelling order: $e');
+      print(' Error cancelling order: $e');
       throw Exception('Lỗi hủy đơn hàng: $e');
     }
   }
@@ -418,10 +421,176 @@ class OrderApi {
             !lowerStatus.contains('đã hủy'));
   }
 
+  /// Xuất danh sách đơn hàng ra file Excel
+  Future<Map<String, dynamic>> exportToExcel() async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http.get(
+        Uri.parse('${Constant().baseUrl}/Orders/export-excel'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
+        // Lấy tên file từ header hoặc tạo tên mặc định
+        String fileName = 'DanhSachDonHang_${DateTime.now().millisecondsSinceEpoch}.xlsx';
+        final contentDisposition = response.headers['content-disposition'];
+        if (contentDisposition != null && contentDisposition.contains('filename=')) {
+          final filenameIndex = contentDisposition.indexOf('filename=');
+          if (filenameIndex != -1) {
+            var startIndex = filenameIndex + 9;
+            if (contentDisposition.substring(startIndex).startsWith("UTF-8''")) {
+              startIndex += 7;
+            }
+            var valueStart = startIndex;
+            if (valueStart < contentDisposition.length && 
+                (contentDisposition[valueStart] == '"' || contentDisposition[valueStart] == "'")) {
+              valueStart++;
+            }
+            var valueEnd = valueStart;
+            while (valueEnd < contentDisposition.length) {
+              final char = contentDisposition[valueEnd];
+              if (char == ';' || char == '"' || char == "'") {
+                break;
+              }
+              valueEnd++;
+            }
+            if (valueEnd > valueStart) {
+              fileName = contentDisposition.substring(valueStart, valueEnd).trim();
+              fileName = fileName.replaceAll('"', '').replaceAll("'", '');
+            }
+          }
+        }
+        
+        // Clean filename
+        final invalidCharsPattern = RegExp(r'[<>:"/\\|?*]');
+        fileName = fileName.replaceAll(invalidCharsPattern, '_');
+        if (!fileName.endsWith('.xlsx')) {
+          fileName = '$fileName.xlsx';
+        }
+
+        // Save file to Downloads folder
+        Directory? directory;
+        try {
+          if (Platform.isAndroid) {
+            try {
+              final downloadsDir = Directory('/storage/emulated/0/Download');
+              if (await downloadsDir.exists() || await downloadsDir.parent.exists()) {
+                if (!await downloadsDir.exists()) {
+                  await downloadsDir.create(recursive: true);
+                }
+                directory = downloadsDir;
+              } else {
+                final altDownloadsDir = Directory('/sdcard/Download');
+                if (await altDownloadsDir.exists() || await altDownloadsDir.parent.exists()) {
+                  if (!await altDownloadsDir.exists()) {
+                    await altDownloadsDir.create(recursive: true);
+                  }
+                  directory = altDownloadsDir;
+                } else {
+                  final externalDir = await getExternalStorageDirectory();
+                  if (externalDir != null) {
+                    final appDownloadsDir = Directory('${externalDir.path}/Download');
+                    if (!await appDownloadsDir.exists()) {
+                      await appDownloadsDir.create(recursive: true);
+                    }
+                    directory = appDownloadsDir;
+                  } else {
+                    throw Exception('Cannot access external storage');
+                  }
+                }
+              }
+            } catch (e) {
+              print('Error accessing Downloads: $e');
+              try {
+                final externalDir = await getExternalStorageDirectory();
+                if (externalDir != null) {
+                  final appDownloadsDir = Directory('${externalDir.path}/Download');
+                  if (!await appDownloadsDir.exists()) {
+                    await appDownloadsDir.create(recursive: true);
+                  }
+                  directory = appDownloadsDir;
+                } else {
+                  directory = await getApplicationDocumentsDirectory();
+                }
+              } catch (e2) {
+                directory = await getApplicationDocumentsDirectory();
+              }
+            }
+          } else if (Platform.isIOS) {
+            directory = await getApplicationDocumentsDirectory();
+          } else {
+            directory = await getDownloadsDirectory() ?? await getApplicationDocumentsDirectory();
+          }
+        } catch (e) {
+          print('Error determining directory: $e');
+          directory = await getApplicationDocumentsDirectory();
+        }
+        
+        final filePath = '${directory.path}/$fileName';
+        final file = File(filePath);
+        
+        if (response.bodyBytes.isEmpty) {
+          return {
+            'success': false,
+            'error': 'File Excel rỗng. Backend có thể đã lỗi khi tạo file.',
+          };
+        }
+        
+        try {
+          await file.writeAsBytes(response.bodyBytes);
+        } catch (e) {
+          return {
+            'success': false,
+            'error': 'Lỗi khi ghi file: $e',
+          };
+        }
+        
+        if (!await file.exists()) {
+          return {
+            'success': false,
+            'error': 'File không được tạo. Vui lòng kiểm tra quyền truy cập bộ nhớ.',
+          };
+        }
+        
+        final fileSize = await file.length();
+        if (fileSize == 0) {
+          return {
+            'success': false,
+            'error': 'File được tạo nhưng rỗng.',
+          };
+        }
+        
+        try {
+          await OpenFile.open(filePath);
+        } catch (e) {
+          print('File đã lưu nhưng không thể mở tự động: $e');
+        }
+        
+        return {
+          'success': true,
+          'filePath': filePath,
+          'fileName': fileName,
+          'fileSize': fileSize,
+        };
+      } else {
+        final errorBody = response.body;
+        return {
+          'success': false,
+          'error': 'HTTP ${response.statusCode}: ${errorBody.length > 200 ? errorBody.substring(0, 200) : errorBody}',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'error': 'Lỗi xuất file Excel: $e',
+      };
+    }
+  }
+
   // Lấy thống kê doanh thu theo tháng
   Future<List<Map<String, dynamic>>> getMonthlyRevenue({int? year}) async {
     try {
-      print('📊 Fetching monthly revenue statistics...');
+      print(' Fetching monthly revenue statistics...');
 
       final headers = await ApiService().getHeaders();
 
@@ -433,19 +602,19 @@ class OrderApi {
         },
       );
 
-      print('📊 Monthly Revenue URL: $uri');
+      print(' Monthly Revenue URL: $uri');
 
       final response = await http
           .get(uri, headers: headers)
           .timeout(const Duration(seconds: 30));
 
-      print('📊 Monthly Revenue API Response: ${response.statusCode}');
-      print('📊 Monthly Revenue API Body: ${response.body}');
-      print('📊 Monthly Revenue Headers: $headers');
+      print(' Monthly Revenue API Response: ${response.statusCode}');
+      print(' Monthly Revenue API Body: ${response.body}');
+      print(' Monthly Revenue Headers: $headers');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        print('📊 Monthly Revenue Data: $data');
+        print(' Monthly Revenue Data: $data');
 
         // Kiểm tra cấu trúc response
         if (data is Map && data.containsKey('data')) {
@@ -466,7 +635,7 @@ class OrderApi {
             'Failed to load monthly revenue: ${response.statusCode}');
       }
     } catch (e) {
-      print('❌ Error getting monthly revenue: $e');
+      print(' Error getting monthly revenue: $e');
       throw Exception('Error getting monthly revenue: $e');
     }
   }

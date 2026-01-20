@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/auth/login_screen.dart';
 import 'package:fresher_food/roles/user/page/auth/register_screen.dart';
+import 'package:fresher_food/roles/user/page/auth/register_with_phone_screen.dart';
+import 'package:iconsax/iconsax.dart';
 
 /// Màn hình xác thực chính - Quản lý đăng nhập và đăng ký
 /// 
@@ -154,25 +156,101 @@ class _AuthTabContentState extends State<_AuthTabContent> {
       );
     } else {
       // ========== MÀN HÌNH ĐĂNG KÝ ==========
-      return RegisterScreen(
-        // Chỉ cho phép đăng ký với vai trò 'user' (không cho phép đăng ký admin)
-        role: 'user',
-        roleName: 'Khách Hàng',
-        primaryColor: Colors.green,
-        // Callback khi người dùng click "Đăng nhập ngay" - chuyển về màn hình đăng nhập
-        onSwitchToLogin: () {
-          setState(() {
-            _isLogin = true;
-          });
-        },
-        // Callback khi đăng ký thành công - tự động chuyển về màn hình đăng nhập
-        onRegisterSuccess: () {
-          setState(() {
-            _isLogin = true;
-          });
-        },
-        // Callback khi người dùng thay đổi vai trò (không sử dụng trong RegisterScreen)
-        onRoleChanged: widget.onRoleChanged,
+      return Stack(
+        children: [
+          RegisterScreen(
+            // Chỉ cho phép đăng ký với vai trò 'user' (không cho phép đăng ký admin)
+            role: 'user',
+            roleName: 'Khách Hàng',
+            primaryColor: Colors.green,
+            // Callback khi người dùng click "Đăng nhập ngay" - chuyển về màn hình đăng nhập
+            onSwitchToLogin: () {
+              setState(() {
+                _isLogin = true;
+              });
+            },
+            // Callback khi đăng ký thành công - tự động chuyển về màn hình đăng nhập
+            onRegisterSuccess: () {
+              setState(() {
+                _isLogin = true;
+              });
+            },
+            // Callback khi người dùng thay đổi vai trò (không sử dụng trong RegisterScreen)
+            onRoleChanged: widget.onRoleChanged,
+          ),
+          // Button chuyển sang đăng ký bằng số điện thoại
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.green.shade50, Colors.green.shade100],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.green.shade200, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.green.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => RegisterWithPhoneScreen(
+                          role: 'user',
+                          roleName: 'Khách Hàng',
+                          primaryColor: Colors.green,
+                          onSwitchToLogin: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              _isLogin = true;
+                            });
+                          },
+                          onRegisterSuccess: () {
+                            Navigator.pop(context);
+                            setState(() {
+                              _isLogin = true;
+                            });
+                          },
+                        ),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(Iconsax.call, size: 18, color: Colors.green),
+                        SizedBox(width: 6),
+                        Text(
+                          'Đăng ký bằng SĐT',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       );
     }
   }

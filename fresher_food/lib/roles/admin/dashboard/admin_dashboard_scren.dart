@@ -8,8 +8,11 @@ import 'package:fresher_food/roles/admin/page/statistical/thongke.dart';
 import 'package:fresher_food/roles/admin/page/user_manager/quanlynguoidung.dart';
 import 'package:fresher_food/roles/admin/page/chat_manager/admin_chat_list_page.dart';
 import 'package:fresher_food/roles/admin/page/promotion_manager/quanlykhuyenmai.dart';
+import 'package:fresher_food/roles/admin/page/rag_manager/rag_document_manager_page.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/services/api/chat_api.dart';
+import 'package:fresher_food/services/api/notification_api.dart';
+import 'package:fresher_food/roles/admin/page/notification/admin_notification_page.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:iconsax/iconsax.dart';
 import 'dart:async';
@@ -26,7 +29,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   int _selectedIndex = 0;
   Map<String, dynamic>? _userInfo;
   int _totalUnreadMessages = 0;
+  int _totalUnreadNotifications = 0;
   final ChatApi _chatApi = ChatApi();
+  final NotificationApi _notificationApi = NotificationApi();
   Timer? _refreshTimer;
 
   /// Khối chức năng: Lấy danh sách các màn hình quản lý với localization
@@ -74,6 +79,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'icon': Iconsax.magicpen
       },
       {
+        'title': 'AI hỗ trợ',
+        'screen': const RagDocumentManagerPage(),
+        'icon': Iconsax.document_text
+      },
+      {
         'title': localizations.adminSettings,
         'screen': const CaiDatScreen(),
         'icon': Iconsax.setting
@@ -81,15 +91,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ];
   }
 
-  /// Khối khởi tạo: Load thông tin user, tin nhắn chưa đọc và tự động refresh mỗi 10 giây
+  /// Khối khởi tạo: Load thông tin user, tin nhắn chưa đọc, thông báo chưa đọc và tự động refresh mỗi 10 giây
   @override
   void initState() {
     super.initState();
     _loadUserInfo();
     _loadUnreadMessagesCount();
+    _loadUnreadNotificationsCount();
     _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
       if (mounted) {
         _loadUnreadMessagesCount();
+        _loadUnreadNotificationsCount();
       }
     });
   }
@@ -127,6 +139,23 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       }
     } catch (e) {
       print('Lỗi load số lượng tin nhắn chưa đọc: $e');
+    }
+  }
+
+  /// Khối chức năng: Load số lượng thông báo chưa đọc
+  Future<void> _loadUnreadNotificationsCount() async {
+    try {
+      final user = await UserApi().getCurrentUser();
+      if (user != null) {
+        final count = await _notificationApi.getUnreadCount(user.maTaiKhoan);
+        if (mounted) {
+          setState(() {
+            _totalUnreadNotifications = count;
+          });
+        }
+      }
+    } catch (e) {
+      print('Lỗi load số lượng thông báo chưa đọc: $e');
     }
   }
 
@@ -192,10 +221,58 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       elevation: 0,
       centerTitle: true,
       actions: [
+        // Icon thông báo
         Stack(
           children: [
             IconButton(
               icon: const Icon(Iconsax.notification),
+              onPressed: () {
+                // Navigate to notification page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AdminNotificationPage(),
+                  ),
+                ).then((_) {
+                  // Refresh counts when returning from notification page
+                  _loadUnreadNotificationsCount();
+                });
+              },
+            ),
+            if (_totalUnreadNotifications > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 16,
+                    minHeight: 16,
+                  ),
+                  child: Text(
+                    _totalUnreadNotifications > 99
+                        ? '99+'
+                        : '$_totalUnreadNotifications',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        // Icon chat
+        Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Iconsax.message),
               onPressed: () {
                 // Navigate to chat list
                 setState(() => _selectedIndex = 6); // Index of chat management
@@ -208,7 +285,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(4),
                   decoration: const BoxDecoration(
-                    color: Colors.red,
+                    color: Colors.orange,
                     shape: BoxShape.circle,
                   ),
                   constraints: const BoxConstraints(
@@ -232,7 +309,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
-  Widget _buildDrawer(List<Map<String, dynamic>> screens, BuildContext context) {
+  Widget _buildDrawer(
+      List<Map<String, dynamic>> screens, BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
     return Drawer(
       child: ListView(
@@ -308,7 +386,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             minHeight: 12,
                           ),
                           child: Text(
-                            _totalUnreadMessages > 99 ? '99+' : '$_totalUnreadMessages',
+                            _totalUnreadMessages > 99
+                                ? '99+'
+                                : '$_totalUnreadMessages',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 8,
@@ -342,7 +422,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          _totalUnreadMessages > 99 ? '99+' : '$_totalUnreadMessages',
+                          _totalUnreadMessages > 99
+                              ? '99+'
+                              : '$_totalUnreadMessages',
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
