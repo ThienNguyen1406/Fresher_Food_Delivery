@@ -24,3 +24,21 @@
 **/appsettings.*.json
 !**/appsettings.example.json
 
+# Python virtual environments
+**/venv/
+**/env/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
+# Large binary files
+**/*.bin
+**/*.pyd
+**/*.dll
+**/*.so
+**/*.dylib
+
+# Database files
+rag_service/db/
