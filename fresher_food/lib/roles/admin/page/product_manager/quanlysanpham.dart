@@ -8,10 +8,12 @@ import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_se
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_loading_screen.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_empty_screen.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_item_widget.dart';
+import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_grid_item_widget.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_delete_dialog.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_error_dialog.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_dialog.dart';
 import 'package:fresher_food/roles/admin/page/product_manager/widgets/product_add_fab.dart';
+import 'package:fresher_food/roles/admin/page/product_manager/admin_product_detail_page.dart';
 
 /// Màn hình quản lý sản phẩm - CRUD sản phẩm và quản lý thùng rác
 class QuanLySanPhamScreen extends StatefulWidget {
@@ -33,6 +35,7 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
   String _searchKeyword = '';
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
+  bool _isGridView = false; // View mode: false = list, true = grid
 
   /// Khối khởi tạo: Khởi tạo TabController (Sản phẩm/Thùng rác) và load dữ liệu
   @override
@@ -129,6 +132,15 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
           _loadData();
           Navigator.pop(context);
         },
+      ),
+    );
+  }
+
+  void _navigateToProductDetail(Product product) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => AdminProductDetailPage(productId: product.maSanPham),
       ),
     );
   }
@@ -342,6 +354,12 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
             productCount: _tabController.index == 0 ? _filteredProducts.length : _trashProducts.length,
             onAddProduct: _showAddProductDialog,
             onExportExcel: _tabController.index == 0 ? _exportToExcel : null,
+            isGridView: _isGridView,
+            onToggleView: _tabController.index == 0 ? () {
+              setState(() {
+                _isGridView = !_isGridView;
+              });
+            } : null,
           ),
           // Tab Bar
           Container(
@@ -384,24 +402,44 @@ class _QuanLySanPhamScreenState extends State<QuanLySanPhamScreen> with SingleTi
                         : RefreshIndicator(
                             onRefresh: _loadData,
                             color: const Color(0xFF2E7D32),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(20),
-                              itemCount: _filteredProducts.length,
-                              itemBuilder: (context, index) {
-                                final product = _filteredProducts[index];
-                                final category = _categories.firstWhere(
-                                  (cat) => cat.maDanhMuc == product.maDanhMuc,
-                                  orElse: () => Category(maDanhMuc: '', tenDanhMuc: 'Chưa phân loại', icon: ''),
-                                );
+                            child: _isGridView
+                                ? GridView.builder(
+                                    padding: const EdgeInsets.all(16),
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.75,
+                                    ),
+                                    itemCount: _filteredProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final product = _filteredProducts[index];
+                                      return ProductGridItemWidget(
+                                        product: product,
+                                        formatPrice: _formatPrice,
+                                        onTap: _navigateToProductDetail,
+                                      );
+                                    },
+                                  )
+                                : ListView.builder(
+                                    padding: const EdgeInsets.all(20),
+                                    itemCount: _filteredProducts.length,
+                                    itemBuilder: (context, index) {
+                                      final product = _filteredProducts[index];
+                                      final category = _categories.firstWhere(
+                                        (cat) => cat.maDanhMuc == product.maDanhMuc,
+                                        orElse: () => Category(maDanhMuc: '', tenDanhMuc: 'Chưa phân loại', icon: ''),
+                                      );
                                 return ProductItemWidget(
                                   product: product,
                                   category: category,
                                   onEdit: _showEditProductDialog,
                                   onDelete: _showDeleteConfirmation,
+                                  onTap: _navigateToProductDetail,
                                   formatPrice: _formatPrice,
                                 );
-                              },
-                            ),
+                                    },
+                                  ),
                           ),
                 // Tab 2: Thùng rác
                 _isLoadingTrash

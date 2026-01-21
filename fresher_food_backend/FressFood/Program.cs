@@ -55,6 +55,9 @@ builder.Services.AddScoped<FressFood.Services.IAIService, FressFood.Services.Ope
 // Đăng ký Python RAG Service (gọi Python service qua HTTP)
 builder.Services.AddScoped<FressFood.Services.PythonRAGService>();
 
+// Đăng ký Function Handler Service (gọi Python function handler qua HTTP)
+builder.Services.AddScoped<FressFood.Services.IFunctionHandler, FressFood.Services.FunctionHandlerService>();
+
 // Đăng ký ChatbotService
 builder.Services.AddScoped<FressFood.Services.ChatbotService>();
 
