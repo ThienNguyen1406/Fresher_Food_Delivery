@@ -52,14 +52,22 @@ namespace FressFood.Services
 
             try
             {
+                // Kiểm tra xem context có chứa RAG context không
+                bool hasRAGContext = !string.IsNullOrEmpty(context) && 
+                                     (context.Contains("=== THÔNG TIN TỪ TÀI LIỆU ===") || 
+                                      context.Contains("Thông tin liên quan từ tài liệu:") ||
+                                      context.Contains("Thông tin từ tài liệu:"));
+                
                 var systemPrompt = @"Bạn là trợ lý tự động của Fresher Food - một ứng dụng giao thực phẩm tươi sống.
                                         Trách nhiệm của bạn:
                                         - Trả lời câu hỏi của khách hàng một cách thân thiện, chuyên nghiệp
                                         - Cung cấp thông tin về sản phẩm, đơn hàng, giao hàng, thanh toán, doanh thu, thống kê
                                         - Hướng dẫn khách hàng sử dụng ứng dụng
-                                        - QUAN TRỌNG: Nếu có thông tin từ tài liệu (được đánh dấu === THÔNG TIN TỪ TÀI LIỆU ===), 
-                                          bạn PHẢI sử dụng thông tin đó để trả lời. KHÔNG được nói rằng bạn không có thông tin 
-                                          nếu thông tin đó có trong tài liệu.
+                                        - QUAN TRỌNG: Nếu có thông tin từ tài liệu (được đánh dấu === THÔNG TIN TỪ TÀI LIỆU === hoặc 'Thông tin liên quan từ tài liệu'), 
+                                          bạn PHẢI ƯU TIÊN sử dụng thông tin đó để trả lời. KHÔNG được gọi function nếu thông tin đã có trong tài liệu.
+                                          CHỈ gọi function khi: (1) Không có thông tin trong tài liệu, HOẶC (2) Cần dữ liệu real-time như số lượng tồn kho hiện tại, đơn hàng mới nhất.
+                                        - Nếu thông tin trong tài liệu có đầy đủ để trả lời (tên sản phẩm, giá, mô tả), hãy sử dụng thông tin đó.
+                                          KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong tài liệu.
                                         - BẠN CÓ THỂ trả lời các câu hỏi về doanh thu, thống kê, đơn hàng nếu thông tin đó có trong tài liệu.
                                           KHÔNG được từ chối trả lời về doanh thu/đơn hàng nếu thông tin có trong tài liệu.
                                         - Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó', 'số vừa rồi' hoặc các từ thay thế tương tự, 
@@ -177,7 +185,7 @@ namespace FressFood.Services
                     new
                     {
                         name = "getProductInfo",
-                        description = "Lấy thông tin chi tiết của một sản phẩm. Dùng khi user hỏi về thông tin sản phẩm cụ thể.",
+                        description = "Lấy thông tin chi tiết của một sản phẩm. Dùng khi user hỏi về thông tin sản phẩm cụ thể như tên, giá, mô tả, số lượng tồn kho, hạn sử dụng. Có thể tìm bằng tên sản phẩm hoặc mã sản phẩm. Ví dụ: 'giá bán của rau xanh', 'thông tin về cá hồi', 'sản phẩm táo'.",
                         parameters = new
                         {
                             type = "object",
@@ -186,15 +194,38 @@ namespace FressFood.Services
                                 productId = new
                                 {
                                     type = "string",
-                                    description = "Mã sản phẩm"
+                                    description = "Mã sản phẩm (nếu có)"
                                 },
                                 productName = new
                                 {
                                     type = "string",
-                                    description = "Tên sản phẩm (có thể dùng thay cho productId)"
+                                    description = "Tên sản phẩm (có thể dùng thay cho productId). Ví dụ: 'rau xanh', 'cá hồi', 'táo', 'thịt bò'. Nếu user chỉ nói tên sản phẩm mà không có mã, dùng productName."
                                 }
                             },
-                            required = new[] { "productId" }
+                            required = new string[] { }  // Không bắt buộc, có thể dùng productId hoặc productName
+                        }
+                    },
+                    new
+                    {
+                        name = "getCategoryProducts",
+                        description = "Lấy danh sách sản phẩm theo danh mục. Dùng khi user hỏi về sản phẩm trong một danh mục cụ thể như 'rau củ', 'trái cây', 'thịt cá', 'đồ uống'.",
+                        parameters = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                categoryName = new
+                                {
+                                    type = "string",
+                                    description = "Tên danh mục sản phẩm. Ví dụ: 'Rau củ', 'Trái cây', 'Thịt cá', 'Đồ uống'"
+                                },
+                                limit = new
+                                {
+                                    type = "integer",
+                                    description = "Số lượng sản phẩm tối đa (mặc định: 20)"
+                                }
+                            },
+                            required = new[] { "categoryName" }
                         }
                     },
                     new
@@ -216,12 +247,68 @@ namespace FressFood.Services
                     }
                 };
 
+                // Nếu có RAG context, chỉ cho phép gọi function cho các trường hợp cần real-time data
+                // Các function cần real-time: getProductsExpiringSoon, getActivePromotions (có thể thay đổi theo thời gian)
+                // Các function có thể dùng RAG: getProductInfo, getTopProducts (nếu đã có trong RAG)
+                object[] functionsToUse = functions;
+                string functionCallMode = "auto";
+                
+                if (hasRAGContext)
+                {
+                    _logger.LogInformation("RAG context detected. Restricting function calls to real-time data only.");
+                    // Chỉ cho phép các function cần real-time data
+                    functionsToUse = new object[]
+                    {
+                        new
+                        {
+                            name = "getProductsExpiringSoon",
+                            description = "Lấy danh sách sản phẩm sắp hết hạn (trong vòng X ngày). Dùng khi user hỏi về sản phẩm gần hết hạn, sắp hết hạn, cần kiểm tra hạn sử dụng. CHỈ gọi khi cần dữ liệu real-time về hạn sử dụng.",
+                            parameters = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    days = new
+                                    {
+                                        type = "integer",
+                                        description = "Số ngày còn lại trước khi hết hạn (mặc định: 7 ngày)"
+                                    }
+                                }
+                            }
+                        },
+                        new
+                        {
+                            name = "getActivePromotions",
+                            description = "Lấy danh sách khuyến mãi đang hoạt động. Dùng khi user hỏi về khuyến mãi, giảm giá, sale, chương trình khuyến mãi hiện tại. CHỈ gọi khi cần dữ liệu real-time về khuyến mãi.",
+                            parameters = new
+                            {
+                                type = "object",
+                                properties = new
+                                {
+                                    productId = new
+                                    {
+                                        type = "string",
+                                        description = "Mã sản phẩm cụ thể (tùy chọn). Nếu không có, trả về tất cả khuyến mãi."
+                                    },
+                                    limit = new
+                                    {
+                                        type = "integer",
+                                        description = "Số lượng khuyến mãi tối đa (mặc định: 20)"
+                                    }
+                                }
+                            }
+                        }
+                    };
+                    // Vẫn cho phép auto nhưng chỉ với functions hạn chế
+                    functionCallMode = "auto";
+                }
+                
                 var requestBody = new
                 {
                     model = _model,
                     messages = messages,
-                    functions = functions,
-                    function_call = "auto",  // Cho phép AI tự quyết định khi nào gọi function
+                    functions = functionsToUse,
+                    function_call = functionCallMode,  // Cho phép AI tự quyết định khi nào gọi function
                     max_tokens = 500,  // Tăng lên để có thể trả lời dài hơn khi có function results
                     temperature = 0.7
                 };

@@ -565,25 +565,49 @@ class FunctionHandler:
                         WHERE s.MaSanPham = ? AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
                     """
                     cursor.execute(query, product_id)
+                    rows = cursor.fetchall()
                 else:
+                    # Tìm kiếm theo tên sản phẩm - hỗ trợ tìm kiếm linh hoạt hơn
+                    # Tìm kiếm không phân biệt hoa thường và hỗ trợ tìm kiếm một phần
                     query = """
-                        SELECT s.MaSanPham, s.TenSanPham, s.MoTa, s.GiaBan, s.SoLuongTon, 
+                        SELECT TOP 5 s.MaSanPham, s.TenSanPham, s.MoTa, s.GiaBan, s.SoLuongTon, 
                                s.DonViTinh, s.Anh, s.NgaySanXuat, s.NgayHetHan,
                                dm.TenDanhMuc
                         FROM SanPham s
                         LEFT JOIN DanhMuc dm ON s.MaDanhMuc = dm.MaDanhMuc
-                        WHERE s.TenSanPham LIKE ? AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
-                        ORDER BY s.TenSanPham
+                        WHERE (s.TenSanPham LIKE ? OR s.TenSanPham LIKE ? OR s.TenSanPham LIKE ?)
+                          AND (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
+                        ORDER BY 
+                            CASE 
+                                WHEN s.TenSanPham LIKE ? THEN 1  -- Khớp chính xác
+                                WHEN s.TenSanPham LIKE ? THEN 2  -- Bắt đầu bằng
+                                ELSE 3  -- Chứa
+                            END,
+                            s.TenSanPham
                     """
-                    cursor.execute(query, f"%{product_name}%")
+                    # Tìm kiếm với nhiều pattern: chính xác, bắt đầu bằng, chứa
+                    search_pattern = product_name.strip()
+                    cursor.execute(query, (
+                        search_pattern,  # Khớp chính xác
+                        f"{search_pattern}%",  # Bắt đầu bằng
+                        f"%{search_pattern}%",  # Chứa
+                        search_pattern,  # Cho ORDER BY
+                        f"{search_pattern}%"  # Cho ORDER BY
+                    ))
                 
-                row = cursor.fetchone()
+                    rows = cursor.fetchall()
+                
                 cursor.close()
             
-            if not row:
+            if not rows or len(rows) == 0:
                 return json.dumps({
-                    "error": f"Không tìm thấy sản phẩm '{product_name or product_id}'"
+                    "error": f"Không tìm thấy sản phẩm '{product_name or product_id}' trong hệ thống. Vui lòng kiểm tra lại tên sản phẩm hoặc cung cấp mã sản phẩm chính xác.",
+                    "suggestion": "Bạn có thể thử tìm kiếm với tên sản phẩm khác hoặc xem danh sách sản phẩm trong ứng dụng."
                 }, ensure_ascii=False)
+            
+            # Nếu có nhiều kết quả, trả về sản phẩm đầu tiên (khớp nhất)
+            # Hoặc có thể trả về danh sách nếu cần
+            row = rows[0]  # Lấy sản phẩm khớp nhất
             
             ma_san_pham, ten_san_pham, mo_ta, gia_ban, so_luong_ton, don_vi_tinh, anh, ngay_san_xuat, ngay_het_han, ten_danh_muc = row
             

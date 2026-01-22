@@ -181,9 +181,17 @@ namespace FressFood.Services
                 }
             }
 
-            // Fallback: xử lý như tin nhắn thường
+            // Fallback: xử lý như tin nhắn thường (luôn có response)
             _logger.LogInformation("Falling back to standard ProcessMessageAsync");
-            return await ProcessMessageAsync(userMessage, maChat);
+            var fallbackResponse = await ProcessMessageAsync(userMessage, maChat);
+            if (!string.IsNullOrEmpty(fallbackResponse))
+            {
+                return fallbackResponse;
+            }
+            
+            // Fallback cuối cùng: luôn trả về một câu trả lời
+            _logger.LogWarning("ProcessMessageAsync returned null, using default response");
+            return "Xin chào! Tôi là trợ lý tự động của Fresher Food. Tôi có thể giúp bạn về sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Bạn cần hỗ trợ gì không?";
         }
 
         /// <summary>
@@ -194,20 +202,24 @@ namespace FressFood.Services
             if (string.IsNullOrWhiteSpace(userMessage))
                 return null;
 
-            // Nếu có AI service và conversation history, sử dụng AI với context
-            if (_aiService != null && conversationHistory != null && conversationHistory.Count > 0)
+            // Nếu có AI service, luôn thử dùng AI (có hoặc không có conversation history)
+            if (_aiService != null)
             {
                 try
                 {
-                    // Xây dựng conversation context từ lịch sử
-                    var conversationContext = BuildConversationContext(conversationHistory);
-                    var enhancedContext = $"Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food. Mã chat: {maChat}\n\n" +
-                                         $"Lịch sử hội thoại:\n{conversationContext}\n\n" +
+                    var enhancedContext = $"Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food. Mã chat: {maChat}\n\n";
+                    
+                    // Thêm conversation history nếu có
+                    if (conversationHistory != null && conversationHistory.Count > 0)
+                    {
+                        var conversationContext = BuildConversationContext(conversationHistory);
+                        enhancedContext += $"Lịch sử hội thoại:\n{conversationContext}\n\n" +
                                          $"Hãy trả lời câu hỏi của user dựa trên lịch sử hội thoại trên. " +
                                          $"Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó' hoặc các từ thay thế tương tự, " +
                                          $"hãy tham chiếu đến thông tin từ các tin nhắn trước đó trong lịch sử hội thoại. " +
                                          $"Ví dụ: Nếu user hỏi '1+1 = mấy' và bạn trả lời '2', sau đó user hỏi 'số đó + 10 = bao nhiêu', " +
                                          $"bạn cần hiểu 'số đó' là 2 và trả lời '12'.";
+                    }
                     
                     var aiResponse = await _aiService.GetAIResponseAsync(userMessage, enhancedContext);
                     
@@ -223,8 +235,15 @@ namespace FressFood.Services
                 }
             }
 
-            // Fallback: xử lý như tin nhắn thường
-            return await ProcessMessageAsync(userMessage, maChat);
+            // Fallback: xử lý như tin nhắn thường (luôn có response)
+            var fallbackResponse = await ProcessMessageAsync(userMessage, maChat);
+            if (!string.IsNullOrEmpty(fallbackResponse))
+            {
+                return fallbackResponse;
+            }
+            
+            // Fallback cuối cùng: luôn trả về một câu trả lời
+            return "Xin chào! Tôi là trợ lý tự động của Fresher Food. Tôi có thể giúp bạn về sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Bạn cần hỗ trợ gì không?";
         }
 
         /// <summary>
@@ -307,12 +326,24 @@ namespace FressFood.Services
             if (!string.IsNullOrWhiteSpace(ragContext))
             {
                 _logger.LogInformation("Falling back to ProcessMessageWithRAGAsync (without history)");
-                return await ProcessMessageWithRAGAsync(userMessage, ragContext, maChat);
+                var ragResponse = await ProcessMessageWithRAGAsync(userMessage, ragContext, maChat);
+                if (!string.IsNullOrEmpty(ragResponse))
+                {
+                    return ragResponse;
+                }
             }
 
-            // Fallback cuối cùng: xử lý như tin nhắn thường
+            // Fallback cuối cùng: xử lý như tin nhắn thường (luôn có response)
             _logger.LogInformation("Falling back to ProcessMessageWithHistoryAsync (standard processing)");
-            return await ProcessMessageWithHistoryAsync(userMessage, maChat, conversationHistory);
+            var historyResponse = await ProcessMessageWithHistoryAsync(userMessage, maChat, conversationHistory);
+            if (!string.IsNullOrEmpty(historyResponse))
+            {
+                return historyResponse;
+            }
+            
+            // Fallback cuối cùng: luôn trả về một câu trả lời
+            _logger.LogWarning("All processing methods returned null, using default response");
+            return "Xin chào! Tôi là trợ lý tự động của Fresher Food. Tôi có thể giúp bạn về sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Bạn cần hỗ trợ gì không?";
         }
 
         /// <summary>

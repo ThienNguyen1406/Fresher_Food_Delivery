@@ -626,6 +626,7 @@ namespace FressFood.Controllers
                         // RAG chat: có tin nhắn chào từ BOT
                         bool isRagChat = false;
                         bool hasRealAdmin = false;
+                        bool hasAdminMessage = false;
                         
                         try
                         {
@@ -706,7 +707,26 @@ namespace FressFood.Controllers
                                 _logger.LogInformation($"[SendMessage] Admin check: hasRealAdmin={hasRealAdmin}, MaAdmin={adminResult?.ToString() ?? "NULL"}");
                             }
                             
-                            _logger.LogInformation($"Chat type check: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, willUseRAG={isRagChat || !hasRealAdmin}");
+                            // Kiểm tra xem có tin nhắn từ admin thật (không phải BOT) trong chat chưa
+                            // Nếu đã có tin nhắn từ admin thật → không cần bot tự động phản hồi
+                            string checkAdminMessageQuery = @"
+                                SELECT COUNT(*) 
+                                FROM Message m
+                                INNER JOIN Chat c ON m.MaChat = c.MaChat
+                                WHERE m.MaChat = @MaChat 
+                                  AND m.LoaiNguoiGui = 'Admin' 
+                                  AND m.MaNguoiGui != 'BOT'
+                                  AND m.MaNguoiGui IS NOT NULL";
+                            
+                            using (var checkAdminMessageCommand = new SqlCommand(checkAdminMessageQuery, connection))
+                            {
+                                checkAdminMessageCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
+                                var adminMessageCount = (int)await checkAdminMessageCommand.ExecuteScalarAsync();
+                                hasAdminMessage = adminMessageCount > 0;
+                                _logger.LogInformation($"[SendMessage] Admin message check: hasAdminMessage={hasAdminMessage}, count={adminMessageCount}");
+                            }
+                            
+                            _logger.LogInformation($"Chat type check: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage}, willUseRAG={isRagChat || (!hasRealAdmin && !hasAdminMessage)}");
                         }
                         catch (Exception checkEx)
                         {
@@ -715,12 +735,13 @@ namespace FressFood.Controllers
                             isRagChat = true;
                         }
                         
-                        // Chỉ tự động trả lời với RAG nếu:
+                        // Chỉ tự động trả lời với bot nếu:
                         // - Đây là RAG chat (có tin nhắn chào từ BOT), HOẶC
-                        // - Chat chưa có admin thật (user đang chat với bot)
-                        if (isRagChat || !hasRealAdmin)
+                        // - Chat chưa có admin thật VÀ chưa có tin nhắn từ admin thật (user đang chờ admin trả lời)
+                        // Nếu đã có admin trả lời → không tự động phản hồi nữa
+                        if (isRagChat || (!hasRealAdmin && !hasAdminMessage))
                         {
-                            _logger.LogInformation($"Starting auto-reply process for RAG chat. isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, MaChat={request.MaChat}, Message='{request.NoiDung}'");
+                            _logger.LogInformation($"Starting auto-reply process. isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage}, MaChat={request.MaChat}, Message='{request.NoiDung}'");
                             
                             // Capture connectionString để dùng trong Task.Run
                             var capturedConnectionString = connectionString;
@@ -865,62 +886,63 @@ namespace FressFood.Controllers
                                         _logger.LogInformation($"[Task.Run] Bot response from History only: {(string.IsNullOrEmpty(botResponse) ? "NULL/EMPTY" : $"{botResponse.Length} chars")}");
                                     }
                                 
-                                if (!string.IsNullOrEmpty(botResponse))
+                                // Đảm bảo luôn có response - nếu null thì dùng fallback
+                                if (string.IsNullOrEmpty(botResponse))
                                 {
-                                    _logger.LogInformation($"[Task.Run] Saving bot response to database: {botResponse.Length} chars");
-                                    var botMaTinNhan = $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                                    _logger.LogWarning($"[Task.Run] Bot response is null or empty for chat {capturedMaChat}. Using fallback response. RAG context was {(string.IsNullOrEmpty(ragContext) ? "empty" : "available")}");
+                                    botResponse = "Xin chào! Tôi là trợ lý tự động của Fresher Food. Tôi có thể giúp bạn về sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Bạn cần hỗ trợ gì không?";
+                                }
+                                
+                                // Lưu bot response vào database
+                                _logger.LogInformation($"[Task.Run] Saving bot response to database: {botResponse.Length} chars");
+                                var botMaTinNhan = $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                                
+                                using (var botConnection = new SqlConnection(capturedConnectionString))
+                                {
+                                    await botConnection.OpenAsync();
                                     
-                                    using (var botConnection = new SqlConnection(capturedConnectionString))
+                                    // Tạo tin nhắn từ chatbot
+                                    string botMessageQuery = @"
+                                        INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                        VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+
+                                    using (var botCommand = new SqlCommand(botMessageQuery, botConnection))
                                     {
-                                        await botConnection.OpenAsync();
-                                        
-                                        // Tạo tin nhắn từ chatbot
-                                        string botMessageQuery = @"
-                                            INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
-                                            VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+                                        botCommand.Parameters.AddWithValue("@MaTinNhan", botMaTinNhan);
+                                        botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                        botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT"); // Mã chatbot
+                                        botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Admin"); // Hiển thị như admin
+                                        botCommand.Parameters.AddWithValue("@NoiDung", botResponse);
+                                        botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                        botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
 
-                                        using (var botCommand = new SqlCommand(botMessageQuery, botConnection))
-                                        {
-                                            botCommand.Parameters.AddWithValue("@MaTinNhan", botMaTinNhan);
-                                            botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
-                                            botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT"); // Mã chatbot
-                                            botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Admin"); // Hiển thị như admin
-                                            botCommand.Parameters.AddWithValue("@NoiDung", botResponse);
-                                            botCommand.Parameters.AddWithValue("@DaDoc", false);
-                                            botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
-
-                                            await botCommand.ExecuteNonQueryAsync();
-                                        }
-
-                                        // Cập nhật tin nhắn cuối trong Chat
-                                        string updateChatQuery = @"
-                                            UPDATE Chat 
-                                            SET TinNhanCuoi = @TinNhanCuoi, 
-                                                NgayTinNhanCuoi = @NgayTinNhanCuoi,
-                                                NgayCapNhat = @NgayCapNhat
-                                            WHERE MaChat = @MaChat";
-
-                                        using (var updateCommand = new SqlCommand(updateChatQuery, botConnection))
-                                        {
-                                            var preview = botResponse.Length > 100 
-                                                ? botResponse.Substring(0, 100) 
-                                                : botResponse;
-
-                                            updateCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
-                                            updateCommand.Parameters.AddWithValue("@TinNhanCuoi", preview);
-                                            updateCommand.Parameters.AddWithValue("@NgayTinNhanCuoi", DateTime.Now);
-                                            updateCommand.Parameters.AddWithValue("@NgayCapNhat", DateTime.Now);
-
-                                            await updateCommand.ExecuteNonQueryAsync();
-                                        }
+                                        await botCommand.ExecuteNonQueryAsync();
                                     }
-                                    
-                                    _logger.LogInformation($"[Task.Run] Chatbot auto-replied to chat {capturedMaChat} successfully");
+
+                                    // Cập nhật tin nhắn cuối trong Chat
+                                    string updateChatQuery = @"
+                                        UPDATE Chat 
+                                        SET TinNhanCuoi = @TinNhanCuoi, 
+                                            NgayTinNhanCuoi = @NgayTinNhanCuoi,
+                                            NgayCapNhat = @NgayCapNhat
+                                        WHERE MaChat = @MaChat";
+
+                                    using (var updateCommand = new SqlCommand(updateChatQuery, botConnection))
+                                    {
+                                        var preview = botResponse.Length > 100 
+                                            ? botResponse.Substring(0, 100) 
+                                            : botResponse;
+
+                                        updateCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                        updateCommand.Parameters.AddWithValue("@TinNhanCuoi", preview);
+                                        updateCommand.Parameters.AddWithValue("@NgayTinNhanCuoi", DateTime.Now);
+                                        updateCommand.Parameters.AddWithValue("@NgayCapNhat", DateTime.Now);
+
+                                        await updateCommand.ExecuteNonQueryAsync();
+                                    }
                                 }
-                                else
-                                {
-                                    _logger.LogWarning($"[Task.Run] Bot response is null or empty for chat {capturedMaChat}. RAG context was {(string.IsNullOrEmpty(ragContext) ? "empty" : "available")}");
-                                }
+                                
+                                _logger.LogInformation($"[Task.Run] Chatbot auto-replied to chat {capturedMaChat} successfully");
                             }
                             catch (Exception ex)
                             {
@@ -931,7 +953,7 @@ namespace FressFood.Controllers
                         }
                         else
                         {
-                            _logger.LogInformation($"Skipping auto-reply: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin} (this is admin chat management, not RAG chat)");
+                            _logger.LogInformation($"Skipping auto-reply: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage} (admin has already responded, no need for bot auto-reply)");
                         }
                     }
                 }
