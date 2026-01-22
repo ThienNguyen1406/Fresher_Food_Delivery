@@ -267,27 +267,30 @@ namespace FressFood.Services
                     }
                     enhancedContext.AppendLine();
                     
-                    // Thêm conversation history nếu có
+                    // Thêm conversation history nếu có (QUAN TRỌNG: ưu tiên cao nhất)
                     if (conversationHistory != null && conversationHistory.Count > 0)
                     {
                         var conversationContext = BuildConversationContext(conversationHistory);
-                        enhancedContext.AppendLine("Lịch sử hội thoại:");
+                        enhancedContext.AppendLine("=== LỊCH SỬ HỘI THOẠI (QUAN TRỌNG - ƯU TIÊN CAO NHẤT) ===");
+                        enhancedContext.AppendLine("Đây là các tin nhắn trước đó trong cuộc trò chuyện. Nếu bạn đã cung cấp thông tin trong các tin nhắn trước, bạn PHẢI sử dụng thông tin đó.");
                         enhancedContext.AppendLine(conversationContext);
+                        enhancedContext.AppendLine("=== KẾT THÚC LỊCH SỬ HỘI THOẠI ===");
                         enhancedContext.AppendLine();
                     }
                     
-                    // Thêm RAG context (quan trọng nhất)
-                    enhancedContext.AppendLine("=== THÔNG TIN TỪ TÀI LIỆU (QUAN TRỌNG - PHẢI SỬ DỤNG) ===");
+                    // Thêm RAG context (quan trọng thứ 2, sau conversation history)
+                    enhancedContext.AppendLine("=== THÔNG TIN TỪ TÀI LIỆU (QUAN TRỌNG - SỬ DỤNG NẾU KHÔNG CÓ TRONG LỊCH SỬ) ===");
                     enhancedContext.AppendLine(ragContext);
                     enhancedContext.AppendLine("=== KẾT THÚC THÔNG TIN TỪ TÀI LIỆU ===");
                     enhancedContext.AppendLine();
-                    enhancedContext.AppendLine("QUAN TRỌNG: Bạn PHẢI trả lời câu hỏi của user dựa TRỰC TIẾP trên thông tin từ tài liệu ở trên. " +
-                                             "Thông tin trong tài liệu là CHÍNH XÁC và ĐÁNG TIN CẬY. " +
-                                             "Nếu câu hỏi của user liên quan đến thông tin trong tài liệu, bạn PHẢI sử dụng thông tin đó để trả lời một cách CHI TIẾT và CHÍNH XÁC. " +
-                                             "KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong tài liệu. " +
-                                             "Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó' hoặc các từ thay thế tương tự, " +
-                                             "hãy tham chiếu đến thông tin từ các tin nhắn trước đó trong lịch sử hội thoại (nếu có). " +
-                                             "CHỈ khi thông tin trong tài liệu THỰC SỰ không có, bạn mới nói rõ và đề nghị khách hàng cung cấp thêm thông tin.");
+                    enhancedContext.AppendLine("QUAN TRỌNG - THỨ TỰ ƯU TIÊN TRẢ LỜI:");
+                    enhancedContext.AppendLine("1. Nếu bạn đã cung cấp thông tin trong LỊCH SỬ HỘI THOẠI ở trên, bạn PHẢI sử dụng thông tin đó. Đây là ưu tiên CAO NHẤT.");
+                    enhancedContext.AppendLine("   Ví dụ: Nếu trong lịch sử bạn đã nói 'Cá hồi Na Uy: Giá 250,000 VND', và user hỏi lại 'Giá của Cá hồi Na Uy', bạn PHẢI trả lời '250,000 VND'.");
+                    enhancedContext.AppendLine("2. Nếu không có trong lịch sử, hãy tìm trong THÔNG TIN TỪ TÀI LIỆU ở trên.");
+                    enhancedContext.AppendLine("3. KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong lịch sử hội thoại HOẶC trong tài liệu.");
+                    enhancedContext.AppendLine("4. Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó', 'sản phẩm đó' hoặc các từ thay thế tương tự, " +
+                                             "hãy tham chiếu đến thông tin từ các tin nhắn trước đó trong lịch sử hội thoại.");
+                    enhancedContext.AppendLine("5. CHỈ khi thông tin THỰC SỰ không có trong cả lịch sử hội thoại VÀ tài liệu, bạn mới nói rõ và đề nghị khách hàng cung cấp thêm thông tin.");
                     
                     _logger.LogInformation($"Calling AI service with RAG context (length: {ragContext.Length} chars) and {conversationHistory?.Count ?? 0} history messages");
                     _logger.LogInformation($"Enhanced context preview (first 500 chars): {enhancedContext.ToString().Substring(0, Math.Min(500, enhancedContext.Length))}...");
@@ -310,15 +313,45 @@ namespace FressFood.Services
                     _logger.LogError(ex, $"Stack trace: {ex.StackTrace}");
                 }
             }
-            else
+            
+            // Nếu không có RAG context HOẶC RAG context rỗng, vẫn dùng AI service với conversation history
+            if (string.IsNullOrWhiteSpace(ragContext) && _aiService != null)
             {
-                if (string.IsNullOrWhiteSpace(ragContext))
+                _logger.LogInformation("RAG context is empty, using AI service with conversation history only");
+                try
                 {
-                    _logger.LogWarning("RAG context is empty, cannot process with RAG");
+                    var enhancedContext = new System.Text.StringBuilder();
+                    enhancedContext.AppendLine("Ngữ cảnh: Khách hàng đang chat trong ứng dụng Fresher Food.");
+                    if (!string.IsNullOrEmpty(maChat))
+                    {
+                        enhancedContext.AppendLine($"Mã chat: {maChat}");
+                    }
+                    enhancedContext.AppendLine();
+                    
+                    // Thêm conversation history nếu có
+                    if (conversationHistory != null && conversationHistory.Count > 0)
+                    {
+                        var conversationContext = BuildConversationContext(conversationHistory);
+                        enhancedContext.AppendLine("Lịch sử hội thoại:");
+                        enhancedContext.AppendLine(conversationContext);
+                        enhancedContext.AppendLine();
+                    }
+                    
+                    enhancedContext.AppendLine("Bạn là trợ lý tự động của Fresher Food. Hãy trả lời câu hỏi của khách hàng một cách thân thiện và hữu ích. " +
+                                             "Nếu bạn không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin hoặc cung cấp thêm thông tin.");
+                    
+                    _logger.LogInformation($"Calling AI service without RAG context, using {conversationHistory?.Count ?? 0} history messages");
+                    var aiResponse = await _aiService.GetAIResponseAsync(userMessage, enhancedContext.ToString());
+                    
+                    if (!string.IsNullOrEmpty(aiResponse))
+                    {
+                        _logger.LogInformation($"AI service provided response without RAG: {aiResponse.Length} chars");
+                        return aiResponse;
+                    }
                 }
-                if (_aiService == null)
+                catch (Exception ex)
                 {
-                    _logger.LogWarning("AI service is null, cannot process message");
+                    _logger.LogError(ex, $"Error calling AI service without RAG context: {ex.Message}");
                 }
             }
 

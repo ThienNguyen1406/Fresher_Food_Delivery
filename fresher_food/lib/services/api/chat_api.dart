@@ -224,11 +224,16 @@ class ChatApi {
   }
 
   /// Xóa cuộc trò chuyện
-  Future<bool> deleteChat(String maChat) async {
+  Future<bool> deleteChat(String maChat, String maNguoiDung) async {
     try {
+      final uri = Uri.parse('${Constant().baseUrl}/Chat/$maChat')
+          .replace(queryParameters: {
+        'maNguoiDung': maNguoiDung,
+      });
+      
       final res = await http
           .delete(
-            Uri.parse('${Constant().baseUrl}/Chat/$maChat'),
+            uri,
             headers: await ApiService().getHeaders(),
           )
           .timeout(const Duration(seconds: 60));

@@ -236,7 +236,8 @@ class _AdminRagConversationListPageState
     }
 
     try {
-      final success = await _chatApi.deleteChat(conversation.maChat);
+      // Admin có thể xóa bất kỳ chat nào, truyền maNguoiDung từ conversation
+      final success = await _chatApi.deleteChat(conversation.maChat, conversation.maNguoiDung);
       
       if (mounted) {
         if (success) {

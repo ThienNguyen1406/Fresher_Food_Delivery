@@ -622,126 +622,45 @@ namespace FressFood.Controllers
                     {
                         _logger.LogInformation($"[SendMessage] User message received. MaChat={request.MaChat}, Message='{request.NoiDung}'");
                         
-                        // Kiểm tra xem đây có phải là RAG chat không
-                        // RAG chat: có tin nhắn chào từ BOT
-                        bool isRagChat = false;
-                        bool hasRealAdmin = false;
-                        bool hasAdminMessage = false;
+                        // Đơn giản hóa logic: Bot sẽ LUÔN phản hồi trừ khi đã có admin thật trả lời
+                        // Điều này đảm bảo user luôn nhận được phản hồi, kể cả khi không có RAG context
+                        bool hasRealAdminMessage = false;
                         
                         try
                         {
-                            _logger.LogInformation($"[SendMessage] Checking if this is a RAG chat for MaChat={request.MaChat}");
+                            _logger.LogInformation($"[SendMessage] Checking if admin has replied for MaChat={request.MaChat}");
                             
-                            // Cách 1: Kiểm tra xem có tin nhắn chào từ bot không (RAG chat có tin nhắn chào)
-                            string checkGreetingQuery = @"
-                                SELECT COUNT(*) 
-                                FROM Message 
-                                WHERE MaChat = @MaChat 
-                                  AND MaNguoiGui = 'BOT' 
-                                  AND (NoiDung LIKE '%Xin chào hôm nay mình có thể giúp gì cho bạn%'
-                                       OR NoiDung LIKE N'%Xin chào hôm nay mình có thể giúp gì cho bạn%')";
-                            
-                            using (var checkGreetingCommand = new SqlCommand(checkGreetingQuery, connection))
-                            {
-                                checkGreetingCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
-                                var greetingCount = (int)await checkGreetingCommand.ExecuteScalarAsync();
-                                isRagChat = greetingCount > 0;
-                                _logger.LogInformation($"[SendMessage] Greeting message check: count={greetingCount}, isRagChat={isRagChat}");
-                            }
-                            
-                            // Cách 2: Kiểm tra TieuDe và MaAdmin - RAG chat thường có TieuDe null hoặc được set từ tin nhắn đầu tiên
-                            // Nếu TieuDe là null và có tin nhắn từ BOT → đây là RAG chat
-                            // HOẶC nếu MaAdmin = 'BOT' → đây là RAG chat
-                            if (!isRagChat)
-                            {
-                                string checkTitleQuery = @"
-                                    SELECT c.TieuDe, c.MaAdmin,
-                                           (SELECT COUNT(*) FROM Message m WHERE m.MaChat = c.MaChat AND m.MaNguoiGui = 'BOT') AS BotMessageCount
-                                    FROM Chat c
-                                    WHERE c.MaChat = @MaChat";
-                                
-                                using (var checkTitleCommand = new SqlCommand(checkTitleQuery, connection))
-                                {
-                                    checkTitleCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
-                                    using (var reader = await checkTitleCommand.ExecuteReaderAsync())
-                                    {
-                                        if (await reader.ReadAsync())
-                                        {
-                                            var tieuDe = reader["TieuDe"]?.ToString();
-                                            var maAdmin = reader["MaAdmin"]?.ToString();
-                                            var botMessageCount = reader["BotMessageCount"] != DBNull.Value 
-                                                ? Convert.ToInt32(reader["BotMessageCount"]) 
-                                                : 0;
-                                            
-                                            _logger.LogInformation($"[SendMessage] Title/Admin check: TieuDe='{tieuDe}', MaAdmin='{maAdmin}', BotMessageCount={botMessageCount}");
-                                            
-                                            // Nếu MaAdmin = 'BOT' → RAG chat
-                                            if (maAdmin == "BOT")
-                                            {
-                                                isRagChat = true;
-                                                _logger.LogInformation($"[SendMessage] MaAdmin='BOT' detected, setting isRagChat=true");
-                                            }
-                                            // Nếu TieuDe là null và có tin nhắn từ BOT → RAG chat
-                                            else if (string.IsNullOrEmpty(tieuDe) && botMessageCount > 0)
-                                            {
-                                                isRagChat = true;
-                                                _logger.LogInformation($"[SendMessage] TieuDe is null and BotMessageCount>0, setting isRagChat=true");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            // Kiểm tra xem có admin thật (không phải BOT) đã nhận chat chưa
-                            // Nếu có admin thật (MaAdmin != null và MaAdmin != 'BOT'), đây là admin chat management
-                            string checkAdminQuery = @"
-                                SELECT MaAdmin 
-                                FROM Chat 
-                                WHERE MaChat = @MaChat AND MaAdmin IS NOT NULL AND MaAdmin != 'BOT'";
-                            
-                            using (var checkAdminCommand = new SqlCommand(checkAdminQuery, connection))
-                            {
-                                checkAdminCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
-                                var adminResult = await checkAdminCommand.ExecuteScalarAsync();
-                                hasRealAdmin = adminResult != null && adminResult != DBNull.Value;
-                                _logger.LogInformation($"[SendMessage] Admin check: hasRealAdmin={hasRealAdmin}, MaAdmin={adminResult?.ToString() ?? "NULL"}");
-                            }
-                            
-                            // Kiểm tra xem có tin nhắn từ admin thật (không phải BOT) trong chat chưa
+                            // Chỉ kiểm tra xem có tin nhắn từ admin thật (không phải BOT) trong chat chưa
                             // Nếu đã có tin nhắn từ admin thật → không cần bot tự động phản hồi
                             string checkAdminMessageQuery = @"
                                 SELECT COUNT(*) 
                                 FROM Message m
-                                INNER JOIN Chat c ON m.MaChat = c.MaChat
                                 WHERE m.MaChat = @MaChat 
                                   AND m.LoaiNguoiGui = 'Admin' 
                                   AND m.MaNguoiGui != 'BOT'
-                                  AND m.MaNguoiGui IS NOT NULL";
+                                  AND m.MaNguoiGui IS NOT NULL
+                                  AND m.MaNguoiGui != ''";
                             
                             using (var checkAdminMessageCommand = new SqlCommand(checkAdminMessageQuery, connection))
                             {
                                 checkAdminMessageCommand.Parameters.AddWithValue("@MaChat", request.MaChat);
                                 var adminMessageCount = (int)await checkAdminMessageCommand.ExecuteScalarAsync();
-                                hasAdminMessage = adminMessageCount > 0;
-                                _logger.LogInformation($"[SendMessage] Admin message check: hasAdminMessage={hasAdminMessage}, count={adminMessageCount}");
+                                hasRealAdminMessage = adminMessageCount > 0;
+                                _logger.LogInformation($"[SendMessage] Admin message check: hasRealAdminMessage={hasRealAdminMessage}, count={adminMessageCount}");
                             }
-                            
-                            _logger.LogInformation($"Chat type check: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage}, willUseRAG={isRagChat || (!hasRealAdmin && !hasAdminMessage)}");
                         }
                         catch (Exception checkEx)
                         {
-                            _logger.LogWarning(checkEx, "Failed to check chat type");
-                            // Nếu không kiểm tra được, mặc định dùng RAG (an toàn hơn)
-                            isRagChat = true;
+                            _logger.LogWarning(checkEx, "Failed to check admin messages, defaulting to allow bot reply");
+                            // Nếu không kiểm tra được, mặc định cho phép bot phản hồi (an toàn hơn cho user)
+                            hasRealAdminMessage = false;
                         }
                         
-                        // Chỉ tự động trả lời với bot nếu:
-                        // - Đây là RAG chat (có tin nhắn chào từ BOT), HOẶC
-                        // - Chat chưa có admin thật VÀ chưa có tin nhắn từ admin thật (user đang chờ admin trả lời)
-                        // Nếu đã có admin trả lời → không tự động phản hồi nữa
-                        if (isRagChat || (!hasRealAdmin && !hasAdminMessage))
+                        // Bot sẽ tự động phản hồi TRỪ KHI đã có admin thật trả lời
+                        // Điều này đảm bảo user luôn nhận được phản hồi, kể cả khi không có RAG context
+                        if (!hasRealAdminMessage)
                         {
-                            _logger.LogInformation($"Starting auto-reply process. isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage}, MaChat={request.MaChat}, Message='{request.NoiDung}'");
+                            _logger.LogInformation($"Starting auto-reply process. hasRealAdminMessage={hasRealAdminMessage}, MaChat={request.MaChat}, Message='{request.NoiDung}'");
                             
                             // Capture connectionString để dùng trong Task.Run
                             var capturedConnectionString = connectionString;
@@ -865,26 +784,15 @@ namespace FressFood.Controllers
                                     }
                                     
                                     // Xử lý tin nhắn bằng chatbot với conversation history
+                                    // Luôn gọi ProcessMessageWithRAGAndHistoryAsync vì nó đã xử lý cả trường hợp RAG context rỗng
                                     string? botResponse = null;
-                                    if (!string.IsNullOrEmpty(ragContext))
-                                    {
-                                        _logger.LogInformation($"[Task.Run] Processing message with RAG context (length: {ragContext.Length} chars) and {conversationHistory.Count} history messages");
-                                        botResponse = await _chatbotService.ProcessMessageWithRAGAndHistoryAsync(
-                                            capturedNoiDung, 
-                                            ragContext, 
-                                            capturedMaChat,
-                                            conversationHistory);
-                                        _logger.LogInformation($"[Task.Run] Bot response from RAG+History: {(string.IsNullOrEmpty(botResponse) ? "NULL/EMPTY" : $"{botResponse.Length} chars")}");
-                                    }
-                                    else
-                                    {
-                                        _logger.LogInformation($"[Task.Run] Processing message without RAG context, using {conversationHistory.Count} history messages");
-                                        botResponse = await _chatbotService.ProcessMessageWithHistoryAsync(
-                                            capturedNoiDung, 
-                                            capturedMaChat,
-                                            conversationHistory);
-                                        _logger.LogInformation($"[Task.Run] Bot response from History only: {(string.IsNullOrEmpty(botResponse) ? "NULL/EMPTY" : $"{botResponse.Length} chars")}");
-                                    }
+                                    _logger.LogInformation($"[Task.Run] Processing message with RAG context (length: {ragContext?.Length ?? 0} chars) and {conversationHistory.Count} history messages");
+                                    botResponse = await _chatbotService.ProcessMessageWithRAGAndHistoryAsync(
+                                        capturedNoiDung, 
+                                        ragContext ?? string.Empty, 
+                                        capturedMaChat,
+                                        conversationHistory);
+                                    _logger.LogInformation($"[Task.Run] Bot response from RAG+History: {(string.IsNullOrEmpty(botResponse) ? "NULL/EMPTY" : $"{botResponse.Length} chars")}");
                                 
                                 // Đảm bảo luôn có response - nếu null thì dùng fallback
                                 if (string.IsNullOrEmpty(botResponse))
@@ -948,12 +856,47 @@ namespace FressFood.Controllers
                             {
                                 _logger.LogError(ex, $"[Task.Run] Error sending chatbot auto-reply for chat {capturedMaChat}. Exception: {ex.Message}");
                                 _logger.LogError(ex, $"[Task.Run] Stack trace: {ex.StackTrace}");
+                                
+                                // Đảm bảo luôn có phản hồi, ngay cả khi có lỗi
+                                try
+                                {
+                                    using (var errorConnection = new SqlConnection(capturedConnectionString))
+                                    {
+                                        await errorConnection.OpenAsync();
+                                        
+                                        var fallbackResponse = "Xin chào! Tôi là trợ lý tự động của Fresher Food. Tôi có thể giúp bạn về sản phẩm, đơn hàng, giao hàng, thanh toán, khuyến mãi. Bạn cần hỗ trợ gì không?";
+                                        var botMaTinNhan = $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                                        
+                                        string botMessageQuery = @"
+                                            INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                            VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+
+                                        using (var botCommand = new SqlCommand(botMessageQuery, errorConnection))
+                                        {
+                                            botCommand.Parameters.AddWithValue("@MaTinNhan", botMaTinNhan);
+                                            botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                            botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT");
+                                            botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Admin");
+                                            botCommand.Parameters.AddWithValue("@NoiDung", fallbackResponse);
+                                            botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                            botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+
+                                            await botCommand.ExecuteNonQueryAsync();
+                                        }
+                                        
+                                        _logger.LogInformation($"[Task.Run] Fallback response saved after error for chat {capturedMaChat}");
+                                    }
+                                }
+                                catch (Exception fallbackEx)
+                                {
+                                    _logger.LogError(fallbackEx, $"[Task.Run] Failed to save fallback response for chat {capturedMaChat}");
+                                }
                             }
                         });
                         }
                         else
                         {
-                            _logger.LogInformation($"Skipping auto-reply: isRagChat={isRagChat}, hasRealAdmin={hasRealAdmin}, hasAdminMessage={hasAdminMessage} (admin has already responded, no need for bot auto-reply)");
+                            _logger.LogInformation($"Skipping auto-reply: hasRealAdminMessage={hasRealAdminMessage} (admin has already responded, no need for bot auto-reply)");
                         }
                     }
                 }
@@ -1301,10 +1244,11 @@ namespace FressFood.Controllers
         /// Xóa document
         /// <summary>
         /// Xóa cuộc trò chuyện
-        /// DELETE: api/Chat/{maChat}
+        /// DELETE: api/Chat/{maChat}?maNguoiDung={maNguoiDung}
+        /// Chỉ cho phép user xóa chat của chính mình
         /// </summary>
         [HttpDelete("{maChat}")]
-        public IActionResult DeleteChat(string maChat)
+        public async Task<IActionResult> DeleteChat(string maChat, [FromQuery] string? maNguoiDung = null)
         {
             try
             {
@@ -1317,14 +1261,39 @@ namespace FressFood.Controllers
 
                 using (var connection = new SqlConnection(connectionString))
                 {
-                    connection.Open();
+                    await connection.OpenAsync();
+
+                    // Kiểm tra quyền: chỉ cho phép user xóa chat của chính mình
+                    if (!string.IsNullOrWhiteSpace(maNguoiDung))
+                    {
+                        string checkPermissionQuery = @"
+                            SELECT MaNguoiDung 
+                            FROM Chat 
+                            WHERE MaChat = @MaChat";
+                        
+                        using (var checkCommand = new SqlCommand(checkPermissionQuery, connection))
+                        {
+                            checkCommand.Parameters.AddWithValue("@MaChat", maChat);
+                            var chatOwner = await checkCommand.ExecuteScalarAsync();
+                            
+                            if (chatOwner == null || chatOwner == DBNull.Value)
+                            {
+                                return NotFound(new { error = "Không tìm thấy cuộc trò chuyện" });
+                            }
+                            
+                            if (chatOwner.ToString() != maNguoiDung)
+                            {
+                                return Forbid("Bạn không có quyền xóa cuộc trò chuyện này");
+                            }
+                        }
+                    }
 
                     // Xóa tất cả tin nhắn trong chat trước
                     string deleteMessagesQuery = @"DELETE FROM Message WHERE MaChat = @MaChat";
                     using (var deleteMessagesCommand = new SqlCommand(deleteMessagesQuery, connection))
                     {
                         deleteMessagesCommand.Parameters.AddWithValue("@MaChat", maChat);
-                        deleteMessagesCommand.ExecuteNonQuery();
+                        await deleteMessagesCommand.ExecuteNonQueryAsync();
                     }
 
                     // Xóa chat
@@ -1332,7 +1301,7 @@ namespace FressFood.Controllers
                     using (var deleteChatCommand = new SqlCommand(deleteChatQuery, connection))
                     {
                         deleteChatCommand.Parameters.AddWithValue("@MaChat", maChat);
-                        int affectedRows = deleteChatCommand.ExecuteNonQuery();
+                        int affectedRows = await deleteChatCommand.ExecuteNonQueryAsync();
 
                         if (affectedRows == 0)
                         {
@@ -1341,7 +1310,7 @@ namespace FressFood.Controllers
                     }
                 }
 
-                _logger.LogInformation($"Chat deleted successfully: {maChat}");
+                _logger.LogInformation($"Chat deleted successfully: {maChat} by user: {maNguoiDung ?? "admin"}");
                 return Ok(new { message = "Xóa cuộc trò chuyện thành công" });
             }
             catch (Exception ex)

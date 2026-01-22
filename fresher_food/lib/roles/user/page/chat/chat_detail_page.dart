@@ -49,6 +49,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   String? _selectedFileId;
   DateTime? _lastScrollCheck;
   bool _isPageVisible = true;
+  bool _isWaitingForBot = false;
   
   // TỐI ƯU: Cache MediaQuery và DateFormat
   double? _cachedScreenWidth;
@@ -61,12 +62,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _loadMessages();
     // Lắng nghe scroll để load more khi scroll lên đầu (với debounce)
     _scrollController.addListener(_onScroll);
-    // TỐI ƯU: Tăng interval từ 5s lên 8s để giảm API calls và rebuild
-    _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
-      if (mounted && _isPageVisible) {
-        _loadNewMessages();
-      }
-    });
+    // Tạo refresh timer động - sẽ thay đổi interval dựa trên trạng thái
+    _startRefreshTimer();
   }
 
   void _onScroll() {
@@ -90,6 +87,68 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         _messages.isNotEmpty) {
       _loadMoreMessages();
     }
+  }
+
+  /// Xóa cuộc trò chuyện
+  Future<void> _deleteChat() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xóa cuộc trò chuyện'),
+        content: const Text('Bạn có chắc chắn muốn xóa cuộc trò chuyện này?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Hủy'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      try {
+        final success = await _chatApi.deleteChat(widget.maChat, widget.currentUserId);
+        if (success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Đã xóa cuộc trò chuyện'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Quay lại màn hình trước
+          Navigator.of(context).pop(true);
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không thể xóa cuộc trò chuyện'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Lỗi: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  /// Tạo chat mới
+  void _createNewChat() {
+    Navigator.of(context).pop(); // Quay lại chat list
+    // Chat list page sẽ tự động tạo chat mới khi user gửi tin nhắn
   }
 
   @override
@@ -124,12 +183,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     }
   }
 
+  void _startRefreshTimer() {
+    _refreshTimer?.cancel();
+    // Nếu đang chờ bot phản hồi, refresh nhanh hơn (2 giây)
+    // Nếu không, refresh chậm hơn (8 giây) để tiết kiệm tài nguyên
+    final interval = _isWaitingForBot 
+        ? const Duration(seconds: 2) 
+        : const Duration(seconds: 8);
+    
+    _refreshTimer = Timer.periodic(interval, (_) {
+      if (mounted && _isPageVisible) {
+        _loadNewMessages();
+      }
+    });
+  }
+  
   void _waitForBotResponse() {
     // Hủy timer cũ nếu có
     _botResponseWaitTimer?.cancel();
     
-    // TỐI ƯU: Chỉ update flag, không rebuild toàn màn hình
+    // Đánh dấu đang chờ bot và tăng tốc refresh
+    _isWaitingForBot = true;
     _isWaitingForBotResponseNotifier.value = true;
+    _startRefreshTimer(); // Restart với interval ngắn hơn
     
     // Scroll xuống cuối để hiển thị typing indicator
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -143,9 +219,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     });
     
     int attempts = 0;
-    const maxAttempts = 8; // Giảm từ 10 xuống 8 lần (8 giây)
+    const maxAttempts = 12; // Tăng lên 12 lần (24 giây với interval 2s)
     
-    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) {
       attempts++;
       if (mounted && _isPageVisible) {
         _loadNewMessages();
@@ -155,8 +231,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           final lastMessage = _messages.last;
           if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
             // Bot đã phản hồi, tắt indicator và scroll xuống
+            _isWaitingForBot = false;
             _isWaitingForBotResponseNotifier.value = false;
             timer.cancel();
+            _startRefreshTimer(); // Quay lại interval dài hơn
             
             // Scroll xuống để hiển thị tin nhắn mới từ bot
             WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -175,8 +253,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       
       // Dừng sau maxAttempts lần
       if (attempts >= maxAttempts) {
+        _isWaitingForBot = false;
         _isWaitingForBotResponseNotifier.value = false;
         timer.cancel();
+        _startRefreshTimer(); // Quay lại interval dài hơn
       }
     });
   }
@@ -573,6 +653,39 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         elevation: 0,
         shadowColor: Colors.black.withOpacity(0.1),
         actions: [
+          // Menu options
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert, color: Colors.black87),
+            onSelected: (value) async {
+              if (value == 'delete') {
+                await _deleteChat();
+              } else if (value == 'new_chat') {
+                _createNewChat();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'new_chat',
+                child: Row(
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 20),
+                    SizedBox(width: 8),
+                    Text('Tạo chat mới'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete_outline, size: 20, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Xóa cuộc trò chuyện', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          ),
           // Nút upload file
           Container(
             margin: const EdgeInsets.only(right: 8),

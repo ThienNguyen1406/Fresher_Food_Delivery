@@ -58,21 +58,48 @@ namespace FressFood.Services
                                       context.Contains("Thông tin liên quan từ tài liệu:") ||
                                       context.Contains("Thông tin từ tài liệu:"));
                 
+                // Phân tích intent của user message
+                bool isPriceQuery = !string.IsNullOrEmpty(userMessage) && 
+                                   (userMessage.Contains("giá") || userMessage.Contains("Giá") || 
+                                    userMessage.Contains("giá bán") || userMessage.Contains("Giá bán") ||
+                                    userMessage.Contains("bao nhiêu tiền") || userMessage.Contains("Bao nhiêu tiền"));
+                bool isProductInfoQuery = !string.IsNullOrEmpty(userMessage) && 
+                                         (userMessage.Contains("thông tin") || userMessage.Contains("Thông tin") ||
+                                          userMessage.Contains("mô tả") || userMessage.Contains("Mô tả") ||
+                                          userMessage.Contains("sản phẩm") || userMessage.Contains("Sản phẩm"));
+                bool isExpiringQuery = !string.IsNullOrEmpty(userMessage) && 
+                                      (userMessage.Contains("hết hạn") || userMessage.Contains("Hết hạn") ||
+                                       userMessage.Contains("sắp hết hạn") || userMessage.Contains("Sắp hết hạn") ||
+                                       userMessage.Contains("gần hết hạn") || userMessage.Contains("Gần hết hạn"));
+                bool isPromotionQuery = !string.IsNullOrEmpty(userMessage) && 
+                                       (userMessage.Contains("khuyến mãi") || userMessage.Contains("Khuyến mãi") ||
+                                        userMessage.Contains("giảm giá") || userMessage.Contains("Giảm giá") ||
+                                        userMessage.Contains("sale") || userMessage.Contains("Sale"));
+                
+                // Nếu có RAG context về giá/thông tin sản phẩm → TẮT function calling hoàn toàn
+                bool shouldDisableFunctionCalling = hasRAGContext && (isPriceQuery || isProductInfoQuery) && !isExpiringQuery && !isPromotionQuery;
+                
                 var systemPrompt = @"Bạn là trợ lý tự động của Fresher Food - một ứng dụng giao thực phẩm tươi sống.
                                         Trách nhiệm của bạn:
                                         - Trả lời câu hỏi của khách hàng một cách thân thiện, chuyên nghiệp
                                         - Cung cấp thông tin về sản phẩm, đơn hàng, giao hàng, thanh toán, doanh thu, thống kê
                                         - Hướng dẫn khách hàng sử dụng ứng dụng
-                                        - QUAN TRỌNG: Nếu có thông tin từ tài liệu (được đánh dấu === THÔNG TIN TỪ TÀI LIỆU === hoặc 'Thông tin liên quan từ tài liệu'), 
-                                          bạn PHẢI ƯU TIÊN sử dụng thông tin đó để trả lời. KHÔNG được gọi function nếu thông tin đã có trong tài liệu.
-                                          CHỈ gọi function khi: (1) Không có thông tin trong tài liệu, HOẶC (2) Cần dữ liệu real-time như số lượng tồn kho hiện tại, đơn hàng mới nhất.
-                                        - Nếu thông tin trong tài liệu có đầy đủ để trả lời (tên sản phẩm, giá, mô tả), hãy sử dụng thông tin đó.
-                                          KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong tài liệu.
-                                        - BẠN CÓ THỂ trả lời các câu hỏi về doanh thu, thống kê, đơn hàng nếu thông tin đó có trong tài liệu.
-                                          KHÔNG được từ chối trả lời về doanh thu/đơn hàng nếu thông tin có trong tài liệu.
-                                        - Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó', 'số vừa rồi' hoặc các từ thay thế tương tự, 
+                                        - QUAN TRỌNG - THỨ TỰ ƯU TIÊN TRẢ LỜI:
+                                          1. Nếu bạn đã cung cấp thông tin trong LỊCH SỬ HỘI THOẠI, bạn PHẢI sử dụng thông tin đó. Đây là ưu tiên CAO NHẤT.
+                                             Ví dụ: Nếu trong lịch sử bạn đã nói 'Cá hồi Na Uy: Giá 250,000 VND', và user hỏi lại 'Giá của Cá hồi Na Uy', bạn PHẢI trả lời '250,000 VND'.
+                                          2. Nếu không có trong lịch sử, hãy tìm trong THÔNG TIN TỪ TÀI LIỆU (được đánh dấu === THÔNG TIN TỪ TÀI LIỆU ===).
+                                          3. KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong lịch sử hội thoại HOẶC trong tài liệu.
+                                          4. KHÔNG được gọi function nếu thông tin đã có trong lịch sử hội thoại HOẶC trong tài liệu.
+                                          CHỈ gọi function khi: (1) Không có thông tin trong cả lịch sử VÀ tài liệu, HOẶC (2) User hỏi cụ thể về sản phẩm sắp hết hạn hoặc khuyến mãi hiện tại.
+                                        - Nếu user hỏi về GIÁ BÁN hoặc THÔNG TIN SẢN PHẨM và đã có thông tin trong lịch sử hội thoại HOẶC tài liệu, bạn PHẢI sử dụng thông tin đó.
+                                          KHÔNG được gọi function getProductInfo, getTopProducts, getCategoryProducts nếu đã có thông tin.
+                                        - Nếu thông tin có đầy đủ để trả lời (tên sản phẩm, giá, mô tả), hãy sử dụng thông tin đó.
+                                          KHÔNG được nói rằng bạn không có thông tin nếu thông tin đó có trong lịch sử hội thoại HOẶC trong tài liệu.
+                                        - BẠN CÓ THỂ trả lời các câu hỏi về doanh thu, thống kê, đơn hàng nếu thông tin đó có trong lịch sử hội thoại HOẶC tài liệu.
+                                          KHÔNG được từ chối trả lời về doanh thu/đơn hàng nếu thông tin có trong lịch sử hội thoại HOẶC tài liệu.
+                                        - Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó', 'số vừa rồi', 'sản phẩm đó' hoặc các từ thay thế tương tự, 
                                           hãy tham chiếu đến thông tin từ lịch sử hội thoại trước đó để hiểu user đang nói về cái gì.
-                                        - Nếu không có thông tin trong tài liệu và không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin
+                                        - Nếu không có thông tin trong cả lịch sử hội thoại VÀ tài liệu và không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin
 
                                         Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu (tối đa 300 từ).";
 
@@ -247,22 +274,27 @@ namespace FressFood.Services
                     }
                 };
 
-                // Nếu có RAG context, chỉ cho phép gọi function cho các trường hợp cần real-time data
-                // Các function cần real-time: getProductsExpiringSoon, getActivePromotions (có thể thay đổi theo thời gian)
-                // Các function có thể dùng RAG: getProductInfo, getTopProducts (nếu đã có trong RAG)
+                // Quyết định có cho phép function calling không
                 object[] functionsToUse = functions;
                 string functionCallMode = "auto";
                 
-                if (hasRAGContext)
+                if (shouldDisableFunctionCalling)
                 {
-                    _logger.LogInformation("RAG context detected. Restricting function calls to real-time data only.");
-                    // Chỉ cho phép các function cần real-time data
+                    // TẮT HOÀN TOÀN function calling khi có RAG context về giá/thông tin sản phẩm
+                    _logger.LogInformation($"Disabling function calling: hasRAGContext={hasRAGContext}, isPriceQuery={isPriceQuery}, isProductInfoQuery={isProductInfoQuery}");
+                    functionsToUse = new object[0]; // Không có function nào
+                    functionCallMode = "none"; // Tắt function calling
+                }
+                else if (hasRAGContext)
+                {
+                    // Có RAG context nhưng user hỏi về hết hạn/khuyến mãi → chỉ cho phép functions liên quan
+                    _logger.LogInformation("RAG context detected. Restricting function calls to expiring/promotion queries only.");
                     functionsToUse = new object[]
                     {
                         new
                         {
                             name = "getProductsExpiringSoon",
-                            description = "Lấy danh sách sản phẩm sắp hết hạn (trong vòng X ngày). Dùng khi user hỏi về sản phẩm gần hết hạn, sắp hết hạn, cần kiểm tra hạn sử dụng. CHỈ gọi khi cần dữ liệu real-time về hạn sử dụng.",
+                            description = "Lấy danh sách sản phẩm sắp hết hạn (trong vòng X ngày). CHỈ gọi khi user hỏi CỤ THỂ về sản phẩm gần hết hạn, sắp hết hạn, cần kiểm tra hạn sử dụng. KHÔNG gọi khi user chỉ hỏi về giá hoặc thông tin sản phẩm thông thường.",
                             parameters = new
                             {
                                 type = "object",
@@ -279,7 +311,7 @@ namespace FressFood.Services
                         new
                         {
                             name = "getActivePromotions",
-                            description = "Lấy danh sách khuyến mãi đang hoạt động. Dùng khi user hỏi về khuyến mãi, giảm giá, sale, chương trình khuyến mãi hiện tại. CHỈ gọi khi cần dữ liệu real-time về khuyến mãi.",
+                            description = "Lấy danh sách khuyến mãi đang hoạt động. CHỈ gọi khi user hỏi CỤ THỂ về khuyến mãi, giảm giá, sale, chương trình khuyến mãi hiện tại. KHÔNG gọi khi user chỉ hỏi về giá hoặc thông tin sản phẩm thông thường.",
                             parameters = new
                             {
                                 type = "object",
@@ -299,19 +331,44 @@ namespace FressFood.Services
                             }
                         }
                     };
-                    // Vẫn cho phép auto nhưng chỉ với functions hạn chế
+                    functionCallMode = "auto";
+                }
+                else
+                {
+                    // Không có RAG context → cho phép tất cả functions
+                    _logger.LogInformation("No RAG context detected. Allowing all function calls.");
+                    functionsToUse = functions;
                     functionCallMode = "auto";
                 }
                 
-                var requestBody = new
+                // Tạo request body - chỉ thêm functions nếu có functions và function_call không phải "none"
+                object requestBody;
+                if (functionCallMode == "none" || functionsToUse.Length == 0)
                 {
-                    model = _model,
-                    messages = messages,
-                    functions = functionsToUse,
-                    function_call = functionCallMode,  // Cho phép AI tự quyết định khi nào gọi function
-                    max_tokens = 500,  // Tăng lên để có thể trả lời dài hơn khi có function results
-                    temperature = 0.7
-                };
+                    // Tắt hoàn toàn function calling
+                    requestBody = new
+                    {
+                        model = _model,
+                        messages = messages,
+                        max_tokens = 500,
+                        temperature = 0.7
+                    };
+                    _logger.LogInformation("Function calling disabled completely for this request");
+                }
+                else
+                {
+                    // Cho phép function calling
+                    requestBody = new
+                    {
+                        model = _model,
+                        messages = messages,
+                        functions = functionsToUse,
+                        function_call = functionCallMode,
+                        max_tokens = 500,
+                        temperature = 0.7
+                    };
+                    _logger.LogInformation($"Function calling enabled with {functionsToUse.Length} functions, mode: {functionCallMode}");
+                }
 
                 var response = await _httpClient.PostAsJsonAsync("chat/completions", requestBody);
                 
