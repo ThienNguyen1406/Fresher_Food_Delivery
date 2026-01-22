@@ -2,6 +2,28 @@
 
 Service Python xử lý RAG (Retrieval Augmented Generation) cho chatbot, hỗ trợ upload file, extract text, embedding và vector search.
 
+📖 **Xem [ARCHITECTURE.md](ARCHITECTURE.md) để hiểu rõ về cấu trúc và luồng hoạt động.**  
+📖 **Xem [SETUP.md](SETUP.md) để biết chi tiết về cài đặt và cấu hình.**
+
+## ⚠️ QUAN TRỌNG: Cấu hình OpenAI API Key
+
+**Để sử dụng embeddings nhanh (khuyến nghị), bạn CẦN cấu hình OpenAI API Key:**
+
+```bash
+# Tạo file .env
+cp .env.example .env
+
+# Thêm OpenAI API Key vào .env
+OPENAI_API_KEY=sk-your-openai-api-key-here
+```
+
+**Kiểm tra cấu hình:**
+```bash
+python check_config.py
+```
+
+Nếu không có OpenAI API Key, hệ thống sẽ dùng Sentence Transformer (chậm hơn nhiều).
+
 ## Tính năng
 
 - ✅ Upload và xử lý file: docx, txt, pdf, xlsx
@@ -32,16 +54,32 @@ pip install openai chromadb sentence-transformers
 
 **Nếu gặp lỗi SSL/timeout, xem file [INSTALL.md](INSTALL.md) để biết thêm cách xử lý.**
 
-2. **Cấu hình environment variables:**
+2. **Cấu hình environment variables (QUAN TRỌNG):**
+
+**⚠️ BẮT BUỘC: Cấu hình OpenAI API Key để sử dụng embeddings nhanh**
+
 ```bash
+# Tạo file .env từ template
 cp .env.example .env
-# Chỉnh sửa .env theo nhu cầu
+
+# Chỉnh sửa .env và thêm OpenAI API Key
+# Lấy API key tại: https://platform.openai.com/api-keys
+OPENAI_API_KEY=sk-your-openai-api-key-here
 ```
+
+**Nếu không có OpenAI API Key:**
+- Hệ thống sẽ tự động dùng Sentence Transformer (chậm hơn nhiều)
+- Xem [SETUP.md](SETUP.md) để biết chi tiết
 
 3. **Chạy service:**
 ```bash
+# Cách 1: Chạy từ main.py ở root (khuyến nghị)
 python main.py
-# Hoặc
+
+# Cách 2: Chạy từ app/main.py (phải ở thư mục root)
+python app/main.py
+
+# Cách 3: Sử dụng uvicorn trực tiếp
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -123,50 +161,72 @@ var response = await _httpClient.PostAsync(
 
 ## Vector Store Options
 
-### Chroma (Mặc định)
+### Chroma (Mặc định - Khuyến nghị)
 - Dễ setup, không cần server riêng
-- Lưu trữ local trong `app/db/chroma_db`
-- Phù hợp cho development và small-scale
+- Lưu trữ local trong `data/vector_store/chroma_db`
+- Phù hợp cho development và production nhỏ
+- Có thể nâng cấp lên Qdrant sau
 
-### Milvus (Production)
-- Cần cài đặt Milvus server riêng
+### Qdrant (Production - Tùy chọn)
+- Cần cài đặt Qdrant server riêng
 - Hiệu năng tốt hơn cho large-scale
-- Phù hợp cho production
+- Phù hợp cho production lớn
 
 ## Embedding Models
 
-### Sentence Transformer (Mặc định)
+### OpenAI Embeddings (Khuyến nghị - Mặc định)
+- Model: `text-embedding-3-large`
+- Cần API key
+- Chất lượng tốt nhất
+
+### Sentence Transformer (Fallback)
 - Model: `paraphrase-multilingual-MiniLM-L12-v2`
 - Hỗ trợ tiếng Việt
 - Miễn phí, chạy local
-
-### OpenAI Embeddings (Optional)
-- Model: `text-embedding-3-small`
-- Cần API key
-- Chất lượng tốt hơn nhưng có phí
+- Tự động fallback nếu OpenAI không khả dụng
 
 ## Cấu trúc thư mục
 
 ```
 rag_service/
-├── main.py                 # Entry point
 ├── app/
-│   ├── main.py            # FastAPI app
-│   ├── ingest.py          # Script ingest documents
-│   ├── api/               # API routes
-│   │   ├── __init__.py
+│   ├── main.py            # FastAPI app - Entry point
+│   ├── api/               # API Layer (FastAPI routes)
+│   │   ├── deps.py        # Dependency injection
 │   │   └── routes/
-│   │       ├── document.py    # Document endpoints
-│   │       └── query.py       # Query endpoints
-│   ├── rag/               # RAG logic
-│   │   ├── service.py         # RAG service chính
-│   │   ├── processor.py       # Document processor
-│   │   ├── embedding.py       # Embedding service
-│   │   └── vector_store.py    # Vector store
-│   ├── data/              # Data files (temporary)
-│   └── db/                # Vector database storage
+│   │       ├── document.py    # Upload & ingest document
+│   │       ├── query.py        # Semantic search
+│   │       ├── function.py     # Function calling
+│   │       └── health.py       # Health check
+│   ├── core/              # Business logic (RAG brain)
+│   │   ├── rag_pipeline.py     # Query → retrieve → answer
+│   │   ├── ingest_pipeline.py  # File → chunks → vector
+│   │   ├── prompt_builder.py   # Build prompts for LLM
+│   │   └── settings.py         # Configuration
+│   ├── domain/            # Pure domain entities (NO framework)
+│   │   ├── document.py         # Document, Chunk entity
+│   │   ├── query.py            # Query entity
+│   │   └── answer.py           # Answer entity
+│   ├── services/          # Application services
+│   │   ├── document_processor.py
+│   │   ├── embedding_service.py
+│   │   ├── reranker_service.py
+│   │   └── function_handler.py
+│   ├── infrastructure/    # External systems
+│   │   ├── vector_store/
+│   │   │   ├── base.py         # Base interface
+│   │   │   └── chroma.py       # Chroma implementation
+│   │   └── llm/
+│   │       ├── openai.py       # OpenAI LLM
+│   │       └── ollama.py        # Ollama fallback
+│   └── utils/             # Utilities
+│       ├── text.py
+│       └── tokenizer.py
+├── data/                  # Vector store data
+│   └── vector_store/
+├── db/                    # Legacy Chroma DB (có thể xóa sau)
 ├── requirements.txt
-├── .env.example
+├── requirements-minimal.txt
 └── README.md
 ```
 

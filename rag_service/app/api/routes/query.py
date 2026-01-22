@@ -6,13 +6,12 @@ from pydantic import BaseModel
 from typing import List, Optional
 import logging
 
-from app.rag.service import RAGService
+from app.api.deps import get_rag_pipeline
+from app.domain.query import Query
+from app.domain.answer import Answer, RetrievedChunk
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-# Initialize RAG service
-rag_service = RAGService()
 
 # Models
 class QueryRequest(BaseModel):
@@ -29,37 +28,54 @@ class QueryResponse(BaseModel):
 async def retrieve_context(request: QueryRequest):
     """
     Retrieve context từ vector store dựa trên query
+    Tối ưu để phản hồi nhanh (< 3 giây)
     """
+    import time
+    start_time = time.time()
+    
     try:
-        import logging
-        logger = logging.getLogger(__name__)
+        logger.info(f"Received query request: question='{request.question[:50]}...', top_k={request.top_k}, file_id={request.file_id}")
         
-        logger.info(f"Received query request: question='{request.question}', top_k={request.top_k}, file_id={request.file_id}")
+        # Giới hạn top_k để tăng tốc (tối đa 10)
+        top_k = min(request.top_k, 10)
+        if top_k != request.top_k:
+            logger.info(f"Giới hạn top_k từ {request.top_k} xuống {top_k} để tăng tốc")
         
-        # Kiểm tra xem có documents không
-        all_docs = await rag_service.get_all_documents()
-        logger.info(f"Total documents available: {len(all_docs)}")
-        
-        if len(all_docs) == 0:
-            logger.warning("No documents in vector store")
-            return QueryResponse(
-                context="",
-                chunks=[],
-                has_context=False
-            )
-        
-        context, chunks = await rag_service.retrieve_context(
-            request.question,
-            top_k=request.top_k,
-            file_id=request.file_id
+        # Create domain query
+        query = Query(
+            question=request.question,
+            file_id=request.file_id,
+            top_k=top_k
         )
         
-        logger.info(f"Retrieved {len(chunks)} chunks, has_context={len(chunks) > 0}")
+        # Get RAG pipeline
+        rag_pipeline = get_rag_pipeline()
+        
+        # Retrieve context
+        answer = await rag_pipeline.retrieve(query)
+        
+        elapsed_time = time.time() - start_time
+        logger.info(f"Query processed in {elapsed_time:.2f}s")
+        
+        # Convert to response format
+        chunks_dict = [
+            {
+                'chunk_id': chunk.chunk_id,
+                'file_id': chunk.file_id,
+                'file_name': chunk.file_name,
+                'chunk_index': chunk.chunk_index,
+                'text': chunk.text,
+                'similarity': chunk.similarity
+            }
+            for chunk in answer.chunks
+        ]
+        
+        logger.info(f"Retrieved {len(answer.chunks)} chunks, has_context={answer.has_context}")
         
         return QueryResponse(
-            context=context,
-            chunks=chunks,
-            has_context=len(chunks) > 0
+            context=answer.context,
+            chunks=chunks_dict,
+            has_context=answer.has_context
         )
     
     except Exception as e:
@@ -72,19 +88,20 @@ async def debug_vector_store():
     Debug endpoint để kiểm tra vector store
     """
     try:
-        # Lấy tất cả documents
-        all_docs = await rag_service.get_all_documents()
+        from app.api.deps import get_vector_store
+        vector_store = get_vector_store()
         
-        # Kiểm tra vector store trực tiếp
-        vector_store = rag_service.vector_store
+        # Lấy tất cả documents
+        all_docs = await vector_store.get_all_documents()
+        
         store_info = {
-            "store_type": vector_store.store_type,
+            "store_type": vector_store.store_type if hasattr(vector_store, 'store_type') else "chroma",
             "total_documents": len(all_docs),
             "documents": all_docs
         }
         
         # Nếu là Chroma, lấy thêm thông tin
-        if vector_store.store_type == "chroma" and vector_store.collection:
+        if hasattr(vector_store, 'collection') and vector_store.collection:
             try:
                 all_data = vector_store.collection.get()
                 total_chunks = len(all_data.get('ids', [])) if all_data else 0
@@ -93,7 +110,7 @@ async def debug_vector_store():
                 
                 # Lấy sample chunks để kiểm tra
                 if total_chunks > 0:
-                    sample_ids = all_data.get('ids', [])[:5]  # 5 chunks đầu tiên
+                    sample_ids = all_data.get('ids', [])[:5]
                     sample_metadatas = all_data.get('metadatas', [])[:5]
                     store_info["sample_chunks"] = [
                         {
@@ -111,4 +128,3 @@ async def debug_vector_store():
     except Exception as e:
         logger.error(f"Error in debug_vector_store: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-

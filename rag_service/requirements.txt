@@ -19,6 +19,7 @@ chromadb>=0.4.0  # Chroma vector database
 # Utilities
 numpy>=1.24.0,<2.0.0
 pydantic>=2.5.0
+python-dotenv>=1.0.0  # Load environment variables từ .env file
 
 # Logging
 python-json-logger>=2.0.0

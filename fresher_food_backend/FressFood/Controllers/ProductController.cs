@@ -2,6 +2,8 @@ using FressFood.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
+using OfficeOpenXml;
+using OfficeOpenXml.Style;
 
 namespace FressFood.Controllers
 {
@@ -14,6 +16,7 @@ namespace FressFood.Controllers
         public ProductController(IConfiguration configuration)
         {
             _configuration = configuration;
+            ExcelPackage.LicenseContext = LicenseContext.NonCommercial;
         }
 
         // GET: api/Products
@@ -771,6 +774,132 @@ namespace FressFood.Controllers
             }
             
             return Math.Max(0, giaThucTe);
+        }
+
+        /// <summary>
+        /// Export danh sách sản phẩm ra file Excel
+        /// GET: api/Product/export-excel
+        /// </summary>
+        [HttpGet("export-excel")]
+        public async Task<IActionResult> ExportProductsToExcel()
+        {
+            try
+            {
+                var connectionString = _configuration.GetConnectionString("DefaultConnection");
+                if (string.IsNullOrEmpty(connectionString))
+                {
+                    return StatusCode(500, new { error = "Database connection string not configured" });
+                }
+
+                using var package = new ExcelPackage();
+                var worksheet = package.Workbook.Worksheets.Add("Danh sách sản phẩm");
+
+                // Header
+                worksheet.Cells[1, 1].Value = "DANH SÁCH SẢN PHẨM";
+                worksheet.Cells[1, 1, 1, 11].Merge = true;
+                worksheet.Cells[1, 1].Style.Font.Size = 16;
+                worksheet.Cells[1, 1].Style.Font.Bold = true;
+                worksheet.Cells[1, 1].Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+
+                worksheet.Cells[2, 1].Value = $"Ngày xuất báo cáo: {DateTime.Now:dd/MM/yyyy HH:mm:ss}";
+                worksheet.Cells[2, 1, 2, 11].Merge = true;
+
+                // Column headers
+                int headerRow = 4;
+                worksheet.Cells[headerRow, 1].Value = "Mã sản phẩm";
+                worksheet.Cells[headerRow, 2].Value = "Tên sản phẩm";
+                worksheet.Cells[headerRow, 3].Value = "Mô tả";
+                worksheet.Cells[headerRow, 4].Value = "Giá bán";
+                worksheet.Cells[headerRow, 5].Value = "Số lượng tồn";
+                worksheet.Cells[headerRow, 6].Value = "Đơn vị tính";
+                worksheet.Cells[headerRow, 7].Value = "Xuất xứ";
+                worksheet.Cells[headerRow, 8].Value = "Mã danh mục";
+                worksheet.Cells[headerRow, 9].Value = "Ngày sản xuất";
+                worksheet.Cells[headerRow, 10].Value = "Ngày hết hạn";
+                worksheet.Cells[headerRow, 11].Value = "Trạng thái";
+
+                // Style header
+                using (var range = worksheet.Cells[headerRow, 1, headerRow, 11])
+                {
+                    range.Style.Font.Bold = true;
+                    range.Style.Fill.PatternType = ExcelFillStyle.Solid;
+                    range.Style.Fill.BackgroundColor.SetColor(System.Drawing.Color.LightGray);
+                    range.Style.HorizontalAlignment = ExcelHorizontalAlignment.Center;
+                }
+
+                // Data
+                int row = headerRow + 1;
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    await connection.OpenAsync();
+                    string query = @"SELECT 
+                        MaSanPham, 
+                        TenSanPham, 
+                        MoTa, 
+                        GiaBan, 
+                        SoLuongTon, 
+                        DonViTinh, 
+                        XuatXu, 
+                        MaDanhMuc, 
+                        NgaySanXuat, 
+                        NgayHetHan,
+                        CASE 
+                            WHEN (IsDeleted = 0 OR IsDeleted IS NULL) THEN 'Hoạt động'
+                            ELSE 'Đã xóa'
+                        END as TrangThai
+                    FROM SanPham
+                    ORDER BY TenSanPham";
+
+                    using (var command = new SqlCommand(query, connection))
+                    using (var reader = await command.ExecuteReaderAsync())
+                    {
+                        while (await reader.ReadAsync())
+                        {
+                            worksheet.Cells[row, 1].Value = reader["MaSanPham"].ToString();
+                            worksheet.Cells[row, 2].Value = reader["TenSanPham"].ToString();
+                            worksheet.Cells[row, 3].Value = reader["MoTa"]?.ToString() ?? "";
+                            worksheet.Cells[row, 4].Value = Convert.ToDecimal(reader["GiaBan"]);
+                            worksheet.Cells[row, 4].Style.Numberformat.Format = "#,##0";
+                            worksheet.Cells[row, 5].Value = Convert.ToInt32(reader["SoLuongTon"]);
+                            worksheet.Cells[row, 6].Value = reader["DonViTinh"]?.ToString() ?? "";
+                            worksheet.Cells[row, 7].Value = reader["XuatXu"]?.ToString() ?? "";
+                            worksheet.Cells[row, 8].Value = reader["MaDanhMuc"].ToString();
+                            
+                            if (!reader.IsDBNull(reader.GetOrdinal("NgaySanXuat")))
+                            {
+                                worksheet.Cells[row, 9].Value = reader.GetDateTime(reader.GetOrdinal("NgaySanXuat")).ToString("dd/MM/yyyy");
+                            }
+                            
+                            if (!reader.IsDBNull(reader.GetOrdinal("NgayHetHan")))
+                            {
+                                worksheet.Cells[row, 10].Value = reader.GetDateTime(reader.GetOrdinal("NgayHetHan")).ToString("dd/MM/yyyy");
+                            }
+                            
+                            worksheet.Cells[row, 11].Value = reader["TrangThai"].ToString();
+                            row++;
+                        }
+                    }
+                }
+
+                // Auto fit columns
+                worksheet.Cells[worksheet.Dimension.Address].AutoFitColumns();
+
+                var fileName = $"DanhSachSanPham_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx";
+                var fileBytes = package.GetAsByteArray();
+
+                if (fileBytes.Length == 0)
+                {
+                    return StatusCode(500, new { error = "Generated Excel file is empty" });
+                }
+
+                return File(fileBytes,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    fileName);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
         }
     }
 

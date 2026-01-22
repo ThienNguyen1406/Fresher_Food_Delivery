@@ -154,9 +154,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         if (_messages.isNotEmpty) {
           final lastMessage = _messages.last;
           if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
-            // Bot đã phản hồi, tắt indicator
+            // Bot đã phản hồi, tắt indicator và scroll xuống
             _isWaitingForBotResponseNotifier.value = false;
             timer.cancel();
+            
+            // Scroll xuống để hiển thị tin nhắn mới từ bot
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (_scrollController.hasClients && mounted) {
+                _scrollController.animateTo(
+                  _scrollController.position.maxScrollExtent,
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                );
+              }
+            });
             return;
           }
         }
@@ -306,15 +317,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
               newMessages.isNotEmpty && 
               newMessages.last.maTinNhan != oldLastMessageId &&
               _scrollController.hasClients) {
-            // Chỉ auto-scroll nếu đang ở gần cuối danh sách
+            // Kiểm tra xem tin nhắn mới có phải từ bot không
+            final lastMessage = newMessages.last;
+            final isFromBot = lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT';
+            
+            // Nếu là tin nhắn từ bot, luôn scroll xuống
+            // Nếu là tin nhắn từ user, chỉ scroll nếu đang ở gần cuối
             final isNearBottom = _scrollController.position.pixels >= 
                 _scrollController.position.maxScrollExtent - 200;
-            if (isNearBottom) {
-              _scrollController.animateTo(
-                _scrollController.position.maxScrollExtent,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-              );
+            
+            if (isFromBot || isNearBottom) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (_scrollController.hasClients && mounted) {
+                  _scrollController.animateTo(
+                    _scrollController.position.maxScrollExtent,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeOut,
+                  );
+                }
+              });
             }
           }
 

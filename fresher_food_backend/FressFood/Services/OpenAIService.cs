@@ -1,10 +1,11 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System;
 
 namespace FressFood.Services
 {
     /// <summary>
-    /// Service tích hợp OpenAI API để xử lý câu hỏi phức tạp
+    /// Service tích hợp OpenAI API để xử lý câu hỏi phức tạp với Function Calling
     /// </summary>
     public class OpenAIService : IAIService
     {
@@ -14,8 +15,13 @@ namespace FressFood.Services
         private readonly string? _apiKey;
         private readonly string? _model;
         private readonly bool _isEnabled;
+        private readonly IFunctionHandler? _functionHandler;
 
-        public OpenAIService(IConfiguration configuration, ILogger<OpenAIService> logger, IHttpClientFactory httpClientFactory)
+        public OpenAIService(
+            IConfiguration configuration, 
+            ILogger<OpenAIService> logger, 
+            IHttpClientFactory httpClientFactory,
+            IFunctionHandler? functionHandler = null)
         {
             _configuration = configuration;
             _logger = logger;
@@ -23,6 +29,7 @@ namespace FressFood.Services
             _apiKey = _configuration["OpenAI:ApiKey"];
             _model = _configuration["OpenAI:Model"] ?? "gpt-3.5-turbo";
             _isEnabled = !string.IsNullOrEmpty(_apiKey);
+            _functionHandler = functionHandler;
 
             if (_isEnabled)
             {
@@ -124,11 +131,98 @@ namespace FressFood.Services
 
                 messages.Add(new { role = "user", content = userMessage });
 
+                // Định nghĩa các functions có sẵn cho OpenAI Function Calling
+                // Sử dụng object[] để tránh lỗi "No best type found for implicitly-typed array"
+                object[] functions = new object[]
+                {
+                    new
+                    {
+                        name = "getProductsExpiringSoon",
+                        description = "Lấy danh sách sản phẩm sắp hết hạn (trong vòng X ngày). Dùng khi user hỏi về sản phẩm gần hết hạn, sắp hết hạn, cần kiểm tra hạn sử dụng.",
+                        parameters = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                days = new
+                                {
+                                    type = "integer",
+                                    description = "Số ngày còn lại trước khi hết hạn (mặc định: 7 ngày)"
+                                }
+                            }
+                        }
+                    },
+                    new
+                    {
+                        name = "getActivePromotions",
+                        description = "Lấy danh sách khuyến mãi đang hoạt động. Dùng khi user hỏi về khuyến mãi, giảm giá, sale, chương trình khuyến mãi hiện tại.",
+                        parameters = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                productId = new
+                                {
+                                    type = "string",
+                                    description = "Mã sản phẩm cụ thể (tùy chọn). Nếu không có, trả về tất cả khuyến mãi."
+                                },
+                                limit = new
+                                {
+                                    type = "integer",
+                                    description = "Số lượng khuyến mãi tối đa (mặc định: 20)"
+                                }
+                            }
+                        }
+                    },
+                    new
+                    {
+                        name = "getProductInfo",
+                        description = "Lấy thông tin chi tiết của một sản phẩm. Dùng khi user hỏi về thông tin sản phẩm cụ thể.",
+                        parameters = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                productId = new
+                                {
+                                    type = "string",
+                                    description = "Mã sản phẩm"
+                                },
+                                productName = new
+                                {
+                                    type = "string",
+                                    description = "Tên sản phẩm (có thể dùng thay cho productId)"
+                                }
+                            },
+                            required = new[] { "productId" }
+                        }
+                    },
+                    new
+                    {
+                        name = "getTopProducts",
+                        description = "Lấy danh sách sản phẩm bán chạy nhất. Dùng khi user hỏi về sản phẩm phổ biến, bán chạy, nổi bật.",
+                        parameters = new
+                        {
+                            type = "object",
+                            properties = new
+                            {
+                                limit = new
+                                {
+                                    type = "integer",
+                                    description = "Số lượng sản phẩm (mặc định: 10)"
+                                }
+                            }
+                        }
+                    }
+                };
+
                 var requestBody = new
                 {
                     model = _model,
                     messages = messages,
-                    max_tokens = 300,
+                    functions = functions,
+                    function_call = "auto",  // Cho phép AI tự quyết định khi nào gọi function
+                    max_tokens = 500,  // Tăng lên để có thể trả lời dài hơn khi có function results
                     temperature = 0.7
                 };
 
@@ -142,16 +236,98 @@ namespace FressFood.Services
                         choices.GetArrayLength() > 0)
                     {
                         var firstChoice = choices[0];
-                        if (firstChoice.TryGetProperty("message", out var message) &&
-                            message.TryGetProperty("content", out var content))
+                        if (firstChoice.TryGetProperty("message", out var message))
                         {
-                            var aiResponse = content.GetString();
-                            if (!string.IsNullOrEmpty(aiResponse))
+                            // Kiểm tra xem có function call không
+                            if (message.TryGetProperty("function_call", out var functionCall))
                             {
-                                var preview = aiResponse.Length > 50 ? aiResponse.Substring(0, 50) : aiResponse;
-                                _logger.LogInformation($"OpenAI response received: {preview}...");
+                                // AI muốn gọi function
+                                var functionName = functionCall.TryGetProperty("name", out var nameProp) 
+                                    ? nameProp.GetString() 
+                                    : null;
+                                var functionArgs = functionCall.TryGetProperty("arguments", out var argsProp) 
+                                    ? argsProp.GetString() 
+                                    : "{}";
+
+                                if (!string.IsNullOrEmpty(functionName) && _functionHandler != null)
+                                {
+                                    _logger.LogInformation($"OpenAI requested function call: {functionName} with args: {functionArgs}");
+
+                                    // Parse arguments
+                                    var arguments = JsonSerializer.Deserialize<Dictionary<string, object>>(functionArgs) 
+                                        ?? new Dictionary<string, object>();
+
+                                    // Thực thi function
+                                    var functionResult = await _functionHandler.ExecuteFunctionAsync(functionName, arguments);
+
+                                    if (!string.IsNullOrEmpty(functionResult))
+                                    {
+                                        _logger.LogInformation($"Function {functionName} executed successfully. Result length: {functionResult.Length}");
+
+                                        // Gửi lại kết quả function cho OpenAI để tạo câu trả lời cuối cùng
+                                        messages.Add(new 
+                                        { 
+                                            role = "assistant", 
+                                            content = (string?)null,
+                                            function_call = new
+                                            {
+                                                name = functionName,
+                                                arguments = functionArgs
+                                            }
+                                        });
+                                        messages.Add(new 
+                                        { 
+                                            role = "function", 
+                                            name = functionName,
+                                            content = functionResult
+                                        });
+
+                                        // Gọi lại OpenAI với function result
+                                        var secondRequestBody = new
+                                        {
+                                            model = _model,
+                                            messages = messages,
+                                            functions = functions,
+                                            function_call = "auto",
+                                            max_tokens = 500,
+                                            temperature = 0.7
+                                        };
+
+                                        var secondResponse = await _httpClient.PostAsJsonAsync("chat/completions", secondRequestBody);
+                                        
+                                        if (secondResponse.IsSuccessStatusCode)
+                                        {
+                                            var secondResponseData = await secondResponse.Content.ReadFromJsonAsync<JsonElement>();
+                                            if (secondResponseData.TryGetProperty("choices", out var secondChoices) && 
+                                                secondChoices.GetArrayLength() > 0)
+                                            {
+                                                var secondFirstChoice = secondChoices[0];
+                                                if (secondFirstChoice.TryGetProperty("message", out var secondMessage) &&
+                                                    secondMessage.TryGetProperty("content", out var secondContent))
+                                                {
+                                                    var finalResponse = secondContent.GetString();
+                                                    if (!string.IsNullOrEmpty(finalResponse))
+                                                    {
+                                                        _logger.LogInformation($"OpenAI final response with function result: {finalResponse.Substring(0, Math.Min(100, finalResponse.Length))}...");
+                                                        return finalResponse;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                            return aiResponse;
+                            else if (message.TryGetProperty("content", out var content))
+                            {
+                                // Trả lời thông thường (không có function call)
+                                var aiResponse = content.GetString();
+                                if (!string.IsNullOrEmpty(aiResponse))
+                                {
+                                    var preview = aiResponse.Length > 50 ? aiResponse.Substring(0, 50) : aiResponse;
+                                    _logger.LogInformation($"OpenAI response received: {preview}...");
+                                    return aiResponse;
+                                }
+                            }
                         }
                     }
                 }

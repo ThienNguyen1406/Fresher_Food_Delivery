@@ -1,5 +1,7 @@
 """
 Main entry point - Chạy RAG service
+Entry point chính để khởi động RAG service
+Chạy từ thư mục root: python main.py
 """
 from app.main import app
 import uvicorn
@@ -11,13 +13,14 @@ if __name__ == "__main__":
     
     # Hiển thị URL để truy cập từ browser
     print("\n" + "="*50)
-    print("🚀 RAG Service đang chạy!")
+    print("RAG Service dang chay!")
     print("="*50)
-    print(f"📖 API Documentation: http://localhost:{port}/docs")
-    print(f"🔍 Swagger UI: http://localhost:{port}/docs")
-    print(f"📋 ReDoc: http://localhost:{port}/redoc")
-    print(f"❤️  Health Check: http://localhost:{port}/health")
+    print(f"API Documentation: http://localhost:{port}/docs")
+    print(f"Swagger UI: http://localhost:{port}/docs")
+    print(f"ReDoc: http://localhost:{port}/redoc")
+    print(f"Health Check: http://localhost:{port}/health")
     print("="*50)
-    print(f"\nĐể dừng service, nhấn Ctrl+C\n")
+    print(f"\nDe dung service, nhan Ctrl+C\n")
     
     uvicorn.run(app, host=host, port=port)
+

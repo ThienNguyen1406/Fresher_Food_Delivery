@@ -49,10 +49,17 @@ builder.Services.AddScoped<FressFood.Services.IBlockchainService, FressFood.Serv
 // Đăng ký HttpClient cho AI Service
 builder.Services.AddHttpClient();
 
-// Đăng ký AI Service (OpenAI)
-builder.Services.AddScoped<FressFood.Services.IAIService, FressFood.Services.OpenAIService>();
+// Đăng ký AI Service (OpenAI) với Function Handler
+builder.Services.AddScoped<FressFood.Services.IAIService>(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var logger = sp.GetRequiredService<ILogger<FressFood.Services.OpenAIService>>();
+    var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
+    var functionHandler = sp.GetRequiredService<FressFood.Services.IFunctionHandler>();
+    return new FressFood.Services.OpenAIService(config, logger, httpClientFactory, functionHandler);
+});
 
-// Đăng ký Python RAG Service (gọi Python service qua HTTP)
+// Đăng ký Python RAG Service (gọi Python service qua HTTP) 
 builder.Services.AddScoped<FressFood.Services.PythonRAGService>();
 
 // Đăng ký Function Handler Service (gọi Python function handler qua HTTP)

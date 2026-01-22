@@ -5,26 +5,23 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Dict, Any, Optional
 import logging
-import os
+import json
 
-# Import function handler
-import sys
-# Add parent directory to path to import from services
-parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../..'))
-if parent_dir not in sys.path:
-    sys.path.insert(0, parent_dir)
-
-from services.function_handler import FunctionHandler
+from app.services.function import FunctionHandler
+from app.core.settings import Settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 # Initialize function handler
-connection_string = os.getenv(
-    "DATABASE_CONNECTION_STRING",
-    "Server=DOMINICNGUYEN\\SQLEXPRESS;Database=FressFood;User Id=sa;Password=123456;TrustServerCertificate=True;"
-)
-function_handler = FunctionHandler(connection_string)
+_function_handler: FunctionHandler = None
+
+def get_function_handler() -> FunctionHandler:
+    """Get function handler instance"""
+    global _function_handler
+    if _function_handler is None:
+        _function_handler = FunctionHandler(Settings.DATABASE_CONNECTION_STRING)
+    return _function_handler
 
 # Models
 class FunctionExecuteRequest(BaseModel):
@@ -44,6 +41,7 @@ async def execute_function(request: FunctionExecuteRequest):
     try:
         logger.info(f"Executing function: {request.function_name} with arguments: {request.arguments}")
         
+        function_handler = get_function_handler()
         result = await function_handler.execute_function(
             request.function_name,
             request.arguments
@@ -51,7 +49,6 @@ async def execute_function(request: FunctionExecuteRequest):
         
         if result:
             # Kiểm tra xem có lỗi không
-            import json
             try:
                 result_dict = json.loads(result)
                 if "error" in result_dict:
@@ -98,7 +95,7 @@ async def list_functions():
             "getCustomerOrders",
             "getTopProducts",
             "getInventoryStatus",
-            "getCategoryProducts"
+            "getCategoryProducts",
+            "getActivePromotions"
         ]
     }
-
