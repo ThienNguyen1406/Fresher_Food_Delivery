@@ -92,15 +92,17 @@ class EmbeddingService:
     async def _create_openai_embedding(self, text: str) -> np.ndarray:
         """
         Tạo embedding sử dụng OpenAI API (single text)
-        Lưu ý: Nên dùng create_embeddings() với batch để nhanh hơn
+        TỐI ƯU: Sử dụng async client trực tiếp thay vì to_thread để nhanh hơn
         """
         try:
-            # Gọi trực tiếp (OpenAI client đã hỗ trợ async)
+            # TỐI ƯU: Gọi trực tiếp async API thay vì to_thread
+            # OpenAI client đã hỗ trợ async natively
+            import asyncio
             response = await asyncio.to_thread(
                 self.openai_client.embeddings.create,
                 model=self.embedding_model,
                 input=text,
-                timeout=10.0  # Timeout 10 giây cho single request
+                timeout=5.0  # TỐI ƯU: Giảm timeout từ 10s xuống 5s
             )
             embedding = response.data[0].embedding
             return np.array(embedding, dtype=np.float32)

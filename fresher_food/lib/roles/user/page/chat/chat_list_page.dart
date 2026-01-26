@@ -17,11 +17,8 @@ class ChatListPage extends StatefulWidget {
 class _ChatListPageState extends State<ChatListPage> {
   final ChatApi _chatApi = ChatApi();
   final UserApi _userApi = UserApi();
-  final TextEditingController _messageController = TextEditingController();
-  final FocusNode _messageFocusNode = FocusNode();
   List<Chat> _chats = [];
   bool _isLoading = true;
-  bool _isSending = false;
   User? _currentUser;
   String? _error;
 
@@ -33,8 +30,6 @@ class _ChatListPageState extends State<ChatListPage> {
 
   @override
   void dispose() {
-    _messageController.dispose();
-    _messageFocusNode.dispose();
     super.dispose();
   }
 
@@ -71,91 +66,75 @@ class _ChatListPageState extends State<ChatListPage> {
     }
   }
 
-  /// Gửi tin nhắn từ input field
-  Future<void> _sendMessageFromInput() async {
-    if (_currentUser == null) return;
-
-    final text = _messageController.text.trim();
-    if (text.isEmpty || _isSending) return;
+  /// Tạo cuộc trò chuyện mới
+  Future<void> _createNewChat() async {
+    if (_currentUser == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vui lòng đăng nhập để tạo cuộc trò chuyện'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
 
     setState(() {
-      _isSending = true;
+      _isLoading = true;
     });
 
     try {
-      // Tìm chat đang mở (Open) đầu tiên
-      Chat? openChat = _chats.firstWhere(
-        (chat) => chat.trangThai == 'Open',
-        orElse: () => Chat(
-          maChat: '',
-          maNguoiDung: '',
-          trangThai: 'Closed',
-          ngayTao: DateTime.now(),
-        ),
+      final result = await _chatApi.createChat(
+        maNguoiDung: _currentUser!.maTaiKhoan,
+        tieuDe: 'Cuộc trò chuyện mới',
+        noiDungTinNhanDau: null,
       );
 
-      String? maChat;
-
-      if (openChat.maChat.isEmpty) {
-        // Chưa có chat nào đang mở, tạo chat mới
-        final response = await _chatApi.createChat(
-          maNguoiDung: _currentUser!.maTaiKhoan,
-          tieuDe: null,
-          noiDungTinNhanDau: text,
-        );
-
-        if (response != null && response['maChat'] != null) {
-          maChat = response['maChat'];
-        } else {
-          throw Exception('Failed to create chat');
+      if (result != null && result['maChat'] != null) {
+        if (mounted) {
+          // Reload danh sách chat trước
+          await _loadData();
+          
+          // Chuyển đến trang chat detail
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => ChatDetailPage(
+                maChat: result['maChat'],
+                currentUserId: _currentUser!.maTaiKhoan,
+              ),
+            ),
+          ).then((_) => _loadData());
         }
       } else {
-        // Có chat đang mở, gửi tin nhắn vào chat đó
-        maChat = openChat.maChat;
-        final success = await _chatApi.sendMessage(
-          maChat: maChat,
-          maNguoiGui: _currentUser!.maTaiKhoan,
-          loaiNguoiGui: 'User',
-          noiDung: text,
-        );
-
-        if (!success) {
-          throw Exception('Failed to send message');
-        }
-      }
-
-      // Xóa text trong input
-      _messageController.clear();
-
-      // Reload danh sách chat
-      await _loadData();
-
-      // Nếu có maChat, chuyển đến chat detail
-      if (maChat != null && mounted) {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => ChatDetailPage(
-              maChat: maChat!,
-              currentUserId: _currentUser!.maTaiKhoan,
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không thể tạo cuộc trò chuyện. Vui lòng thử lại.'),
+              backgroundColor: Colors.red,
             ),
-          ),
-        ).then((_) => _loadData());
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Lỗi khi tạo cuộc trò chuyện: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
-      }
-    } finally {
-      if (mounted) {
         setState(() {
-          _isSending = false;
+          _isLoading = false;
         });
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -167,6 +146,19 @@ class _ChatListPageState extends State<ChatListPage> {
         title: Text(localizations.supportChat),
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_comment),
+            onPressed: _isLoading ? null : _createNewChat,
+            tooltip: 'Tạo cuộc trò chuyện mới',
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _isLoading ? null : _createNewChat,
+        backgroundColor: theme.primaryColor,
+        child: const Icon(Icons.add, color: Colors.white),
+        tooltip: 'Tạo cuộc trò chuyện mới',
       ),
       body: Column(
         children: [
@@ -288,8 +280,6 @@ class _ChatListPageState extends State<ChatListPage> {
                             ),
                           ),
           ),
-          // Input field luôn hiển thị ở dưới
-          if (_currentUser != null) _buildMessageInput(localizations, theme),
         ],
       ),
     );
@@ -376,13 +366,12 @@ class _ChatListPageState extends State<ChatListPage> {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (chat.ngayTinNhanCuoi != null || chat.ngayTao != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 8),
-                child: Text(
-                  chat.ngayTinNhanCuoi != null
-                      ? timeFormat.format(chat.ngayTinNhanCuoi!)
-                      : timeFormat.format(chat.ngayTao),
+            Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text(
+                chat.ngayTinNhanCuoi != null
+                    ? timeFormat.format(chat.ngayTinNhanCuoi!)
+                    : timeFormat.format(chat.ngayTao),
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey[600],
@@ -506,80 +495,5 @@ class _ChatListPageState extends State<ChatListPage> {
     ];
     final hash = maChat.hashCode;
     return icons[hash.abs() % icons.length];
-  }
-
-  /// Widget input field để nhập tin nhắn
-  Widget _buildMessageInput(AppLocalizations localizations, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.scaffoldBackgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _messageController,
-                focusNode: _messageFocusNode,
-                decoration: InputDecoration(
-                  hintText: localizations.enterYourMessage,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: Colors.grey[300]!),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide(color: theme.primaryColor),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  filled: true,
-                  fillColor: Colors.grey[100],
-                ),
-                maxLines: null,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => _sendMessageFromInput(),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: theme.primaryColor,
-                shape: BoxShape.circle,
-              ),
-              child: IconButton(
-                icon: _isSending
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      )
-                    : const Icon(Icons.send, color: Colors.white),
-                onPressed: _isSending ? null : _sendMessageFromInput,
-                tooltip: localizations.send,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }

@@ -479,13 +479,13 @@ class _RagDocumentManagerPageState extends State<RagDocumentManagerPage>
                                         color: Colors.grey.shade600,
                                       ),
                                       const SizedBox(width: 4),
-                                      Text(
-                                        '$totalChunks chunks',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade600,
-                                        ),
-                                      ),
+                                      // Text(
+                                      //   '$totalChunks chunks',
+                                      //   style: TextStyle(
+                                      //     fontSize: 12,
+                                      //     color: Colors.grey.shade600,
+                                      //   ),
+                                      // ),
                                       const SizedBox(width: 12),
                                       Icon(
                                         Iconsax.calendar,

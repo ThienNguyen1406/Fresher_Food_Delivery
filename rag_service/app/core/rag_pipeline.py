@@ -53,11 +53,17 @@ class RAGPipeline:
         Returns:
             Đối tượng Answer chứa context và danh sách chunks
         """
+        import time
+        total_start = time.time()
+        
         try:
             logger.info(f"Đang tìm kiếm ngữ cảnh cho câu hỏi: '{query.question[:100]}...' (top_k={query.top_k}, file_id={query.file_id})")
             
             # Bước 1: Tạo embedding vector cho câu hỏi
+            embed_start = time.time()
             query_embedding = await self.embedding_service.create_embedding(query.question)
+            embed_time = time.time() - embed_start
+            logger.info(f"✅ Embedding created in {embed_time:.3f}s")
             
             if query_embedding is None:
                 logger.warning("Không thể tạo embedding cho câu hỏi")
@@ -70,12 +76,17 @@ class RAGPipeline:
                           hasattr(self.reranker_service, '_model_loaded') and
                           self.reranker_service._model_loaded)
             
+            # TỐI ƯU: Giảm initial_top_k nếu không dùng reranker để tăng tốc
             initial_top_k = query.top_k * 2 if use_reranker else query.top_k
+            
+            search_start = time.time()
             chunk_dicts = await self.vector_store.search_similar(
                 query_embedding, 
                 top_k=initial_top_k, 
                 file_id=query.file_id
             )
+            search_time = time.time() - search_start
+            logger.info(f"✅ Vector search completed in {search_time:.3f}s (found {len(chunk_dicts)} chunks)")
             
             if not chunk_dicts:
                 logger.warning(f"Không tìm thấy chunks liên quan cho câu hỏi: '{query.question[:100]}...'")
@@ -83,13 +94,15 @@ class RAGPipeline:
             
             # Bước 3: Sắp xếp lại kết quả bằng reranker (chỉ khi model đã load)
             if use_reranker and self.reranker_service.model:
+                rerank_start = time.time()
                 logger.info(f"Đang sắp xếp lại {len(chunk_dicts)} chunks bằng reranker")
                 chunk_dicts = await self.reranker_service.rerank(
                     query.question,
                     chunk_dicts,
                     top_k=query.top_k
                 )
-                logger.info(f"Sau khi sắp xếp lại: {len(chunk_dicts)} chunks")
+                rerank_time = time.time() - rerank_start
+                logger.info(f"✅ Reranking completed in {rerank_time:.3f}s (kept {len(chunk_dicts)} chunks)")
             
             # Bước 4: Chuyển đổi từ dictionary sang domain objects
             # Tối ưu: Sử dụng rerank_score nếu có, không cần sort lại
@@ -115,7 +128,8 @@ class RAGPipeline:
             
             context = "\n".join(context_parts)
             
-            logger.info(f"Đã tìm thấy {len(chunks)} chunks liên quan, độ dài context: {len(context)} ký tự")
+            total_time = time.time() - total_start
+            logger.info(f"✅ Total retrieve time: {total_time:.3f}s - Found {len(chunks)} chunks, context length: {len(context)} chars")
             
             return Answer(context=context, chunks=chunks, has_context=True)
             

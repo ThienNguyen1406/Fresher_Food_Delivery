@@ -28,18 +28,18 @@ class QueryResponse(BaseModel):
 async def retrieve_context(request: QueryRequest):
     """
     Retrieve context từ vector store dựa trên query
-    Tối ưu để phản hồi nhanh (< 3 giây)
+    TỐI ƯU: Mục tiêu phản hồi < 2 giây
     """
     import time
     start_time = time.time()
     
     try:
-        logger.info(f"Received query request: question='{request.question[:50]}...', top_k={request.top_k}, file_id={request.file_id}")
+        logger.info(f"📥 Received query: question='{request.question[:50]}...', top_k={request.top_k}, file_id={request.file_id}")
         
-        # Giới hạn top_k để tăng tốc (tối đa 10)
-        top_k = min(request.top_k, 10)
+        # TỐI ƯU: Giới hạn top_k để tăng tốc (tối đa 5 cho query nhanh)
+        top_k = min(request.top_k, 5)
         if top_k != request.top_k:
-            logger.info(f"Giới hạn top_k từ {request.top_k} xuống {top_k} để tăng tốc")
+            logger.info(f"⚡ Giới hạn top_k từ {request.top_k} xuống {top_k} để tăng tốc")
         
         # Create domain query
         query = Query(
@@ -55,7 +55,7 @@ async def retrieve_context(request: QueryRequest):
         answer = await rag_pipeline.retrieve(query)
         
         elapsed_time = time.time() - start_time
-        logger.info(f"Query processed in {elapsed_time:.2f}s")
+        logger.info(f"✅ Query completed in {elapsed_time:.2f}s (target: <2s)")
         
         # Convert to response format
         chunks_dict = [

@@ -242,3 +242,9 @@ rag_service/
    - Giảm `CHUNK_SIZE` trong `document_processor.py`
    - Sử dụng Milvus thay vì Chroma
 
+
+run app
+-  .\venv\Scripts\activate
+- python main.py
+
+

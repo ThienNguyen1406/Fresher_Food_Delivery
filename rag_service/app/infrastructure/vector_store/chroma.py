@@ -118,21 +118,22 @@ class ChromaVectorStore(VectorStore):
         file_id: Optional[str] = None
     ) -> List[Dict]:
         """Search for similar chunks in Chroma"""
+        import time
+        start_time = time.time()
+        
         try:
             where = {"file_id": file_id} if file_id else None
             
-            all_data = self.collection.get()
-            total_chunks = len(all_data.get('ids', [])) if all_data else 0
-            
-            if total_chunks == 0:
-                logger.warning("Chroma collection is empty")
-                return []
-            
+            # TỐI ƯU: Không cần gọi collection.get() để đếm chunks
+            # Chroma query() sẽ tự xử lý và trả về empty nếu không có kết quả
             results = self.collection.query(
                 query_embeddings=[query_embedding.tolist()],
                 n_results=top_k,
                 where=where
             )
+            
+            search_time = time.time() - start_time
+            logger.debug(f"Chroma search completed in {search_time:.3f}s (top_k={top_k}, file_id={file_id})")
             
             chunks = []
             if results.get('ids') and len(results['ids'][0]) > 0:
