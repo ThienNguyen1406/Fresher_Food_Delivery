@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fresher_food/roles/user/page/card_management/card_management_page.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -156,17 +157,10 @@ class AvatarWithMenuWidget extends StatefulWidget {
             title: const Text('Quản lý thẻ'),
             onTap: () {
               Navigator.pop(context);
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Quản lý thẻ'),
-                  content: const Text('Chức năng quản lý thẻ sẽ được thêm vào phần thanh toán bằng thẻ tín dụng.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Đóng'),
-                    ),
-                  ],
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CardManagementPage(),
                 ),
               );
             },

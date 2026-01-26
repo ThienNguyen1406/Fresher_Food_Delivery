@@ -16,6 +16,7 @@ import 'package:fresher_food/roles/user/page/checkout/widgets/checkout_success_s
 import 'package:fresher_food/roles/user/page/checkout/widgets/processing_dialog.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/stock_error_dialog.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/checkout_snackbar_widgets.dart';
+import 'package:fresher_food/models/SavedCard.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/stripe_card_input.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/bank_transfer_qr.dart';
 import 'package:fresher_food/services/api/stripe_api.dart';
@@ -42,7 +43,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Timer? _successTimer;
   final StripeApi _stripeApi = StripeApi();
   bool _stripeInitialized = false;
-  GlobalKey<StripeCardInputState>? _stripeCardInputKey;
+  bool _providerInitialized = false;
+  List<SavedCard> _savedCards = [];
+  SavedCard? _selectedSavedCard;
+  bool _showNewCardForm = false;
+  bool _cardConfirmed = false; // Track việc thẻ đã được xác nhận
 
   // Color scheme
   final Color _primaryColor = const Color(0xFF10B981);
@@ -57,18 +62,16 @@ class _CheckoutPageState extends State<CheckoutPage> {
   @override
   void initState() {
     super.initState();
-    _stripeCardInputKey = GlobalKey<StripeCardInputState>();
     _initializeStripe();
   }
 
   /// Khối chức năng: Khởi tạo Stripe với publishable key
+  /// KHÔNG dùng setState - Stripe không cần rebuild UI
   Future<void> _initializeStripe() async {
     try {
       final publishableKey = await _stripeApi.getPublishableKey();
       Stripe.publishableKey = publishableKey;
-      setState(() {
-        _stripeInitialized = true;
-      });
+      _stripeInitialized = true; // Không setState, chỉ cập nhật biến
     } catch (e) {
       print('Error initializing Stripe: $e');
     }
@@ -79,6 +82,192 @@ class _CheckoutPageState extends State<CheckoutPage> {
     provider.loadUserInfo();
     provider.loadPaymentMethods();
     provider.loadAvailableCoupons();
+    _loadSavedCards(); // Load thẻ đã lưu
+  }
+
+  /// Khối chức năng: Xử lý xác nhận thẻ - kiểm tra và lưu thẻ nếu cần
+  Future<void> _handleCardConfirmation() async {
+    try {
+      // Tạo PaymentMethod từ CardFormField
+      final paymentMethod = await Stripe.instance.createPaymentMethod(
+        params: const PaymentMethodParams.card(
+          paymentMethodData: PaymentMethodData(),
+        ),
+      );
+
+      if (paymentMethod.id.isEmpty) {
+        throw Exception('Không thể tạo payment method');
+      }
+
+      // Lấy thông tin thẻ từ PaymentMethod
+      final cardInfo = paymentMethod.card;
+      if (cardInfo == null) {
+        throw Exception('Không thể lấy thông tin thẻ');
+      }
+
+      final newCardLast4 = cardInfo.last4 ?? '';
+      final newCardBrand = cardInfo.brand ?? 'card';
+      final newCardExpMonth = cardInfo.expMonth ?? 0;
+      final newCardExpYear = cardInfo.expYear ?? 0;
+
+      // So sánh với các thẻ đã lưu
+      bool isDuplicate = false;
+      for (final savedCard in _savedCards) {
+        if (savedCard.last4 == newCardLast4 &&
+            savedCard.brand.toLowerCase() == newCardBrand.toLowerCase() &&
+            savedCard.expMonth == newCardExpMonth &&
+            savedCard.expYear == newCardExpYear) {
+          isDuplicate = true;
+          break;
+        }
+      }
+
+      if (isDuplicate) {
+        // Thẻ đã tồn tại - chỉ thông báo
+        if (mounted) {
+          CheckoutSnackbarWidgets.showError(
+            context,
+            'Thẻ này đã được lưu trong danh sách thẻ của bạn',
+          );
+        }
+        // Vẫn set _cardConfirmed = true để ẩn form
+        setState(() {
+          _cardConfirmed = true;
+        });
+      } else {
+        // Thẻ mới - lưu vào quản lý thẻ
+        final userInfo = await UserApi().getUserInfo();
+        final userId = userInfo['maTaiKhoan'] ?? '';
+        
+        if (userId.isEmpty) {
+          throw Exception('Không tìm thấy thông tin người dùng');
+        }
+
+        await _stripeApi.saveCard(
+          paymentMethodId: paymentMethod.id,
+          userId: userId,
+          cardholderName: userInfo['hoTen'] ?? '',
+          isDefault: false, // Không đặt làm mặc định khi thêm từ checkout
+        );
+
+        // Reload danh sách thẻ
+        await _loadSavedCards();
+
+        if (mounted) {
+          setState(() {
+            _cardConfirmed = true;
+          });
+          CheckoutSnackbarWidgets.showSuccess(
+            context,
+            'Thẻ đã được xác nhận và lưu thành công',
+            _primaryColor,
+          );
+        }
+      }
+    } catch (e) {
+      print('Error confirming card: $e');
+      if (mounted) {
+        CheckoutSnackbarWidgets.showError(
+          context,
+          'Lỗi khi xác nhận thẻ: $e',
+        );
+      }
+    }
+  }
+
+  /// Khối chức năng: Load danh sách thẻ đã lưu
+  Future<void> _loadSavedCards() async {
+    try {
+      final userInfo = await UserApi().getUserInfo();
+      final userId = userInfo['maTaiKhoan'] ?? '';
+      if (userId.isEmpty) {
+        print('User ID is empty, cannot load saved cards');
+        return;
+      }
+      
+      final cards = await _stripeApi.getSavedCards(userId);
+      setState(() {
+        _savedCards = cards;
+        // Tự động chọn thẻ mặc định nếu có
+        if (_savedCards.isNotEmpty && _selectedSavedCard == null) {
+          _selectedSavedCard = _savedCards.firstWhere(
+            (card) => card.isDefault,
+            orElse: () => _savedCards.first,
+          );
+          _showNewCardForm = false;
+        }
+      });
+    } catch (e) {
+      print('Error loading saved cards: $e');
+      // Không hiển thị lỗi cho user, chỉ log
+    }
+  }
+
+  /// Khối chức năng: Hiển thị bottom sheet để thêm thẻ mới (chiếm 80% màn hình)
+  void _showAddCardBottomSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      isDismissible: true,
+      enableDrag: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.8,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: _surfaceColor,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Drag handle
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _textSecondary.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Card input form
+              Expanded(
+                child: StripeCardInput(
+                  key: const ValueKey('stripe_card_input_bottom_sheet'),
+                  surfaceColor: _surfaceColor,
+                  textPrimary: _textPrimary,
+                  textSecondary: _textSecondary,
+                  primaryColor: _primaryColor,
+                  onCardConfirmed: () async {
+                    await _handleCardConfirmation();
+                    // Đóng bottom sheet sau khi xác nhận
+                    if (mounted) {
+                      Navigator.pop(context);
+                      setState(() {
+                        _showNewCardForm = true;
+                        _cardConfirmed = true;
+                      });
+                    }
+                  },
+                  onClose: () {
+                    Navigator.pop(context);
+                    setState(() {
+                      _showNewCardForm = false;
+                      _cardConfirmed = false;
+                    });
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   /// Khối chức năng: Tạo mã đơn hàng tạm thời cho VietQR
@@ -95,14 +284,21 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   /// Khối giao diện chính: Hiển thị form thanh toán với các section
+  /// Provider đã được tạo ở route, không tạo lại trong build()
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => CheckoutProvider(
-        selectedItems: widget.selectedItems,
-        totalAmount: widget.totalAmount,
-      ),
-      child: Scaffold(
+    // Lấy provider từ context (đã được tạo ở route)
+    final provider = Provider.of<CheckoutProvider>(context);
+    
+    // Khởi tạo provider một lần duy nhất
+    if (!_providerInitialized) {
+      _providerInitialized = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _initializeProvider(provider);
+      });
+    }
+    
+    return Scaffold(
         backgroundColor: _backgroundColor,
         appBar: AppBar(
           title: Text(
@@ -121,18 +317,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
             borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
           ),
         ),
-        body: Consumer<CheckoutProvider>(
-          builder: (context, provider, child) {
+        body: Builder(
+          builder: (context) {
+            final provider = Provider.of<CheckoutProvider>(context);
+            
             // Khởi tạo provider khi widget được build lần đầu
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!provider.isLoading &&
-                  provider.state.name.isEmpty &&
-                  provider.state.phone.isEmpty) {
+            if (!_providerInitialized) {
+              _providerInitialized = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
                 _initializeProvider(provider);
-              }
-            });
+              });
+            }
 
-            if (provider.isLoading || provider.isProcessingPayment) {
+            if (provider.isLoading) {
               return CheckoutLoadingScreen(
                 primaryColor: _primaryColor,
                 accentColor: _accentColor,
@@ -140,10 +337,95 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 textSecondary: _textSecondary,
               );
             }
-            return _buildCheckoutContent(provider);
+            
+            // Tách CardFormField ra khỏi Consumer để không bị rebuild
+            // Chỉ dùng Consumer cho các phần cần rebuild
+            return Column(
+              children: [
+                Expanded(
+                  child: Consumer<CheckoutProvider>(
+                    builder: (context, provider, child) {
+                      return _buildCheckoutContent(provider);
+                    },
+                  ),
+                ),
+                // Hiển thị thông báo xác nhận nếu thẻ đã được xác nhận
+                // Form thêm thẻ được hiển thị trong BottomSheet (80% màn hình)
+                Selector<CheckoutProvider, String>(
+                  selector: (_, provider) => provider.paymentMethod,
+                  shouldRebuild: (prev, next) => prev != next,
+                  builder: (context, paymentMethod, child) {
+                    // Hiển thị thông báo xác nhận nếu thẻ đã được xác nhận
+                    if (Stripe.publishableKey.isNotEmpty &&
+                        paymentMethod == 'stripe' &&
+                        _showNewCardForm &&
+                        _cardConfirmed) {
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: _primaryColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: _primaryColor.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle, color: _primaryColor, size: 24),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    'Thẻ đã được xác nhận',
+                                    style: TextStyle(
+                                      color: _textPrimary,
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Bạn có thể tiếp tục đặt hàng',
+                                    style: TextStyle(
+                                      color: _textSecondary,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                setState(() {
+                                  _cardConfirmed = false;
+                                  _showNewCardForm = false;
+                                });
+                              },
+                              child: Text(
+                                'Thay đổi',
+                                style: TextStyle(
+                                  color: _primaryColor,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                ),
+              ],
+            );
           },
         ),
-      ),
     );
   }
 
@@ -218,19 +500,55 @@ class _CheckoutPageState extends State<CheckoutPage> {
             primaryColor: _primaryColor,
             accentColor: _accentColor,
             backgroundColor: _backgroundColor,
+            savedCards: _savedCards,
+            selectedCard: _showNewCardForm ? null : _selectedSavedCard,
+            onCardSelected: (card) {
+                  setState(() {
+                    _selectedSavedCard = card;
+                    _showNewCardForm = false;
+                    _cardConfirmed = false; // Reset khi chọn thẻ khác
+                  });
+                },
+                onAddNewCard: () {
+                  _showAddCardBottomSheet();
+                },
           ),
 
-          // Hiển thị form nhập thẻ khi chọn thẻ tín dụng (chỉ khi Stripe đã khởi tạo)
-          if (provider.paymentMethod == 'stripe' &&
-              Stripe.publishableKey.isNotEmpty) ...[
+          // CardFormField đã được render riêng ngoài Consumer để không bị rebuild
+          
+          // Hiển thị form nhập thẻ mới khi chọn "Thêm thẻ mới" từ dropdown
+          // Form sẽ bị ẩn khi thẻ được xác nhận (_cardConfirmed = true)
+          // Form được render ở Selector bên ngoài, không cần render lại ở đây
+          // Chỉ hiển thị thông báo hướng dẫn khi form chưa được xác nhận
+          if (provider.paymentMethod == 'stripe' && _showNewCardForm && !_cardConfirmed) ...[
             const SizedBox(height: 16),
-            StripeCardInput(
-              key: _stripeCardInputKey,
-              surfaceColor: _surfaceColor,
-              textPrimary: _textPrimary,
-              textSecondary: _textSecondary,
-              primaryColor: _primaryColor,
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: _primaryColor.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: _primaryColor),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Vui lòng nhập đầy đủ thông tin thẻ (số thẻ, ngày hết hạn, CVV) trước khi thanh toán',
+                      style: TextStyle(
+                        color: _textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+            const SizedBox(height: 16),
           ],
 
           // Hiển thị QR code chuyển khoản CHỈ KHI chọn banking/transfer
@@ -271,7 +589,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
           TotalSection(
             provider: provider,
-            onPlaceOrder: () => _placeOrder(provider),
+            onPlaceOrder: () {
+              if (provider.paymentMethod == 'stripe') {
+                final useNewCard = _selectedSavedCard == null || _showNewCardForm;
+                if (useNewCard && !_cardConfirmed) {
+                  CheckoutSnackbarWidgets.showError(
+                    context,
+                    'Vui lòng xác nhận thẻ trước khi đặt hàng',
+                  );
+                  return;
+                }
+              }
+              _placeOrder(provider);
+            },
             surfaceColor: _surfaceColor,
             textPrimary: _textPrimary,
             textSecondary: _textSecondary,
@@ -305,7 +635,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
       return;
     }
 
-    provider.updateProcessingPayment(true);
+    // ❌ KHÔNG gọi notifyListeners() trước confirmPayment
+    // Vì nó sẽ rebuild CardFormField → mất dữ liệu thẻ
+    // Chỉ dùng dialog để hiển thị loading  
 
     try {
       if (provider.paymentMethod == 'cod') {
@@ -313,6 +645,15 @@ class _CheckoutPageState extends State<CheckoutPage> {
       } else if (provider.paymentMethod == 'momo') {
         await _processMoMoPayment(provider);
       } else if (provider.paymentMethod == 'stripe') {
+        // Kiểm tra thẻ đã complete chưa (nếu dùng thẻ mới)
+        final useNewCard = _selectedSavedCard == null || _showNewCardForm;
+        if (useNewCard && !provider.stripeCardComplete) {
+          CheckoutSnackbarWidgets.showError(
+            context,
+            'Vui lòng nhập đầy đủ thông tin thẻ (số thẻ, ngày hết hạn, CVV)',
+          );
+          return;
+        }
         await _processStripePayment(provider);
       } else if (provider.paymentMethod == 'banking' ||
           provider.paymentMethod == 'transfer') {
@@ -326,9 +667,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     } catch (e) {
       CheckoutSnackbarWidgets.showError(
           context, 'Lỗi trong quá trình thanh toán: $e');
-    } finally {
-      provider.updateProcessingPayment(false);
     }
+    // ❌ KHÔNG gọi updateProcessingPayment(false) vì không dùng isProcessingPayment để điều khiển UI
+    // Dialog đã tự đóng, không cần notifyListeners()
   }
 
   Future<void> _processCODPayment(CheckoutProvider provider) async {
@@ -404,6 +745,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       CheckoutSnackbarWidgets.showError(context, 'Stripe chưa được khởi tạo');
       return;
     }
+    
+    // KHÔNG cần controller - Stripe tự quản lý CardFormField
 
     showDialog(
       context: context,
@@ -426,50 +769,94 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       // Tạo payment intent
       final finalAmount = provider.state.finalAmount;
+      // Nếu có thẻ đã lưu được chọn, truyền payment method ID
+      final selectedPaymentMethodId = (_selectedSavedCard != null && !_showNewCardForm) 
+          ? _selectedSavedCard!.paymentMethodId 
+          : null;
+      
       final paymentIntentData = await _stripeApi.createPaymentIntent(
         amount: finalAmount,
         userId: userId,
+        paymentMethodId: selectedPaymentMethodId,
       );
 
       final clientSecret = paymentIntentData['clientSecret'] as String;
       final paymentIntentId = paymentIntentData['paymentIntentId'] as String;
 
-      // Lấy card details từ form
-      final cardController = _stripeCardInputKey?.currentState?.cardController;
-      if (cardController == null) {
+      // Với CardFormField, cần kiểm tra xem form đã có dữ liệu chưa
+      // Nhưng thực tế, PaymentMethodParams.card() không tự động lấy dữ liệu từ CardFormField
+      // Cần tạo payment method từ CardFormField trước, sau đó confirm payment
+      print('🔄 Đang xử lý thanh toán Stripe...');
+      print('📝 PaymentMethod: ${provider.paymentMethod}');
+      print('📝 ClientSecret: ${clientSecret.substring(0, 20)}...');
+      
+      try {
+        // Xác nhận thanh toán với Stripe
+        print('🔄 Đang xác nhận thanh toán với Stripe...');
+        
+        if (_selectedSavedCard != null && !_showNewCardForm) {
+          // Sử dụng thẻ đã lưu - payment method đã được attach vào payment intent
+          print('💳 Sử dụng thẻ đã lưu: ${_selectedSavedCard!.displayName}');
+          await Stripe.instance.confirmPayment(
+            paymentIntentClientSecret: clientSecret,
+          );
+        } else {
+          // ✅ CÁCH ĐÚNG: Dùng CardFormField với confirmPayment TRỰC TIẾP
+          // KHÔNG dùng createPaymentMethod, updatePaymentIntent, controller, delay, provider
+          // Stripe tự động lấy card details từ CardFormField khi confirm
+          print('💳 Sử dụng thẻ mới từ CardFormField');
+          print('💡 Stripe sẽ tự động lấy card details từ CardFormField');
+          print('⚠️ Đảm bảo form đã được nhập đầy đủ (số thẻ, ngày hết hạn, CVV)');
+          
+          // Confirm payment với PaymentMethodParams.card() (empty)
+          // Stripe tự động lấy card details từ CardFormField
+          // Quan trọng: CardFormField PHẢI được render và visible, user PHẢI đã nhập đầy đủ
+          // Đã check stripeCardComplete ở trên, nên ở đây form đã complete
+          await Stripe.instance.confirmPayment(
+            paymentIntentClientSecret: clientSecret,
+            data: const PaymentMethodParams.card(
+              paymentMethodData: PaymentMethodData(),
+            ),
+          );
+        }
+        
+        print('✅ Payment confirmed successfully');
+      } catch (e) {
+        print('❌ Error confirming payment: $e');
         Navigator.of(context).pop();
-        CheckoutSnackbarWidgets.showError(
-            context, 'Vui lòng nhập thông tin thẻ');
+        String errorMessage;
+        if (e.toString().contains('Card details not complete') || 
+            e.toString().contains('details not complete')) {
+          errorMessage = 'Vui lòng nhập đầy đủ thông tin thẻ:\n- Số thẻ\n- Ngày hết hạn (MM/YY)\n- CVV (3-4 chữ số)';
+        } else if (e.toString().contains('card') || 
+            e.toString().contains('invalid') || 
+            e.toString().contains('number') ||
+            e.toString().contains('expiry') ||
+            e.toString().contains('cvc')) {
+          errorMessage = 'Thông tin thẻ không hợp lệ. Vui lòng kiểm tra lại:\n- Số thẻ (16 chữ số)\n- Ngày hết hạn (MM/YY)\n- CVV (3-4 chữ số)';
+        } else if (e.toString().contains('network') || e.toString().contains('timeout')) {
+          errorMessage = 'Lỗi kết nối. Vui lòng kiểm tra lại kết nối mạng và thử lại.';
+        } else if (e.toString().contains('Form thanh toán chưa sẵn sàng')) {
+          errorMessage = 'Form thanh toán chưa sẵn sàng. Vui lòng đợi một chút và thử lại.';
+        } else {
+          errorMessage = 'Lỗi khi xử lý thanh toán. Vui lòng thử lại.';
+        }
+        CheckoutSnackbarWidgets.showError(context, errorMessage);
         return;
       }
-
-      // Xác nhận thanh toán với Stripe
-      await Stripe.instance.confirmPayment(
-        paymentIntentClientSecret: clientSecret,
-        data: PaymentMethodParams.card(
-          paymentMethodData: PaymentMethodData(
-            billingDetails: BillingDetails(
-              name: provider.state.name,
-              phone: provider.state.phone,
-              address: Address(
-                line1: provider.state.address,
-                line2: '',
-                city: '',
-                state: '',
-                country: 'VN',
-                postalCode: '',
-              ),
-            ),
-          ),
-        ),
-      );
 
       Navigator.of(context).pop(); // Đóng dialog loading
 
       // Xác nhận thanh toán với backend
-      final paymentConfirmed = await _stripeApi.confirmPayment(paymentIntentId);
+      final paymentResult = await _stripeApi.confirmPayment(paymentIntentId);
+      final paymentConfirmed = paymentResult['success'] as bool? ?? false;
+      // final paymentMethodId = paymentResult['paymentMethodId'] as String?; // Not used for now
 
       if (paymentConfirmed) {
+        // ❌ KHÔNG lưu thẻ sau khi thanh toán
+        // Thẻ được thêm trực tiếp trong quản lý thẻ
+        print('✅ Payment confirmed successfully');
+
         // Tạo đơn hàng
         final success = await provider.createOrder('stripe');
         if (success) {

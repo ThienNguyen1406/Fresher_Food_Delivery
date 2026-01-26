@@ -1,11 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:provider/provider.dart';
+import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
+import 'package:fresher_food/roles/user/page/checkout/widgets/card_preview.dart';
 
+/// Widget đơn giản để hiển thị CardFormField
+/// PHẢI là StatefulWidget để không bị recreate
+/// KHÔNG dùng controller, provider, opacity, ignorepointer
+/// Stripe tự quản lý card state
 class StripeCardInput extends StatefulWidget {
   final Color surfaceColor;
   final Color textPrimary;
   final Color textSecondary;
   final Color primaryColor;
+  final Function(bool)? onCardComplete; // Callback để track card complete status
+  final VoidCallback? onCardConfirmed; // Callback khi thẻ được xác nhận
+  final VoidCallback? onClose; // Callback khi đóng form
 
   const StripeCardInput({
     super.key,
@@ -13,210 +23,241 @@ class StripeCardInput extends StatefulWidget {
     required this.textPrimary,
     required this.textSecondary,
     required this.primaryColor,
+    this.onCardComplete,
+    this.onCardConfirmed,
+    this.onClose,
   });
 
   @override
-  State<StripeCardInput> createState() => StripeCardInputState();
+  State<StripeCardInput> createState() => _StripeCardInputState();
 }
 
-class StripeCardInputState extends State<StripeCardInput> {
-  final _cardFormKey = GlobalKey<FormState>();
-  CardFormEditController? _cardFormEditController;
-  bool _isInitializing = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeController();
-  }
-
-  Future<void> _initializeController() async {
-    print(' StripeCardInput: Starting initialization...');
-    print(' StripeCardInput: PublishableKey isNotEmpty: ${Stripe.publishableKey.isNotEmpty}');
-    print(' StripeCardInput: PublishableKey length: ${Stripe.publishableKey.length}');
-    
-    // Đợi lâu hơn và đảm bảo native SDK đã sẵn sàng
-    // Thử gọi applySettings để khởi tạo native SDK
-    if (Stripe.publishableKey.isNotEmpty) {
-      try {
-        print(' StripeCardInput: Calling applySettings to initialize native SDK...');
-        await Stripe.instance.applySettings();
-        print(' StripeCardInput:  applySettings completed');
-      } catch (e) {
-        print(' StripeCardInput: applySettings failed: $e');
-      }
-    }
-    
-    // Đợi thêm một chút để đảm bảo native SDK hoàn toàn sẵn sàng
-    await Future.delayed(const Duration(milliseconds: 1000));
-    
-    if (!mounted) {
-      print(' StripeCardInput: Widget not mounted, returning');
-      return;
-    }
-    
-    // Chỉ khởi tạo controller khi Stripe đã được khởi tạo
-    if (Stripe.publishableKey.isNotEmpty) {
-      try {
-        print(' StripeCardInput: Attempting to create CardFormEditController...');
-        _cardFormEditController = CardFormEditController();
-        print(' StripeCardInput:  CardFormEditController created successfully');
-        
-        // Đợi thêm một chút trước khi hiển thị form
-        await Future.delayed(const Duration(milliseconds: 500));
-        
-        if (mounted) {
-          setState(() {
-            _isInitializing = false;
-          });
-          print(' StripeCardInput: State updated, _isInitializing = false');
-        }
-      } catch (e) {
-        print(' StripeCardInput: Error initializing CardFormEditController: $e');
-        print(' StripeCardInput: Stack trace: ${StackTrace.current}');
-        // Thử lại sau một chút
-        await Future.delayed(const Duration(milliseconds: 2000));
-        if (mounted && Stripe.publishableKey.isNotEmpty) {
-          try {
-            print(' StripeCardInput: Retrying CardFormEditController creation...');
-            _cardFormEditController = CardFormEditController();
-            print(' StripeCardInput:  CardFormEditController created on retry');
-            await Future.delayed(const Duration(milliseconds: 500));
-            if (mounted) {
-              setState(() {
-                _isInitializing = false;
-              });
-            }
-          } catch (e2) {
-            print(' StripeCardInput: Error retrying CardFormEditController: $e2');
-            if (mounted) {
-              setState(() {
-                _isInitializing = false;
-              });
-            }
-          }
-        }
-      }
-    } else {
-      print(' StripeCardInput: PublishableKey is empty, waiting...');
-      // Nếu Stripe chưa khởi tạo, thử lại sau một chút
-      await Future.delayed(const Duration(milliseconds: 2000));
-      if (mounted && Stripe.publishableKey.isNotEmpty && _cardFormEditController == null) {
-        print(' StripeCardInput: Retrying initialization after delay...');
-        _initializeController();
-      } else if (mounted) {
-        print(' StripeCardInput: Still no publishable key, giving up');
-        setState(() {
-          _isInitializing = false;
-        });
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _cardFormEditController?.dispose();
-    super.dispose();
-  }
+class _StripeCardInputState extends State<StripeCardInput> {
+  bool _cardComplete = false;
+  final TextEditingController _cardholderController = TextEditingController();
+  String? _expiryMonth;
+  String? _expiryYear;
+  String? _brand;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: widget.surfaceColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    if (Stripe.publishableKey.isEmpty) {
+      return Container(
+        constraints: const BoxConstraints(minHeight: 200),
+        padding: const EdgeInsets.all(16.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: widget.primaryColor),
+              const SizedBox(height: 12),
+              Text(
+                'Đang khởi tạo Stripe...',
+                style: TextStyle(
+                  color: widget.textSecondary,
+                  fontSize: 14,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Form(
-        key: _cardFormKey,
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.credit_card,
-                  color: widget.primaryColor,
+          // Header với nút đóng
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Nhập thông tin thẻ',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: widget.textPrimary,
+                ),
+              ),
+              IconButton(
+                onPressed: widget.onClose,
+                icon: Icon(
+                  Icons.close,
+                  color: widget.textSecondary,
                   size: 24,
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  'Thông tin thẻ tín dụng',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: widget.textPrimary,
-                  ),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Card Preview
+          CardPreview(
+            cardNumber: null, // Không hiển thị số thẻ đầy đủ vì CardFormField không cung cấp
+            cardholderName: _cardholderController.text.isNotEmpty ? _cardholderController.text : null,
+            expiryMonth: _expiryMonth,
+            expiryYear: _expiryYear,
+            brand: _brand,
+          ),
+          const SizedBox(height: 16),
+          // Cardholder name input
+          TextField(
+            controller: _cardholderController,
+            decoration: InputDecoration(
+              labelText: 'Tên chủ thẻ',
+              hintText: 'Nhập tên chủ thẻ',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: widget.textSecondary.withOpacity(0.3),
                 ),
-              ],
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: widget.textSecondary.withOpacity(0.3),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: widget.primaryColor,
+                  width: 2,
+                ),
+              ),
+              labelStyle: TextStyle(color: widget.textSecondary),
+              hintStyle: TextStyle(color: widget.textSecondary.withOpacity(0.5)),
             ),
-            const SizedBox(height: 16),
-            // Hiển thị form nhập thẻ - chỉ khi Stripe đã được khởi tạo và controller đã sẵn sàng
-            Builder(
-              builder: (context) {
-                final canShow = _cardFormEditController != null && 
-                    !_isInitializing && 
-                    Stripe.publishableKey.isNotEmpty;
-                
-                print(' StripeCardInput build: canShow=$canShow, controller=${_cardFormEditController != null}, isInitializing=$_isInitializing, hasKey=${Stripe.publishableKey.isNotEmpty}');
-                
-                if (canShow) {
-                  return Container(
-                    constraints: const BoxConstraints(minHeight: 200),
-                    child: CardFormField(
-                      controller: _cardFormEditController!,
-                      style: CardFormStyle(
-                        borderColor: widget.textSecondary.withOpacity(0.3),
-                        borderWidth: 1,
-                        borderRadius: 8,
-                        textColor: widget.textPrimary,
-                        placeholderColor: widget.textSecondary,
-                        backgroundColor: widget.surfaceColor,
+            style: TextStyle(color: widget.textPrimary),
+            textCapitalization: TextCapitalization.characters,
+            onChanged: (value) {
+              setState(() {});
+            },
+          ),
+          const SizedBox(height: 16),
+          // Stripe CardFormField
+          CardFormField(
+            onCardChanged: (details) {
+              final isComplete = details?.complete ?? false;
+              
+              // Cố gắng lấy thông tin từ details (nếu có)
+              // Lưu ý: CardFormField không cung cấp số thẻ đầy đủ vì lý do bảo mật
+              // Chỉ có thể lấy last4, brand, expMonth, expYear
+              if (details != null) {
+                setState(() {
+                  _cardComplete = isComplete;
+                  // Không thể lấy số thẻ đầy đủ từ CardFormField
+                  // Chỉ hiển thị placeholder hoặc last4 nếu có
+                  _expiryMonth = details.expiryMonth?.toString().padLeft(2, '0');
+                  _expiryYear = details.expiryYear?.toString().substring(2);
+                  _brand = details.brand;
+                });
+              } else {
+                setState(() {
+                  _cardComplete = isComplete;
+                });
+              }
+              
+              // Track card complete status in provider (nếu có)
+              try {
+                final provider = Provider.of<CheckoutProvider>(context, listen: false);
+                provider.setStripeCardComplete(isComplete);
+              } catch (e) {
+                // Không có CheckoutProvider (dùng trong add card page)
+                // Dùng callback nếu có
+              }
+              // Gọi callback nếu có
+              widget.onCardComplete?.call(isComplete);
+            },
+            style: CardFormStyle(
+              borderColor: widget.textSecondary.withOpacity(0.3),
+              borderWidth: 1,
+              borderRadius: 8,
+              textColor: widget.textPrimary,
+              placeholderColor: widget.textSecondary,
+              backgroundColor: widget.surfaceColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Chỉ hiển thị buttons nếu có callbacks
+          if (widget.onClose != null || widget.onCardConfirmed != null)
+            Row(
+              children: [
+                if (widget.onClose != null) ...[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: widget.onClose,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: widget.textSecondary,
+                        side: BorderSide(
+                          color: widget.textSecondary.withOpacity(0.3),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'Hủy',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  );
-                } else {
-                  return Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Center(
-                      child: Column(
-                        children: [
-                          CircularProgressIndicator(
-                            color: widget.primaryColor,
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            Stripe.publishableKey.isEmpty
-                                ? 'Đang khởi tạo Stripe...'
-                                : _isInitializing
-                                    ? 'Đang khởi tạo form thanh toán...'
-                                    : 'Đang tải form thanh toán...',
-                            style: TextStyle(
-                              color: widget.textSecondary,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Debug: controller=${_cardFormEditController != null}, init=$_isInitializing, key=${Stripe.publishableKey.isNotEmpty}',
-                            style: TextStyle(
-                              color: widget.textSecondary,
-                              fontSize: 10,
-                            ),
-                          ),
-                        ],
+                  ),
+                  if (widget.onCardConfirmed != null) const SizedBox(width: 12),
+                ],
+                if (widget.onCardConfirmed != null)
+                  Expanded(
+                    flex: widget.onClose != null ? 2 : 1,
+                    child: ElevatedButton(
+                      onPressed: _cardComplete ? _confirmCard : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: widget.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        disabledBackgroundColor: widget.textSecondary.withOpacity(0.3),
+                      ),
+                      child: const Text(
+                        'Xác nhận thẻ',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  );
-                }
-              },
+                  ),
+              ],
+            )
+          else
+            // Nếu không có callbacks, hiển thị button "Lưu thẻ" mặc định
+            ElevatedButton(
+              onPressed: _cardComplete ? _confirmCard : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: widget.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                disabledBackgroundColor: widget.textSecondary.withOpacity(0.3),
+              ),
+              child: const Text(
+                'Lưu thẻ',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ),
@@ -224,10 +265,15 @@ class StripeCardInputState extends State<StripeCardInput> {
     );
   }
 
-  CardFormEditController? get cardController => _cardFormEditController;
-}
+  @override
+  void dispose() {
+    _cardholderController.dispose();
+    super.dispose();
+  }
 
-// Extension để truy cập cardController từ bên ngoài
-extension StripeCardInputExtension on GlobalKey<StripeCardInputState> {
-  CardFormEditController? get cardController => currentState?.cardController;
+  void _confirmCard() {
+    if (_cardComplete) {
+      widget.onCardConfirmed?.call();
+    }
+  }
 }

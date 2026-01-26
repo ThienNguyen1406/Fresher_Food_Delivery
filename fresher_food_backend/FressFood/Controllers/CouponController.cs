@@ -275,18 +275,42 @@ namespace FressFood.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    string query = "DELETE FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                    
+                    // Kiểm tra xem phiếu giảm giá có tồn tại không
+                    string checkQuery = "SELECT COUNT(*) FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                    using (var checkCommand = new SqlCommand(checkQuery, connection))
+                    {
+                        checkCommand.Parameters.AddWithValue("@Id_phieugiamgia", id);
+                        int couponExists = Convert.ToInt32(await checkCommand.ExecuteScalarAsync());
+                        if (couponExists == 0)
+                        {
+                            return NotFound(new { error = "Không tìm thấy phiếu giảm giá" });
+                        }
+                    }
 
-                    using (var command = new SqlCommand(query, connection))
+                    // Cập nhật các đơn hàng liên quan: set id_phieugiamgia = NULL
+                    // (Thay vì xóa đơn hàng để giữ lại dữ liệu lịch sử)
+                    string updateOrdersQuery = @"
+                        UPDATE DonHang 
+                        SET id_phieugiamgia = NULL 
+                        WHERE id_phieugiamgia = @Id_phieugiamgia";
+                    using (var command = new SqlCommand(updateOrdersQuery, connection))
                     {
                         command.Parameters.AddWithValue("@Id_phieugiamgia", id);
+                        await command.ExecuteNonQueryAsync();
+                    }
 
+                    // Sau đó mới xóa phiếu giảm giá
+                    string deleteQuery = "DELETE FROM PhieuGiamGia WHERE Id_phieugiamgia = @Id_phieugiamgia";
+                    using (var command = new SqlCommand(deleteQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@Id_phieugiamgia", id);
                         int result = await command.ExecuteNonQueryAsync();
 
                         if (result > 0)
-                            return Ok("Xóa phiếu giảm giá thành công");
+                            return Ok(new { message = "Xóa phiếu giảm giá thành công" });
                         else
-                            return NotFound("Không tìm thấy phiếu giảm giá để xóa");
+                            return NotFound(new { error = "Không tìm thấy phiếu giảm giá để xóa" });
                     }
                 }
             }

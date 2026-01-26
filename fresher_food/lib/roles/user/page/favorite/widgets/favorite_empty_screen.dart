@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
 
 class FavoriteEmptyScreen extends StatelessWidget {
   const FavoriteEmptyScreen({super.key});
@@ -72,7 +73,8 @@ class FavoriteEmptyScreen extends StatelessWidget {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFFF6B6B),
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 40, vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -82,12 +84,18 @@ class FavoriteEmptyScreen extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Khám phá sản phẩm',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 16,
-                          letterSpacing: -0.3,
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(
+                              context, AppRoute.home);
+                        },
+                        child: Text(
+                          'Khám phá sản phẩm',
+                          style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              fontSize: 16,
+                              // letterSpacing: -0.3,
+                              color: Colors.white),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -106,4 +114,3 @@ class FavoriteEmptyScreen extends StatelessWidget {
     );
   }
 }
-

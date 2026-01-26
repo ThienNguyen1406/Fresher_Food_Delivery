@@ -30,6 +30,7 @@ class CheckoutProvider with ChangeNotifier {
   double get shippingFee => _state.shippingFee;
   bool get isLoading => _state.isLoading;
   bool get isProcessingPayment => _state.isProcessingPayment;
+  bool get stripeCardComplete => _state.stripeCardComplete;
   PhieuGiamGia? get selectedCoupon => _state.selectedCoupon;
   List<Pay> get paymentMethods => _state.paymentMethods;
   String get paymentMethod => _state.paymentMethod;
@@ -72,6 +73,13 @@ class CheckoutProvider with ChangeNotifier {
   void updateProcessingPayment(bool isProcessingPayment) {
     _state = _state.copyWith(isProcessingPayment: isProcessingPayment);
     notifyListeners();
+  }
+
+  void setStripeCardComplete(bool value) {
+    // ❌ KHÔNG gọi notifyListeners() vì sẽ rebuild CardFormField → mất dữ liệu thẻ
+    // Chỉ update state để validation check khi user bấm "Đặt hàng"
+    _state = _state.copyWith(stripeCardComplete: value);
+    // notifyListeners(); // ❌ XÓA - không rebuild UI
   }
 
   // Business logic methods
@@ -120,17 +128,46 @@ class CheckoutProvider with ChangeNotifier {
       final paymentMethods = await _service.loadPaymentMethods();
 
       String selectedPaymentId = '';
-      String paymentMethod = 'cod';
+      String paymentMethod = 'cod'; // Mặc định là COD
 
       if (paymentMethods.isNotEmpty) {
+        // Tìm COD method trước
         final codMethod = paymentMethods.firstWhere(
-          (pay) => pay.Pay_name.toLowerCase().contains('cod'),
+          (pay) {
+            final payName = pay.Pay_name.toLowerCase();
+            return payName.contains('cod') || 
+                   payName.contains('tiền mặt') || 
+                   payName.contains('khi nhận hàng') ||
+                   payName.contains('thanh toán khi nhận');
+          },
           orElse: () => paymentMethods.first,
         );
+        
         selectedPaymentId = codMethod.Id_Pay;
-        paymentMethod = codMethod.Pay_name.toLowerCase().contains('cod')
-            ? 'cod'
-            : 'banking';
+        final payName = codMethod.Pay_name.toLowerCase();
+        
+        // Xác định payment method từ tên
+        if (payName.contains('cod') || 
+            payName.contains('tiền mặt') || 
+            payName.contains('khi nhận hàng') ||
+            payName.contains('thanh toán khi nhận')) {
+          paymentMethod = 'cod';
+        } else if (payName.contains('banking') || 
+                   payName.contains('bank') || 
+                   payName.contains('chuyển khoản') || 
+                   payName.contains('transfer') ||
+                   payName.contains('ngân hàng')) {
+          paymentMethod = 'banking';
+        } else if (payName.contains('momo')) {
+          paymentMethod = 'momo';
+        } else if (payName.contains('stripe') || 
+                   payName.contains('thẻ') || 
+                   payName.contains('card') || 
+                   payName.contains('credit') ||
+                   payName.contains('debit')) {
+          paymentMethod = 'stripe';
+        }
+        // Nếu không match, giữ mặc định là 'cod'
       }
 
       _state = _state.copyWith(

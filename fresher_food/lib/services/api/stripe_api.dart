@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:fresher_food/models/SavedCard.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/utils/constant.dart';
 import 'package:http/http.dart' as http;
@@ -45,6 +46,7 @@ class StripeApi {
     required double amount,
     String? orderId,
     String? userId,
+    String? paymentMethodId,
   }) async {
     try {
       final headers = await ApiService().getHeaders();
@@ -59,6 +61,7 @@ class StripeApi {
               'amount': amount,
               'orderId': orderId,
               'userId': userId,
+              'paymentMethodId': paymentMethodId,
             }),
           )
           .timeout(const Duration(seconds: 30));
@@ -83,8 +86,45 @@ class StripeApi {
     }
   }
 
+  // Cập nhật PaymentIntent với PaymentMethod
+  Future<bool> updatePaymentIntent({
+    required String paymentIntentId,
+    required String paymentMethodId,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .put(
+            Uri.parse('${Constant().baseUrl}/Stripe/update-payment-intent'),
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'paymentIntentId': paymentIntentId,
+              'paymentMethodId': paymentMethodId,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Update Payment Intent API Response: ${response.statusCode}');
+      print('Update Payment Intent API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] as bool? ?? false;
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to update payment intent');
+      }
+    } catch (e) {
+      print('Error updating payment intent: $e');
+      throw Exception('Error updating payment intent: $e');
+    }
+  }
+
   // Xác nhận thanh toán
-  Future<bool> confirmPayment(String paymentIntentId) async {
+  Future<Map<String, dynamic>> confirmPayment(String paymentIntentId) async {
     try {
       final headers = await ApiService().getHeaders();
       final response = await http
@@ -105,7 +145,10 @@ class StripeApi {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] as bool? ?? false;
+        return {
+          'success': data['success'] as bool? ?? false,
+          'paymentMethodId': data['paymentMethodId'] as String?,
+        };
       } else {
         final errorData = jsonDecode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to confirm payment');
@@ -113,6 +156,134 @@ class StripeApi {
     } catch (e) {
       print('Error confirming payment: $e');
       throw Exception('Error confirming payment: $e');
+    }
+  }
+
+  // Lưu thẻ sau khi thanh toán thành công
+  Future<SavedCard?> saveCard({
+    required String paymentMethodId,
+    required String userId,
+    String? cardholderName,
+    bool isDefault = false,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .post(
+            Uri.parse('${Constant().baseUrl}/Stripe/save-card'),
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'paymentMethodId': paymentMethodId,
+              'userId': userId,
+              'cardholderName': cardholderName,
+              'isDefault': isDefault,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Save Card API Response: ${response.statusCode}');
+      print('Save Card API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return SavedCard.fromJson(data);
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to save card');
+      }
+    } catch (e) {
+      print('Error saving card: $e');
+      throw Exception('Error saving card: $e');
+    }
+  }
+
+  // Lấy danh sách thẻ đã lưu
+  Future<List<SavedCard>> getSavedCards(String userId) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .get(
+            Uri.parse('${Constant().baseUrl}/Stripe/saved-cards?userId=$userId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Get Saved Cards API Response: ${response.statusCode}');
+      print('Get Saved Cards API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List;
+        return data.map((json) => SavedCard.fromJson(json as Map<String, dynamic>)).toList();
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to get saved cards');
+      }
+    } catch (e) {
+      print('Error getting saved cards: $e');
+      throw Exception('Error getting saved cards: $e');
+    }
+  }
+
+  // Xóa thẻ đã lưu
+  Future<bool> deleteSavedCard(String cardId) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .delete(
+            Uri.parse('${Constant().baseUrl}/Stripe/saved-cards/$cardId'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Delete Saved Card API Response: ${response.statusCode}');
+      print('Delete Saved Card API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] as bool? ?? false;
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to delete card');
+      }
+    } catch (e) {
+      print('Error deleting saved card: $e');
+      throw Exception('Error deleting saved card: $e');
+    }
+  }
+
+  // Đặt thẻ làm mặc định
+  Future<bool> setDefaultCard(String cardId, String userId) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .put(
+            Uri.parse('${Constant().baseUrl}/Stripe/saved-cards/$cardId/set-default'),
+            headers: {
+              ...headers,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'userId': userId,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Set Default Card API Response: ${response.statusCode}');
+      print('Set Default Card API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return data['success'] as bool? ?? false;
+      } else {
+        final errorData = jsonDecode(response.body);
+        throw Exception(errorData['error'] ?? 'Failed to set default card');
+      }
+    } catch (e) {
+      print('Error setting default card: $e');
+      throw Exception('Error setting default card: $e');
     }
   }
 }

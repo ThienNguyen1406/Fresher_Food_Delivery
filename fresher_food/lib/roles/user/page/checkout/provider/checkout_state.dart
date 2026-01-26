@@ -22,6 +22,7 @@ class CheckoutState {
   // UI state
   bool isLoading;
   bool isProcessingPayment;
+  bool stripeCardComplete; // Track if Stripe card form is complete
 
   // Calculations
   double discountAmount;
@@ -45,6 +46,7 @@ class CheckoutState {
     this.discountAmount = 0.0,
     this.finalAmount = 0.0,
     this.shippingFee = 25000,
+    this.stripeCardComplete = false,
   });
 
   CheckoutState copyWith({
@@ -65,6 +67,7 @@ class CheckoutState {
     double? discountAmount,
     double? finalAmount,
     double? shippingFee,
+    bool? stripeCardComplete,
   }) {
     return CheckoutState(
       selectedItems: selectedItems ?? this.selectedItems,
@@ -83,6 +86,7 @@ class CheckoutState {
       discountAmount: discountAmount ?? this.discountAmount,
       finalAmount: finalAmount ?? this.finalAmount,
       shippingFee: shippingFee ?? this.shippingFee,
+      stripeCardComplete: stripeCardComplete ?? this.stripeCardComplete,
     );
   }
 }

@@ -18,6 +18,8 @@ import 'package:fresher_food/roles/user/page/product/product_detail/page/product
 import 'package:fresher_food/roles/user/page/product/product_review/page/product_review_page.dart';
 import 'package:fresher_food/roles/admin/dashboard/admin_dashboard_scren.dart';
 import 'package:fresher_food/models/Cart.dart';
+import 'package:provider/provider.dart';
+import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
 
 class AppRoute {
   // Route names
@@ -72,9 +74,15 @@ class AppRoute {
     } else if (routeName == checkout) {
       if (args is Map<String, dynamic>) {
         return MaterialPageRoute(
-          builder: (_) => CheckoutPage(
-            selectedItems: args['selectedItems'] as List<CartItem>,
-            totalAmount: args['totalAmount'] as double,
+          builder: (_) => ChangeNotifierProvider(
+            create: (_) => CheckoutProvider(
+              selectedItems: args['selectedItems'] as List<CartItem>,
+              totalAmount: args['totalAmount'] as double,
+            ),
+            child: CheckoutPage(
+              selectedItems: args['selectedItems'] as List<CartItem>,
+              totalAmount: args['totalAmount'] as double,
+            ),
           ),
         );
       }

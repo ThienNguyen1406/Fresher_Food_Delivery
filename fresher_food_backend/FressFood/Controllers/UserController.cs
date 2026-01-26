@@ -340,7 +340,15 @@ namespace FoodShop.Controllers
                     }
 
                     // Xóa các dữ liệu liên quan trước (theo thứ tự để tránh foreign key constraint)
-                    // 1. Xóa tin nhắn (Message) - phải xóa trước vì có thể liên quan đến Chat
+                    // 1. Xóa thông báo (Notification) - có foreign key đến MaNguoiNhan
+                    string deleteNotificationsQuery = "DELETE FROM Notification WHERE MaNguoiNhan = @MaTaiKhoan";
+                    using (var command = new SqlCommand(deleteNotificationsQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
+
+                    // 2. Xóa tin nhắn (Message) - phải xóa trước vì có thể liên quan đến Chat
                     string deleteMessagesQuery = @"
                         DELETE FROM Message 
                         WHERE MaChat IN (SELECT MaChat FROM Chat WHERE MaNguoiDung = @MaTaiKhoan)";
@@ -350,7 +358,7 @@ namespace FoodShop.Controllers
                         command.ExecuteNonQuery();
                     }
 
-                    // 2. Xóa cuộc trò chuyện (Chat)
+                    // 3. Xóa cuộc trò chuyện (Chat)
                     string deleteChatsQuery = "DELETE FROM Chat WHERE MaNguoiDung = @MaTaiKhoan";
                     using (var command = new SqlCommand(deleteChatsQuery, connection))
                     {
@@ -358,7 +366,7 @@ namespace FoodShop.Controllers
                         command.ExecuteNonQuery();
                     }
 
-                    // 3. Xóa giỏ hàng (GioHang)
+                    // 4. Xóa giỏ hàng (GioHang)
                     string deleteCartQuery = "DELETE FROM GioHang WHERE MaTaiKhoan = @MaTaiKhoan";
                     using (var command = new SqlCommand(deleteCartQuery, connection))
                     {
@@ -366,7 +374,7 @@ namespace FoodShop.Controllers
                         command.ExecuteNonQuery();
                     }
 
-                    // 4. Xóa đơn hàng (DonHang) - nếu có foreign key constraint
+                    // 5. Xóa đơn hàng (DonHang) - nếu có foreign key constraint
                     // Lưu ý: Có thể cần xóa chi tiết đơn hàng trước
                     string deleteOrderDetailsQuery = @"
                         DELETE FROM ChiTietDonHang 
