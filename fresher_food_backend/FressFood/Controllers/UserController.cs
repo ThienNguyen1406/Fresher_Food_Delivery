@@ -326,12 +326,69 @@ namespace FoodShop.Controllers
                 using (var connection = new SqlConnection(connectionString))
                 {
                     connection.Open();
-                    string query = "DELETE FROM NguoiDung WHERE MaTaiKhoan = @MaTaiKhoan";
+                    
+                    // Kiểm tra xem người dùng có tồn tại không
+                    string checkQuery = "SELECT COUNT(*) FROM NguoiDung WHERE MaTaiKhoan = @MaTaiKhoan";
+                    using (var checkCommand = new SqlCommand(checkQuery, connection))
+                    {
+                        checkCommand.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        int userExists = Convert.ToInt32(checkCommand.ExecuteScalar());
+                        if (userExists == 0)
+                        {
+                            return NotFound(new { error = "Không tìm thấy người dùng" });
+                        }
+                    }
 
-                    using (var command = new SqlCommand(query, connection))
+                    // Xóa các dữ liệu liên quan trước (theo thứ tự để tránh foreign key constraint)
+                    // 1. Xóa tin nhắn (Message) - phải xóa trước vì có thể liên quan đến Chat
+                    string deleteMessagesQuery = @"
+                        DELETE FROM Message 
+                        WHERE MaChat IN (SELECT MaChat FROM Chat WHERE MaNguoiDung = @MaTaiKhoan)";
+                    using (var command = new SqlCommand(deleteMessagesQuery, connection))
                     {
                         command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
 
+                    // 2. Xóa cuộc trò chuyện (Chat)
+                    string deleteChatsQuery = "DELETE FROM Chat WHERE MaNguoiDung = @MaTaiKhoan";
+                    using (var command = new SqlCommand(deleteChatsQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
+
+                    // 3. Xóa giỏ hàng (GioHang)
+                    string deleteCartQuery = "DELETE FROM GioHang WHERE MaTaiKhoan = @MaTaiKhoan";
+                    using (var command = new SqlCommand(deleteCartQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
+
+                    // 4. Xóa đơn hàng (DonHang) - nếu có foreign key constraint
+                    // Lưu ý: Có thể cần xóa chi tiết đơn hàng trước
+                    string deleteOrderDetailsQuery = @"
+                        DELETE FROM ChiTietDonHang 
+                        WHERE MaDonHang IN (SELECT MaDonHang FROM DonHang WHERE MaTaiKhoan = @MaTaiKhoan)";
+                    using (var command = new SqlCommand(deleteOrderDetailsQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
+
+                    string deleteOrdersQuery = "DELETE FROM DonHang WHERE MaTaiKhoan = @MaTaiKhoan";
+                    using (var command = new SqlCommand(deleteOrdersQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
+                        command.ExecuteNonQuery();
+                    }
+
+                    // 5. Cuối cùng mới xóa người dùng
+                    string deleteUserQuery = "DELETE FROM NguoiDung WHERE MaTaiKhoan = @MaTaiKhoan";
+                    using (var command = new SqlCommand(deleteUserQuery, connection))
+                    {
+                        command.Parameters.AddWithValue("@MaTaiKhoan", id);
                         int affectedRows = command.ExecuteNonQuery();
                         if (affectedRows == 0)
                         {

@@ -107,15 +107,23 @@ class _QuanLyNguoiDungScreenState extends State<QuanLyNguoiDungScreen> {
 
     if (confirm == true) {
       try {
+        print('🔄 Đang xóa tài khoản: ${nd['maTaiKhoan']}');
         final thanhCong = await api.deleteNguoiDung(nd['maTaiKhoan']);
         if (thanhCong) {
+          print('✅ Xóa tài khoản thành công');
           _showSnackbar('Xóa tài khoản thành công!', true);
-          _taiNguoiDung();
+          // Reload danh sách sau khi xóa thành công
+          await _taiNguoiDung();
         } else {
-          _showSnackbar('Xóa tài khoản thất bại!', false);
+          print('❌ Xóa tài khoản thất bại - API trả về false');
+          _showSnackbar('Xóa tài khoản thất bại. Vui lòng thử lại hoặc kiểm tra dữ liệu liên quan.', false);
         }
       } catch (e) {
-        _showSnackbar('Lỗi: $e', false);
+        print('❌ Lỗi khi xóa tài khoản: $e');
+        final errorMsg = e.toString().contains('REFERENCE constraint') 
+            ? 'Không thể xóa người dùng vì còn dữ liệu liên quan. Vui lòng xóa các đơn hàng, giỏ hàng và chat trước.'
+            : 'Lỗi: ${e.toString()}';
+        _showSnackbar(errorMsg, false);
       }
     }
   }

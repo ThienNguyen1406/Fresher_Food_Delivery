@@ -109,16 +109,22 @@ class _QuanLyPhieuGiamGiaScreenState extends State<QuanLyPhieuGiamGiaScreen> {
 
     try {
       final apiService = Provider.of<CouponApi>(context, listen: false);
+      print('🔄 Đang xóa phiếu giảm giá với ID: $id');
+      
       final success = await apiService.deleteCoupon(id);
       
       if (success) {
+        print('✅ Xóa phiếu giảm giá thành công');
         _showSnackbar('Xóa thành công', true);
-        _loadCoupons();
+        // Reload danh sách sau khi xóa thành công
+        await _loadCoupons();
       } else {
-        _showSnackbar('Xóa thất bại', false);
+        print('❌ Xóa phiếu giảm giá thất bại - API trả về false');
+        _showSnackbar('Xóa thất bại. Vui lòng thử lại.', false);
       }
     } catch (e) {
-      _showSnackbar('Lỗi: $e', false);
+      print('❌ Lỗi khi xóa phiếu giảm giá: $e');
+      _showSnackbar('Lỗi: ${e.toString()}', false);
     }
   }
 

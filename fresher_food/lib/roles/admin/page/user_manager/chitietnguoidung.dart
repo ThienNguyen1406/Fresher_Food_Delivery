@@ -66,7 +66,9 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
     setState(() => _dangLuu = true);
 
     final data = {
+      "MaTaiKhoan": widget.nguoiDung['maTaiKhoan'] ?? '',
       "TenNguoiDung": _tenNguoiDungCtrl.text.trim(),
+      "MatKhau": "", // Empty string - backend sẽ giữ nguyên mật khẩu cũ
       "HoTen": _hoTenCtrl.text.trim(),
       "Email": _emailCtrl.text.trim(),
       "Sdt": _sdtCtrl.text.trim(),
@@ -75,16 +77,23 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
     };
 
     try {
+      print('🔄 Đang cập nhật thông tin người dùng: ${widget.nguoiDung['maTaiKhoan']}');
+      print('📝 Dữ liệu: $data');
+      
       final thanhCong =
           await widget.api.updateNguoiDung(widget.nguoiDung['maTaiKhoan'], data);
+      
       if (thanhCong) {
+        print('✅ Cập nhật thông tin thành công');
         _showSnackbar('Cập nhật thông tin thành công!', true);
         Navigator.pop(context, true);
       } else {
-        _showSnackbar('Cập nhật thất bại!', false);
+        print('❌ Cập nhật thất bại - API trả về false');
+        _showSnackbar('Cập nhật thất bại. Vui lòng thử lại.', false);
       }
     } catch (e) {
-      _showSnackbar('Lỗi: $e', false);
+      print('❌ Lỗi khi cập nhật thông tin: $e');
+      _showSnackbar('Lỗi: ${e.toString()}', false);
     } finally {
       setState(() => _dangLuu = false);
     }
@@ -440,13 +449,14 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.save_outlined, size: 20),
+                            Icon(Icons.save_outlined, size: 20, color: Colors.white),
                             SizedBox(width: 8),
                             Text(
                               'Lưu thay đổi',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
+                                color: Colors.white,
                               ),
                             ),
                           ],

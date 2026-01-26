@@ -182,9 +182,33 @@ class CouponApi {
 
   // DELETE: Xóa phiếu giảm giá
   Future<bool> deleteCoupon(String id) async {
-    final res =
-        await http.delete(Uri.parse('${Constant().baseUrl}/Coupon/$id'));
-    return res.statusCode == 200;
+    try {
+      final headers = await ApiService().getHeaders();
+      final response = await http
+          .delete(
+            Uri.parse('${Constant().baseUrl}/Coupon/$id'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Delete Coupon API Response: ${response.statusCode}');
+      print('Delete Coupon API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        print('Coupon deleted successfully: $id');
+        return true;
+      } else if (response.statusCode == 404) {
+        print('Coupon not found: $id');
+        return false;
+      } else {
+        print('Failed to delete coupon: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Error deleting coupon: $e');
+      return false;
+    }
   }
 
   // Kiểm tra tính hợp lệ của phiếu giảm giá

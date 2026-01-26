@@ -345,16 +345,77 @@ class UserApi {
 
   Future<bool> updateNguoiDung(
       String maTaiKhoan, Map<String, dynamic> data) async {
-    final res = await http.put(
-        Uri.parse('${Constant().baseUrl}/User/$maTaiKhoan'),
-        body: jsonEncode(data));
-    return res.statusCode == 200;
+    try {
+      final headers = await ApiService().getHeaders();
+      headers['Content-Type'] = 'application/json';
+      
+      final response = await http
+          .put(
+            Uri.parse('${Constant().baseUrl}/User/$maTaiKhoan'),
+            headers: headers,
+            body: jsonEncode(data),
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Update User API Response: ${response.statusCode}');
+      print('Update User API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        print('User updated successfully: $maTaiKhoan');
+        return true;
+      } else if (response.statusCode == 404) {
+        print('User not found: $maTaiKhoan');
+        return false;
+      } else {
+        print('Failed to update user: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        return false;
+      }
+    } catch (e) {
+      print('Error updating user: $e');
+      return false;
+    }
   }
 
   Future<bool> deleteNguoiDung(String maTaiKhoan) async {
-    final res =
-        await http.delete(Uri.parse('${Constant().baseUrl}/User/$maTaiKhoan'));
-    return res.statusCode == 200;
+    try {
+      final headers = await ApiService().getHeaders();
+      
+      final response = await http
+          .delete(
+            Uri.parse('${Constant().baseUrl}/User/$maTaiKhoan'),
+            headers: headers,
+          )
+          .timeout(const Duration(seconds: 30));
+
+      print('Delete User API Response: ${response.statusCode}');
+      print('Delete User API Body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        print('User deleted successfully: $maTaiKhoan');
+        return true;
+      } else if (response.statusCode == 404) {
+        print('User not found: $maTaiKhoan');
+        return false;
+      } else {
+        print('Failed to delete user: ${response.statusCode}');
+        print('Response body: ${response.body}');
+        
+        // Parse error message from response
+        try {
+          final errorData = jsonDecode(response.body);
+          final errorMessage = errorData['error']?.toString() ?? 'Không thể xóa người dùng';
+          print('Error message: $errorMessage');
+        } catch (e) {
+          print('Could not parse error response: $e');
+        }
+        
+        return false;
+      }
+    } catch (e) {
+      print('Error deleting user: $e');
+      return false;
+    }
   }
 
   Future<bool> isAdmin() async {
