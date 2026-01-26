@@ -200,13 +200,13 @@ class _LoginScreenState extends State<LoginScreen>
               ),
             ),
 
-            // Email Field
+            // Email hoặc Tên đăng nhập Field
             TextFormField(
               controller: _emailController,
               decoration: InputDecoration(
-                labelText: localizations.email,
-                hintText: 'Email',
-                prefixIcon: Icon(Icons.email_outlined,
+                labelText: 'Email hoặc tên đăng nhập',
+                hintText: 'Email hoặc tên đăng nhập',
+                prefixIcon: Icon(Icons.person_outline,
                     color: widget.primaryColor, size: 22),
                 suffixIcon: _emailController.text.isNotEmpty
                     ? IconButton(
@@ -252,17 +252,15 @@ class _LoginScreenState extends State<LoginScreen>
                 hintStyle: TextStyle(fontSize: 16, color: Colors.grey.shade400),
               ),
               style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w500),
-              keyboardType: TextInputType.emailAddress,
+              keyboardType: TextInputType.text,
               textInputAction: TextInputAction.next,
-              autofillHints: const [AutofillHints.email],
+              autofillHints: const [AutofillHints.username],
               onChanged: (_) => setState(() {}),
-              // Validation: kiểm tra email không được để trống và phải có định dạng hợp lệ
+              // Validation: chỉ kiểm tra không được để trống
+              // Có thể nhập email hoặc tên đăng nhập
               validator: (value) {
                 if (value == null || value.isEmpty) {
-                  return localizations.pleaseEnterEmail;
-                }
-                if (!value.contains('@') || !value.contains('.')) {
-                  return localizations.invalidEmail;
+                  return 'Vui lòng nhập email hoặc tên đăng nhập';
                 }
                 return null;
               },

@@ -47,8 +47,7 @@ class HomeAppBar extends StatelessWidget {
                   FutureBuilder<Map<String, dynamic>>(
                     future: context.read<HomeProvider>().getUserInfo(),
                     builder: (context, snapshot) {
-                      final userName =
-                          snapshot.data?['tenTaiKhoan'] ?? 'Người dùng';
+                      final userName = snapshot.data?['hoTen'] ?? 'Người dùng';
                       return Text(
                         userName,
                         style: const TextStyle(
@@ -157,4 +156,3 @@ class HomeAppBar extends StatelessWidget {
     );
   }
 }
-

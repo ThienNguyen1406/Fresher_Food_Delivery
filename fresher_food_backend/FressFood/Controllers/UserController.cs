@@ -57,13 +57,14 @@ namespace FoodShop.Controllers
                         }
                         return StatusCode(500, new { error = $"Lỗi kết nối database: {sqlEx.Message}. Vui lòng kiểm tra SQL Server đã chạy và database '{dbName}' đã tồn tại." });
                     }
+                    // Cho phép đăng nhập bằng Email hoặc TenNguoiDung
                     string query = @"SELECT MaTaiKhoan, TenNguoiDung, MatKhau, Email, HoTen, Sdt, DiaChi, VaiTro, Avatar 
                                    FROM NguoiDung 
-                                   WHERE Email = @Email AND MatKhau = @MatKhau";
+                                   WHERE (Email = @EmailOrUsername OR TenNguoiDung = @EmailOrUsername) AND MatKhau = @MatKhau";
 
                     using (var command = new SqlCommand(query, connection))
                     {
-                        command.Parameters.AddWithValue("@Email", loginRequest.Email);
+                        command.Parameters.AddWithValue("@EmailOrUsername", loginRequest.Email);
                         command.Parameters.AddWithValue("@MatKhau", loginRequest.MatKhau);
 
                         using (var reader = command.ExecuteReader())
