@@ -5,7 +5,8 @@ class ChiTietNguoiDungScreen extends StatefulWidget {
   final Map<String, dynamic> nguoiDung;
   final UserApi api;
 
-  const ChiTietNguoiDungScreen({super.key, required this.nguoiDung, required this.api});
+  const ChiTietNguoiDungScreen(
+      {super.key, required this.nguoiDung, required this.api});
 
   @override
   State<ChiTietNguoiDungScreen> createState() => _ChiTietNguoiDungScreenState();
@@ -62,13 +63,11 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
   Future<void> _capNhatNguoiDung() async {
     // Ẩn bàn phím
     FocusScope.of(context).unfocus();
-    
+
     setState(() => _dangLuu = true);
 
     final data = {
-      "MaTaiKhoan": widget.nguoiDung['maTaiKhoan'] ?? '',
       "TenNguoiDung": _tenNguoiDungCtrl.text.trim(),
-      "MatKhau": "", // Empty string - backend sẽ giữ nguyên mật khẩu cũ
       "HoTen": _hoTenCtrl.text.trim(),
       "Email": _emailCtrl.text.trim(),
       "Sdt": _sdtCtrl.text.trim(),
@@ -77,23 +76,16 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
     };
 
     try {
-      print('🔄 Đang cập nhật thông tin người dùng: ${widget.nguoiDung['maTaiKhoan']}');
-      print('📝 Dữ liệu: $data');
-      
-      final thanhCong =
-          await widget.api.updateNguoiDung(widget.nguoiDung['maTaiKhoan'], data);
-      
+      final thanhCong = await widget.api
+          .updateNguoiDung(widget.nguoiDung['maTaiKhoan'], data);
       if (thanhCong) {
-        print('✅ Cập nhật thông tin thành công');
         _showSnackbar('Cập nhật thông tin thành công!', true);
         Navigator.pop(context, true);
       } else {
-        print('❌ Cập nhật thất bại - API trả về false');
-        _showSnackbar('Cập nhật thất bại. Vui lòng thử lại.', false);
+        _showSnackbar('Cập nhật thất bại!', false);
       }
     } catch (e) {
-      print('❌ Lỗi khi cập nhật thông tin: $e');
-      _showSnackbar('Lỗi: ${e.toString()}', false);
+      _showSnackbar('Lỗi: $e', false);
     } finally {
       setState(() => _dangLuu = false);
     }
@@ -148,7 +140,8 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
               keyboardType: keyboardType,
               readOnly: readOnly,
               enableInteractiveSelection: !readOnly,
-              enableSuggestions: !readOnly && keyboardType == TextInputType.text,
+              enableSuggestions:
+                  !readOnly && keyboardType == TextInputType.text,
               autocorrect: !readOnly && keyboardType == TextInputType.text,
               textInputAction: TextInputAction.next,
               style: TextStyle(color: _textColor),
@@ -168,7 +161,8 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: _primaryColor, width: 2),
                 ),
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
             ),
           ),
@@ -227,8 +221,11 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                       child: Row(
                         children: [
                           Icon(
-                            role == 'Admin' ? Icons.admin_panel_settings : Icons.person,
-                            color: role == 'Admin' ? Colors.orange : _primaryColor,
+                            role == 'Admin'
+                                ? Icons.admin_panel_settings
+                                : Icons.person,
+                            color:
+                                role == 'Admin' ? Colors.orange : _primaryColor,
                             size: 20,
                           ),
                           SizedBox(width: 12),
@@ -271,7 +268,10 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [_primaryColor.withOpacity(0.1), _primaryColor.withOpacity(0.05)],
+                colors: [
+                  _primaryColor.withOpacity(0.1),
+                  _primaryColor.withOpacity(0.05)
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -315,9 +315,12 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                       ),
                       SizedBox(height: 4),
                       Container(
-                        padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        padding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _vaiTro == 'Admin' ? Colors.orange.withOpacity(0.1) : _primaryColor.withOpacity(0.1),
+                          color: _vaiTro == 'Admin'
+                              ? Colors.orange.withOpacity(0.1)
+                              : _primaryColor.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
@@ -325,7 +328,9 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: _vaiTro == 'Admin' ? Colors.orange : _primaryColor,
+                            color: _vaiTro == 'Admin'
+                                ? Colors.orange
+                                : _primaryColor,
                           ),
                         ),
                       ),
@@ -336,7 +341,7 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
             ),
           ),
           SizedBox(height: 24),
-          
+
           // Form thông tin
           _buildTextField(
             controller: _tenNguoiDungCtrl,
@@ -449,7 +454,7 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.save_outlined, size: 20, color: Colors.white),
+                            Icon(Icons.save_outlined, size: 20),
                             SizedBox(width: 8),
                             Text(
                               'Lưu thay đổi',
