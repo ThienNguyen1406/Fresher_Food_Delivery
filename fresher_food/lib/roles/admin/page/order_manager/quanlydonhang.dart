@@ -667,15 +667,25 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
                       ),
                     ),
                     const SizedBox(width: 8),
+                    // Disable nút chỉnh sửa nếu trạng thái là "Hoàn thành" hoặc "Đã hủy"
                     Container(
                       decoration: BoxDecoration(
-                        color: _primaryColor.withOpacity(0.1),
+                        color: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
+                            ? Colors.grey.withOpacity(0.1)
+                            : _primaryColor.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: IconButton(
-                        icon:
-                            Icon(Iconsax.edit, size: 20, color: _primaryColor),
-                        onPressed: () => _showStatusUpdateDialog(order),
+                        icon: Icon(
+                          Iconsax.edit,
+                          size: 20,
+                          color: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
+                              ? Colors.grey
+                              : _primaryColor,
+                        ),
+                        onPressed: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
+                            ? null
+                            : () => _showStatusUpdateDialog(order),
                       ),
                     ),
                   ],
