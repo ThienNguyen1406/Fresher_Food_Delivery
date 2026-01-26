@@ -111,10 +111,75 @@ class _AdminChatListPageState extends State<AdminChatListPage> {
                   : RefreshIndicator(
                       onRefresh: _loadData,
                       child: ListView.builder(
+                        padding: const EdgeInsets.only(bottom: 8),
                         itemCount: _chats.length,
                         itemBuilder: (context, index) {
                           final chat = _chats[index];
-                          return _buildChatItem(chat, localizations);
+                          return Dismissible(
+                            key: Key(chat.maChat),
+                            direction: DismissDirection.endToStart,
+                            background: Container(
+                              alignment: Alignment.centerRight,
+                              padding: const EdgeInsets.only(right: 20),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.delete,
+                                color: Colors.white,
+                                size: 28,
+                              ),
+                            ),
+                            confirmDismiss: (direction) async {
+                              return await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Xóa cuộc trò chuyện'),
+                                  content: const Text('Bạn có chắc chắn muốn xóa cuộc trò chuyện này?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(false),
+                                      child: const Text('Hủy'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(true),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                      child: const Text('Xóa'),
+                                    ),
+                                  ],
+                                ),
+                              ) ?? false;
+                            },
+                            onDismissed: (direction) async {
+                              // Admin có thể xóa chat của bất kỳ user nào
+                              // Sử dụng maNguoiDung từ chat (không phải currentAdmin)
+                              final success = await _chatApi.deleteChat(
+                                chat.maChat,
+                                chat.maNguoiDung,
+                              );
+                              if (success && mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Đã xóa cuộc trò chuyện'),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                                _loadData();
+                              } else if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Không thể xóa cuộc trò chuyện'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                                _loadData(); // Reload để hiển thị lại chat đã bị xóa
+                              }
+                            },
+                            child: _buildChatItem(chat, localizations),
+                          );
                         },
                       ),
                     ),
