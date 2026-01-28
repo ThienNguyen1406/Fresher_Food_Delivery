@@ -1,0 +1,4 @@
+root: D:\Fresher_Food_Delivery\rag_service 
+path: C:\Program Files\nodejs 
+arch: 64 
+proxy: none

@@ -201,6 +201,46 @@ namespace FressFood.Services
                 return false;
             }
         }
+
+        /// <summary>
+        /// Search products cho chatbot - Trả về products với image URLs
+        /// Sử dụng khi user yêu cầu ảnh sản phẩm
+        /// </summary>
+        public async Task<SearchProductsResponse?> SearchProductsForChatAsync(string query, string? categoryId = null, int topK = 5)
+        {
+            try
+            {
+                var url = $"{_ragServiceUrl}/api/products/search/chat";
+                _logger.LogInformation($"Searching products for chat: '{query}' (category: {categoryId}, topK: {topK})");
+                
+                var request = new
+                {
+                    query = query,
+                    category_id = categoryId,
+                    top_k = topK
+                };
+
+                var response = await _httpClient.PostAsJsonAsync(url, request);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<SearchProductsResponse>();
+                    _logger.LogInformation($"Found {result?.Products?.Count ?? 0} products for chat query");
+                    return result;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Error searching products: {response.StatusCode} - {errorContent}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error calling Python RAG service to search products: {ex.Message}");
+                return null;
+            }
+        }
     }
 
     public class ProcessDocumentResponse
@@ -235,6 +275,51 @@ namespace FressFood.Services
         public string? FileType { get; set; }
         public int TotalChunks { get; set; }
         public string UploadDate { get; set; } = string.Empty;
+    }
+
+    public class SearchProductsResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("products")]
+        public List<ProductSearchResult> Products { get; set; } = new();
+        
+        [System.Text.Json.Serialization.JsonPropertyName("message")]
+        public string Message { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("has_images")]
+        public bool HasImages { get; set; }
+    }
+
+    public class ProductSearchResult
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("product_id")]
+        public string ProductId { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("product_name")]
+        public string ProductName { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("category_id")]
+        public string CategoryId { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("category_name")]
+        public string? CategoryName { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("price")]
+        public double? Price { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("description")]
+        public string? Description { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("image_data")]  // Map từ Python's snake_case
+        public string? ImageData { get; set; }  // Base64 encoded image
+        
+        [System.Text.Json.Serialization.JsonPropertyName("image_mime_type")]
+        public string? ImageMimeType { get; set; }  // MIME type (image/jpeg, image/png, etc.)
+        
+        [System.Text.Json.Serialization.JsonPropertyName("image_url")]
+        public string? ImageUrl { get; set; }  // Fallback: URL nếu không có base64
+        
+        [System.Text.Json.Serialization.JsonPropertyName("similarity")]
+        public double Similarity { get; set; }
     }
 }
 

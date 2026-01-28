@@ -29,6 +29,9 @@ Nếu không có OpenAI API Key, hệ thống sẽ dùng Sentence Transformer (c
 - ✅ Upload và xử lý file: docx, txt, pdf, xlsx
 - ✅ Extract text và chunk thành các đoạn nhỏ
 - ✅ Tạo embeddings bằng Sentence Transformer hoặc OpenAI
+- ✅ **Upload và xử lý ảnh: jpg, png, gif, webp, bmp**
+- ✅ **Tạo image embeddings bằng CLIP model**
+- ✅ **Tìm kiếm ảnh tương tự (image similarity search)**
 - ✅ Lưu trữ vectors trong Chroma hoặc Milvus
 - ✅ Tìm kiếm semantic similarity
 - ✅ API RESTful với FastAPI
@@ -53,6 +56,26 @@ pip install openai chromadb sentence-transformers
 ```
 
 **Nếu gặp lỗi SSL/timeout, xem file [INSTALL.md](INSTALL.md) để biết thêm cách xử lý.**
+
+**3. Cài đặt CLIP model cho image embeddings (BẮT BUỘC nếu dùng image features):**
+
+```bash
+# Windows (với venv)
+venv\Scripts\python.exe -m pip install git+https://github.com/openai/CLIP.git
+
+# Linux/Mac (với venv)
+venv/bin/pip install git+https://github.com/openai/CLIP.git
+
+# Hoặc dùng script có sẵn:
+# Windows
+install_clip.bat
+
+# Linux/Mac
+chmod +x install_clip.sh
+./install_clip.sh
+```
+
+**Lưu ý:** CLIP model (~150MB) sẽ được tải về lần đầu tiên khi chạy service.
 
 2. **Cấu hình environment variables (QUAN TRỌNG):**
 

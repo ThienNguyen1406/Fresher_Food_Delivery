@@ -4,6 +4,7 @@ import 'package:fresher_food/services/api/chat_api.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:convert';
 
 class AdminChatDetailPage extends StatefulWidget {
   final String maChat;
@@ -251,7 +252,7 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
               const SizedBox(width: 8),
             ],
             Flexible(
-              child: Container(
+            child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 decoration: BoxDecoration(
                   color: isFromAdmin
@@ -265,13 +266,7 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      message.noiDung,
-                      style: TextStyle(
-                        color: isFromAdmin ? Colors.white : theme.textTheme.bodyLarge?.color,
-                        fontSize: 15,
-                      ),
-                    ),
+                    _buildMessageContent(message.noiDung, isFromAdmin, theme),
                     const SizedBox(height: 4),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -329,6 +324,102 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  /// Parse message và hiển thị hình ảnh sản phẩm nếu có [PRODUCTS_DATA]
+  Widget _buildMessageContent(String messageText, bool isFromAdmin, ThemeData theme) {
+    // Kiểm tra tag [PRODUCTS_DATA]
+    final productsDataMatch =
+        RegExp(r'\[PRODUCTS_DATA\](.*?)\[/PRODUCTS_DATA\]', dotAll: true)
+            .firstMatch(messageText);
+
+    if (productsDataMatch != null) {
+      try {
+        // Phần text trước PRODUCTS_DATA
+        final textMessage =
+            messageText.substring(0, productsDataMatch.start).trim();
+        final jsonStr = productsDataMatch.group(1)?.trim() ?? '';
+
+        final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final products = productsData['products'] as List<dynamic>? ?? [];
+
+        final productsWithImages = products.where((p) {
+          final imageData = (p as Map<String, dynamic>)['imageData'] as String?;
+          return imageData != null && imageData.isNotEmpty;
+        }).toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (textMessage.isNotEmpty)
+              Text(
+                textMessage,
+                style: TextStyle(
+                  color: isFromAdmin
+                      ? Colors.white
+                      : theme.textTheme.bodyLarge?.color,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+              ),
+            if (productsWithImages.isNotEmpty) ...[
+              if (textMessage.isNotEmpty) const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: productsWithImages.map((product) {
+                  final p = product as Map<String, dynamic>;
+                  final imageData = p['imageData'] as String?;
+
+                  if (imageData != null && imageData.isNotEmpty) {
+                    try {
+                      return Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            base64Decode(imageData),
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      );
+                    } catch (_) {
+                      return Container(
+                        width: 120,
+                        height: 120,
+                        color: Colors.grey.shade200,
+                        child:
+                            const Icon(Icons.image, color: Colors.grey),
+                      );
+                    }
+                  }
+                  return const SizedBox.shrink();
+                }).toList(),
+              ),
+            ],
+          ],
+        );
+      } catch (_) {
+        // Nếu lỗi parse, hiển thị text bình thường
+      }
+    }
+
+    // Mặc định: hiển thị text bình thường
+    return Text(
+      messageText,
+      style: TextStyle(
+        color: isFromAdmin
+            ? Colors.white
+            : theme.textTheme.bodyLarge?.color,
+        fontSize: 15,
       ),
     );
   }

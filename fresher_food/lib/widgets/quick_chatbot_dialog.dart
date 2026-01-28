@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/services/api/rag_api.dart';
 import 'package:fresher_food/utils/constant.dart';
 import 'dart:async';
+import 'dart:convert';
 
 /// Quick Chatbot Dialog - Hỏi đáp nhanh với RAG API
 class QuickChatbotDialog extends StatefulWidget {
@@ -72,10 +73,19 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
         });
 
         if (response != null && response['answer'] != null) {
+          // Lấy danh sách ảnh sản phẩm nếu có
+          final products = response['products'] as List<dynamic>? ?? [];
+          final images = products
+              .map((p) => (p as Map<String, dynamic>)['imageData'] as String?)
+              .where((s) => s != null && s.isNotEmpty)
+              .cast<String>()
+              .toList();
+
           _messages.add(ChatMessage(
             text: response['answer'] as String,
             isFromBot: true,
             timestamp: DateTime.now(),
+            imageDataList: images,
           ));
         } else {
           _messages.add(ChatMessage(
@@ -351,13 +361,7 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
                   ),
                 ],
               ),
-              child: Text(
-                message.text,
-                style: TextStyle(
-                  color: message.isFromBot ? Colors.black87 : Colors.white,
-                  fontSize: 14,
-                ),
-              ),
+              child: _buildMessageContent(message),
             ),
           ),
           if (!message.isFromBot) ...[
@@ -439,13 +443,70 @@ class ChatMessage {
   final String text;
   final bool isFromBot;
   final DateTime timestamp;
+  final List<String> imageDataList;
 
   ChatMessage({
     required this.text,
     required this.isFromBot,
     required this.timestamp,
+    this.imageDataList = const [],
   });
 }
+
+  /// Hiển thị text + ảnh (nếu quick chatbot trả về sản phẩm có imageData)
+  Widget _buildMessageContent(ChatMessage message) {
+    final textWidget = Text(
+      message.text,
+      style: TextStyle(
+        color: message.isFromBot ? Colors.black87 : Colors.white,
+        fontSize: 14,
+        height: 1.4,
+      ),
+    );
+
+    if (message.imageDataList.isEmpty) {
+      return textWidget;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        textWidget,
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: message.imageDataList.map((base64Str) {
+            try {
+              return Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(
+                    base64Decode(base64Str),
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              );
+            } catch (_) {
+              return Container(
+                width: 120,
+                height: 120,
+                color: Colors.grey.shade200,
+                child: const Icon(Icons.image, color: Colors.grey),
+              );
+            }
+          }).toList(),
+        ),
+      ],
+    );
+  }
 
 class _TypingDot extends StatefulWidget {
   final int delay;

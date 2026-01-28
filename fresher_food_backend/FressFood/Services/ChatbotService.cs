@@ -543,5 +543,129 @@ namespace FressFood.Services
             };
             return patterns.Any(p => Regex.IsMatch(message, p, RegexOptions.IgnoreCase));
         }
+
+        /// <summary>
+        /// Kiểm tra user có yêu cầu ảnh sản phẩm không
+        /// </summary>
+        public bool IsImageRequest(string message)
+        {
+            var patterns = new[] { 
+                @"\b(lấy|cho|show|hiển thị|xem)\b.*\b(ảnh|hình|hình ảnh|image|picture|photo)\b",
+                @"\b(ảnh|hình|hình ảnh|image|picture|photo)\b.*\b(của|về|với)\b",
+                @"\b(lấy ra|cho tôi|show me)\b.*\b(ảnh|hình|hình ảnh)\b",
+                @"\b(ảnh|hình|hình ảnh)\b.*\b(sản phẩm|product|món)\b",
+                @"\b(lấy|cho|show)\b.*\b(hình ảnh)\b",  // Match "Lấy ra hình ảnh"
+                @"\b(hình ảnh)\b",  // Match bất kỳ message nào có "hình ảnh"
+                @"\b(ảnh|hình)\b.*\b(sản phẩm|product)\b"  // Match "ảnh sản phẩm"
+            };
+            return patterns.Any(p => Regex.IsMatch(message, p, RegexOptions.IgnoreCase));
+        }
+
+        /// <summary>
+        /// Kiểm tra user có yêu cầu "sản phẩm bán chạy nhất/top bán chạy" không
+        /// </summary>
+        public bool IsTopProductsRequest(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message)) return false;
+
+            // Hạ bớt độ khó: chỉ cần xuất hiện các cụm liên quan đến "bán chạy / top bán chạy"
+            var lower = message.ToLowerInvariant();
+
+            // Chuẩn hoá khoảng trắng
+            lower = Regex.Replace(lower, @"\s+", " ");
+
+            // Các cụm từ hay dùng (chấp nhận cả typo nhỏ kiểu "bánn chạy")
+            if (lower.Contains("bán chạy") || lower.Contains("ban chay") || lower.Contains("bánn chạy"))
+                return true;
+
+            if (lower.Contains("top") && (lower.Contains("bán") || lower.Contains("chạy") || lower.Contains("ban chay")))
+                return true;
+
+            if (lower.Contains("sản phẩm bán chạy") || lower.Contains("san pham ban chay"))
+                return true;
+
+            if (lower.Contains("phổ biến") || lower.Contains("pho bien"))
+                return true;
+
+            if ((lower.Contains("nổi bật") || lower.Contains("noi bat")) &&
+                (lower.Contains("sản phẩm") || lower.Contains("san pham")))
+                return true;
+
+            return false;
+        }
+
+        /// <summary>
+        /// Extract số lượng top products (mặc định 3)
+        /// Ví dụ: "lấy ra 3 sản phẩm bán chạy nhất" -> 3
+        /// </summary>
+        public int ExtractTopProductsLimit(string message, int defaultLimit = 3)
+        {
+            try
+            {
+                var match = Regex.Match(message, @"\b(\d{1,2})\b");
+                if (match.Success && int.TryParse(match.Groups[1].Value, out var n))
+                {
+                    if (n < 1) return 1;
+                    if (n > 10) return 10;
+                    return n;
+                }
+            }
+            catch { }
+            return defaultLimit;
+        }
+
+        /// <summary>
+        /// Extract tên sản phẩm từ message yêu cầu ảnh
+        /// </summary>
+        public string? ExtractProductNameFromImageRequest(string message)
+        {
+            // Patterns để extract product name
+            var patterns = new[]
+            {
+                @"(?:lấy|cho|show|hiển thị|xem).*?(?:ảnh|hình|hình ảnh|image|picture|photo).*?(?:của|về|với)?\s+([^\s]+(?:\s+[^\s]+){0,3})",
+                @"(?:ảnh|hình|hình ảnh|image|picture|photo).*?(?:của|về|với)\s+([^\s]+(?:\s+[^\s]+){0,3})",
+                @"(?:lấy ra|cho tôi|show me)\s+(?:ảnh|hình|hình ảnh)\s+([^\s]+(?:\s+[^\s]+){0,3})",
+                @"(?:lấy|cho)\s+.*?\s+(?:hình ảnh|ảnh|hình)\s+([^\s]+(?:\s+[^\s]+){0,3})"  // Match "Lấy ra hình ảnh Sữa"
+            };
+
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
+                if (match.Success && match.Groups.Count > 1)
+                {
+                    var productName = match.Groups[1].Value.Trim();
+                    // Loại bỏ các từ không cần thiết
+                    productName = Regex.Replace(productName, @"\b(ảnh|hình|hình ảnh|image|picture|photo|của|về|với|sản phẩm|product)\b", "", RegexOptions.IgnoreCase).Trim();
+                    if (!string.IsNullOrWhiteSpace(productName))
+                    {
+                        return productName;
+                    }
+                }
+            }
+
+            // Fallback: Lấy từ sau "hình ảnh", "ảnh" hoặc "hình"
+            var fallbackPatterns = new[]
+            {
+                @"(?:hình\s+ảnh)\s+(.+)",  // "Hình ảnh thịt bò" -> "thịt bò"
+                @"(?:ảnh|hình)\s+([^\s]+(?:\s+[^\s]+){0,2})"   // "Ảnh thịt bò" -> "thịt bò"
+            };
+            
+            foreach (var pattern in fallbackPatterns)
+            {
+                var fallbackMatch = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
+                if (fallbackMatch.Success && fallbackMatch.Groups.Count > 1)
+                {
+                    var productName = fallbackMatch.Groups[1].Value.Trim();
+                    // Loại bỏ các từ không cần thiết
+                    productName = Regex.Replace(productName, @"\b(ảnh|hình|hình ảnh|image|picture|photo|của|về|với|sản phẩm|product)\b", "", RegexOptions.IgnoreCase).Trim();
+                    if (!string.IsNullOrWhiteSpace(productName))
+                    {
+                        return productName;
+                    }
+                }
+            }
+
+            return null;
+        }
     }
 }

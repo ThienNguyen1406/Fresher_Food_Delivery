@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Text;
 using System.Linq;
+using System.Text.Json;
 
 namespace FressFood.Controllers
 {
@@ -15,13 +16,20 @@ namespace FressFood.Controllers
         private readonly ILogger<ChatController> _logger;
         private readonly ChatbotService _chatbotService;
         private readonly PythonRAGService _ragService;
+        private readonly IFunctionHandler _functionHandler;
 
-        public ChatController(IConfiguration configuration, ILogger<ChatController> logger, ChatbotService chatbotService, PythonRAGService ragService)
+        public ChatController(
+            IConfiguration configuration,
+            ILogger<ChatController> logger,
+            ChatbotService chatbotService,
+            PythonRAGService ragService,
+            IFunctionHandler functionHandler)
         {
             _configuration = configuration;
             _logger = logger;
             _chatbotService = chatbotService;
             _ragService = ragService;
+            _functionHandler = functionHandler;
         }
 
         /// <summary>
@@ -723,6 +731,198 @@ namespace FressFood.Controllers
                                         _logger.LogWarning(historyEx, "Failed to retrieve conversation history");
                                     }
                                     
+                                    // ✅ ƯU TIÊN: Kiểm tra nếu user yêu cầu "top sản phẩm bán chạy" (kể cả có từ 'hình ảnh')
+                                    if (_chatbotService.IsTopProductsRequest(capturedNoiDung))
+                                    {
+                                        var limit = _chatbotService.ExtractTopProductsLimit(capturedNoiDung, defaultLimit: 3);
+                                        _logger.LogInformation($"[Task.Run] User requested top products: limit={limit}, question='{capturedNoiDung}'");
+
+                                        try
+                                        {
+                                            var functionResultRaw = await _functionHandler.ExecuteFunctionAsync(
+                                                "getBestSellingProductImage",
+                                                new Dictionary<string, object> { { "limit", limit } }
+                                            );
+
+                                            if (!string.IsNullOrWhiteSpace(functionResultRaw))
+                                            {
+                                                // FunctionHandlerService trả về JSON: { result: "...", success: true/false, ... }
+                                                using var doc = JsonDocument.Parse(functionResultRaw);
+                                                var root = doc.RootElement;
+
+                                                if (root.TryGetProperty("success", out var successProp) && successProp.GetBoolean()
+                                                    && root.TryGetProperty("result", out var resultProp))
+                                                {
+                                                    var inner = resultProp.GetString() ?? "";
+                                                    using var innerDoc = JsonDocument.Parse(inner);
+                                                    var innerRoot = innerDoc.RootElement;
+
+                                                    // products có thể là object (limit=1) hoặc array (limit>1)
+                                                    var productsElement = innerRoot.GetProperty("products");
+                                                    var productsList = new List<object>();
+
+                                                    if (productsElement.ValueKind == JsonValueKind.Array)
+                                                    {
+                                                        foreach (var p in productsElement.EnumerateArray())
+                                                        {
+                                                            productsList.Add(new
+                                                            {
+                                                                productId = p.GetProperty("maSanPham").GetString() ?? "",
+                                                                productName = p.GetProperty("tenSanPham").GetString() ?? "",
+                                                                categoryId = "",
+                                                                categoryName = null as string,
+                                                                price = p.TryGetProperty("giaBan", out var priceProp) ? priceProp.GetDouble() : (double?)null,
+                                                                description = (string?)null,
+                                                                imageData = p.TryGetProperty("imageData", out var imgProp) ? imgProp.GetString() : null,
+                                                                imageMimeType = p.TryGetProperty("imageMimeType", out var mimeProp) ? mimeProp.GetString() : null,
+                                                                similarity = 1.0
+                                                            });
+                                                        }
+                                                    }
+                                                    else if (productsElement.ValueKind == JsonValueKind.Object)
+                                                    {
+                                                        var p = productsElement;
+                                                        productsList.Add(new
+                                                        {
+                                                            productId = p.GetProperty("maSanPham").GetString() ?? "",
+                                                            productName = p.GetProperty("tenSanPham").GetString() ?? "",
+                                                            categoryId = "",
+                                                            categoryName = null as string,
+                                                            price = p.TryGetProperty("giaBan", out var priceProp) ? priceProp.GetDouble() : (double?)null,
+                                                            description = (string?)null,
+                                                            imageData = p.TryGetProperty("imageData", out var imgProp) ? imgProp.GetString() : null,
+                                                            imageMimeType = p.TryGetProperty("imageMimeType", out var mimeProp) ? mimeProp.GetString() : null,
+                                                            similarity = 1.0
+                                                        });
+                                                    }
+
+                                                    var answer = innerRoot.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : null;
+                                                    if (string.IsNullOrWhiteSpace(answer))
+                                                    {
+                                                        answer = $"Tôi tìm thấy {productsList.Count} sản phẩm bán chạy nhất.";
+                                                    }
+
+                                                    // Tạo tin nhắn bot với products (JSON format để frontend parse)
+                                                    var productsJson = System.Text.Json.JsonSerializer.Serialize(new
+                                                    {
+                                                        message = answer,
+                                                        hasImages = true,
+                                                        products = productsList
+                                                    });
+
+                                                    // Tạo message content: Text message + JSON data (frontend sẽ parse)
+                                                    var botMessageContent = $"{answer}\n\n[PRODUCTS_DATA]{productsJson}[/PRODUCTS_DATA]";
+
+                                                    // Lưu tin nhắn bot vào database
+                                                    using (var botConnection = new SqlConnection(capturedConnectionString))
+                                                    {
+                                                        await botConnection.OpenAsync();
+                                                        string insertBotMessageQuery = @"
+                                                            INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                                            VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+
+                                                        using (var botCommand = new SqlCommand(insertBotMessageQuery, botConnection))
+                                                        {
+                                                            botCommand.Parameters.AddWithValue("@MaTinNhan", $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}");
+                                                            botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                            botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT");
+                                                            botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Bot");
+                                                            botCommand.Parameters.AddWithValue("@NoiDung", botMessageContent);
+                                                            botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                                            botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+                                                            await botCommand.ExecuteNonQueryAsync();
+                                                        }
+                                                    }
+
+                                                    _logger.LogInformation($"[Task.Run] Bot replied with {productsList.Count} top products (with images)");
+                                                    return; // Exit early, không cần xử lý tiếp
+                                                }
+                                            }
+                                        }
+                                        catch (Exception topEx)
+                                        {
+                                            _logger.LogError(topEx, $"[Task.Run] Error getting top products: {topEx.Message}");
+                                            // Fall through to normal processing
+                                        }
+                                    }
+                                    
+                                    // Kiểm tra nếu user yêu cầu ảnh sản phẩm
+                                    if (_chatbotService.IsImageRequest(capturedNoiDung))
+                                    {
+                                        _logger.LogInformation($"[Task.Run] User requested product image: '{capturedNoiDung}'");
+                                        
+                                        try
+                                        {
+                                            // Extract product name từ message
+                                            var productName = _chatbotService.ExtractProductNameFromImageRequest(capturedNoiDung);
+                                            var searchQuery = productName ?? capturedNoiDung;
+                                            
+                                            _logger.LogInformation($"[Task.Run] Searching products for: '{searchQuery}'");
+                                            
+                                            // Search products từ RAG service
+                                            var productsResponse = await _ragService.SearchProductsForChatAsync(searchQuery, categoryId: null, topK: 5);
+                                            
+                                            if (productsResponse != null && productsResponse.Products != null && productsResponse.Products.Count > 0)
+                                            {
+                                                // Tạo tin nhắn bot với products (JSON format để frontend parse)
+                                                var productsJson = System.Text.Json.JsonSerializer.Serialize(new
+                                                {
+                                                    message = productsResponse.Message,
+                                                    hasImages = productsResponse.HasImages,
+                                                    products = productsResponse.Products.Select(p => new
+                                                    {
+                                                        productId = p.ProductId,
+                                                        productName = p.ProductName,
+                                                        categoryId = p.CategoryId,
+                                                        categoryName = p.CategoryName,
+                                                        price = p.Price,
+                                                        description = p.Description,
+                                                        imageData = p.ImageData,  // Base64 encoded image
+                                                        imageMimeType = p.ImageMimeType,  // MIME type
+                                                        similarity = p.Similarity
+                                                    }).ToList()
+                                                });
+                                                
+                                                // Tạo message content: Text message + JSON data (frontend sẽ parse)
+                                                var botMessageContent = $"{productsResponse.Message}\n\n[PRODUCTS_DATA]{productsJson}[/PRODUCTS_DATA]";
+                                                
+                                                // Lưu tin nhắn bot vào database
+                                                using (var botConnection = new SqlConnection(capturedConnectionString))
+                                                {
+                                                    await botConnection.OpenAsync();
+                                                    string insertBotMessageQuery = @"
+                                                        INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                                        VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+                                                    
+                                                    using (var botCommand = new SqlCommand(insertBotMessageQuery, botConnection))
+                                                    {
+                                                        botCommand.Parameters.AddWithValue("@MaTinNhan", $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}");
+                                                        botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                        botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT");
+                                                        botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Bot");
+                                                        botCommand.Parameters.AddWithValue("@NoiDung", botMessageContent);
+                                                        botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                                        botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+                                                        await botCommand.ExecuteNonQueryAsync();
+                                                    }
+                                                }
+                                                
+                                                _logger.LogInformation($"[Task.Run] Bot replied with {productsResponse.Products.Count} products (with images)");
+                                                return; // Exit early, không cần xử lý tiếp
+                                            }
+                                            else
+                                            {
+                                                _logger.LogInformation($"[Task.Run] No products found for query: '{searchQuery}'");
+                                                // Fall through to normal processing
+                                            }
+                                        }
+                                        catch (Exception imageEx)
+                                        {
+                                            _logger.LogError(imageEx, $"[Task.Run] Error searching products: {imageEx.Message}");
+                                            // Fall through to normal processing
+                                        }
+                                    }
+                                    
                                     // Thử retrieve context từ RAG nếu có
                                     string? ragContext = null;
                                     try
@@ -1137,6 +1337,142 @@ namespace FressFood.Controllers
                         hasContext = false,
                         chunks = new List<RetrievedChunkInfo>()
                     });
+                }
+
+                // ✅ Ưu tiên xử lý "top sản phẩm bán chạy" (kể cả có từ 'hình ảnh')
+                if (_chatbotService.IsTopProductsRequest(request.Question))
+                {
+                    var limit = _chatbotService.ExtractTopProductsLimit(request.Question, defaultLimit: 3);
+                    _logger.LogInformation($"User requested top products: limit={limit}, question='{request.Question}'");
+
+                    var functionResultRaw = await _functionHandler.ExecuteFunctionAsync(
+                        "getBestSellingProductImage",
+                        new Dictionary<string, object> { { "limit", limit } }
+                    );
+
+                    if (!string.IsNullOrWhiteSpace(functionResultRaw))
+                    {
+                        try
+                        {
+                            // FunctionHandlerService trả về JSON: { result: "...", success: true/false, ... }
+                            using var doc = JsonDocument.Parse(functionResultRaw);
+                            var root = doc.RootElement;
+
+                            if (root.TryGetProperty("success", out var successProp) && successProp.GetBoolean()
+                                && root.TryGetProperty("result", out var resultProp))
+                            {
+                                var inner = resultProp.GetString() ?? "";
+                                using var innerDoc = JsonDocument.Parse(inner);
+                                var innerRoot = innerDoc.RootElement;
+
+                                // products có thể là object (limit=1) hoặc array (limit>1)
+                                var productsElement = innerRoot.GetProperty("products");
+                                var productsList = new List<object>();
+
+                                if (productsElement.ValueKind == JsonValueKind.Array)
+                                {
+                                    foreach (var p in productsElement.EnumerateArray())
+                                    {
+                                        productsList.Add(new
+                                        {
+                                            productId = p.GetProperty("maSanPham").GetString() ?? "",
+                                            productName = p.GetProperty("tenSanPham").GetString() ?? "",
+                                            categoryId = "", // function không trả category
+                                            categoryName = null as string,
+                                            price = p.TryGetProperty("giaBan", out var priceProp) ? priceProp.GetDouble() : (double?)null,
+                                            description = (string?)null,
+                                            imageData = p.TryGetProperty("imageData", out var imgProp) ? imgProp.GetString() : null,
+                                            imageMimeType = p.TryGetProperty("imageMimeType", out var mimeProp) ? mimeProp.GetString() : null,
+                                            similarity = 1.0
+                                        });
+                                    }
+                                }
+                                else if (productsElement.ValueKind == JsonValueKind.Object)
+                                {
+                                    var p = productsElement;
+                                    productsList.Add(new
+                                    {
+                                        productId = p.GetProperty("maSanPham").GetString() ?? "",
+                                        productName = p.GetProperty("tenSanPham").GetString() ?? "",
+                                        categoryId = "",
+                                        categoryName = null as string,
+                                        price = p.TryGetProperty("giaBan", out var priceProp) ? priceProp.GetDouble() : (double?)null,
+                                        description = (string?)null,
+                                        imageData = p.TryGetProperty("imageData", out var imgProp) ? imgProp.GetString() : null,
+                                        imageMimeType = p.TryGetProperty("imageMimeType", out var mimeProp) ? mimeProp.GetString() : null,
+                                        similarity = 1.0
+                                    });
+                                }
+
+                                var answer = innerRoot.TryGetProperty("message", out var msgProp) ? msgProp.GetString() : null;
+                                if (string.IsNullOrWhiteSpace(answer))
+                                {
+                                    answer = $"Tôi tìm thấy {productsList.Count} sản phẩm bán chạy nhất.";
+                                }
+
+                                return Ok(new
+                                {
+                                    answer,
+                                    hasContext = true,
+                                    chunks = new List<RetrievedChunkInfo>(),
+                                    products = productsList,
+                                    hasImages = true
+                                });
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Error parsing function result for getBestSellingProductImage");
+                        }
+                    }
+                }
+
+                // Kiểm tra nếu user yêu cầu ảnh sản phẩm
+                if (_chatbotService.IsImageRequest(request.Question))
+                {
+                    _logger.LogInformation($"User requested product image: '{request.Question}'");
+                    
+                    // Extract product name từ message
+                    var productName = _chatbotService.ExtractProductNameFromImageRequest(request.Question);
+                    var searchQuery = productName ?? request.Question;
+                    
+                    _logger.LogInformation($"Searching products for: '{searchQuery}'");
+                    
+                    // Search products từ RAG service
+                    var productsResponse = await _ragService.SearchProductsForChatAsync(searchQuery, categoryId: null, topK: 5);
+                    
+                    if (productsResponse != null && productsResponse.Products != null && productsResponse.Products.Count > 0)
+                    {
+                        // Trả về products với image data (base64)
+                        return Ok(new { 
+                            answer = productsResponse.Message,
+                            hasContext = true,
+                            chunks = new List<RetrievedChunkInfo>(),
+                            products = productsResponse.Products.Select(p => new {
+                                productId = p.ProductId,
+                                productName = p.ProductName,
+                                categoryId = p.CategoryId,
+                                categoryName = p.CategoryName,
+                                price = p.Price,
+                                description = p.Description,
+                                imageData = p.ImageData,  // Base64 encoded image
+                                imageMimeType = p.ImageMimeType,  // MIME type
+                                similarity = p.Similarity
+                            }).ToList(),
+                            hasImages = productsResponse.HasImages
+                        });
+                    }
+                    else
+                    {
+                        // Không tìm thấy products, trả về message thông thường
+                        return Ok(new { 
+                            answer = productsResponse?.Message ?? $"Xin lỗi, tôi không tìm thấy sản phẩm nào liên quan đến '{searchQuery}'. Bạn có thể thử tìm kiếm với từ khóa khác.",
+                            hasContext = false,
+                            chunks = new List<RetrievedChunkInfo>(),
+                            products = new List<object>(),
+                            hasImages = false
+                        });
+                    }
                 }
 
                 // Retrieve context từ RAG

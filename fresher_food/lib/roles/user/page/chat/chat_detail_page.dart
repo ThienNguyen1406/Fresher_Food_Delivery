@@ -7,6 +7,7 @@ import 'package:fresher_food/utils/constant.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 
 class ChatDetailPage extends StatefulWidget {
@@ -1215,6 +1216,128 @@ class MessageBubble extends StatelessWidget {
     required this.timeFormat,
   });
 
+  /// Parse message và hiển thị với products images nếu có
+  Widget _buildMessageContent(String messageText, bool isFromUser) {
+    // Debug: Log message để kiểm tra
+    print('🔍 Checking message for PRODUCTS_DATA: ${messageText.substring(0, messageText.length > 100 ? 100 : messageText.length)}...');
+    
+    // Kiểm tra xem có [PRODUCTS_DATA] không
+    final productsDataMatch = RegExp(r'\[PRODUCTS_DATA\](.*?)\[/PRODUCTS_DATA\]', dotAll: true).firstMatch(messageText);
+    
+    if (productsDataMatch != null) {
+      print('✅ Found PRODUCTS_DATA tag!');
+      try {
+        // Extract text message (phần trước [PRODUCTS_DATA])
+        final textMessage = messageText.substring(0, productsDataMatch.start).trim();
+        final jsonStr = productsDataMatch.group(1)?.trim() ?? '';
+        
+        // Parse JSON
+        final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final products = productsData['products'] as List<dynamic>? ?? [];
+        final hasImages = productsData['hasImages'] as bool? ?? false;
+        
+        // Debug: Log để kiểm tra
+        print('📦 Parsed products: ${products.length}');
+        print('🖼️  hasImages: $hasImages');
+        for (var i = 0; i < products.length; i++) {
+          final p = products[i] as Map<String, dynamic>;
+          final imageData = p['imageData'] as String?;
+          print('  Product ${i + 1}: ${p['productName']}, hasImageData: ${imageData != null && imageData.isNotEmpty}');
+        }
+        
+        // Filter products có imageData
+        final productsWithImages = products.where((p) {
+          final imageData = p['imageData'] as String?;
+          return imageData != null && imageData.isNotEmpty;
+        }).toList();
+        
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Text message
+            if (textMessage.isNotEmpty)
+              Text(
+                textMessage,
+                style: TextStyle(
+                  color: isFromUser ? Colors.white : Colors.grey.shade800,
+                  fontSize: 15,
+                  height: 1.4,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            // Products images - Hiển thị ảnh nếu có ít nhất 1 product có imageData
+            if (productsWithImages.isNotEmpty) ...[
+              if (textMessage.isNotEmpty) const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: productsWithImages.map((product) {
+                  final imageData = product['imageData'] as String?;
+                  
+                  if (imageData != null && imageData.isNotEmpty) {
+                    try {
+                      return Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            base64Decode(imageData),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              print('Error decoding image: $error');
+                              return Container(
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image, color: Colors.grey),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      print('Error displaying image: $e');
+                      return Container(
+                        width: 120,
+                        height: 120,
+                        color: Colors.grey.shade200,
+                        child: const Icon(Icons.image, color: Colors.grey),
+                      );
+                    }
+                  }
+                  return const SizedBox.shrink();
+                }).toList(),
+              ),
+            ],
+          ],
+        );
+      } catch (e) {
+        // Nếu parse lỗi, hiển thị message bình thường
+        print('❌ Error parsing products data: $e');
+        print('   Message text: ${messageText.substring(0, messageText.length > 200 ? 200 : messageText.length)}...');
+      }
+    } else {
+      // Không tìm thấy [PRODUCTS_DATA] tag
+      print('⚠️  No PRODUCTS_DATA tag found in message');
+      print('   Message text: ${messageText.substring(0, messageText.length > 200 ? 200 : messageText.length)}...');
+    }
+    
+    // Hiển thị message bình thường nếu không có products data
+    return Text(
+      messageText,
+      style: TextStyle(
+        color: isFromUser ? Colors.white : Colors.grey.shade800,
+        fontSize: 15,
+        height: 1.4,
+        fontWeight: FontWeight.w400,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFromUser = message.isFromUser;
@@ -1288,15 +1411,8 @@ class MessageBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    message.noiDung,
-                    style: TextStyle(
-                      color: isFromUser ? Colors.white : Colors.grey.shade800,
-                      fontSize: 15,
-                      height: 1.4,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
+                  // Parse và hiển thị message với products images
+                  _buildMessageContent(message.noiDung, isFromUser),
                   const SizedBox(height: 6),
                   Row(
                     mainAxisSize: MainAxisSize.min,

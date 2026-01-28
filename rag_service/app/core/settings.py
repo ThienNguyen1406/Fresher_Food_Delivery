@@ -31,8 +31,10 @@ class Settings:
     # ========== Vector Store (Kho lưu trữ vector) ==========
     # Loại vector store sử dụng (chroma, qdrant, faiss, ...)
     VECTOR_STORE_TYPE = os.getenv("VECTOR_STORE", "chroma").lower()
-    # Tên collection trong Chroma
+    # Tên collection trong Chroma cho documents (text)
     CHROMA_COLLECTION = os.getenv("CHROMA_COLLECTION", "documents")
+    # Tên collection trong Chroma cho images
+    CHROMA_IMAGE_COLLECTION = os.getenv("CHROMA_IMAGE_COLLECTION", "images")
     # Thư mục lưu trữ dữ liệu Chroma
     CHROMA_PERSIST_DIR = os.getenv("CHROMA_PERSIST_DIR", str(Path(__file__).parent.parent.parent / "data" / "vector_store" / "chroma_db"))
     

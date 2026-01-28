@@ -511,22 +511,41 @@ class FunctionHandler:
             base_url = os.getenv("APP_BASE_URL", "https://localhost:7240")
             
             products = []
-            for row in rows:
-                ma_san_pham, ten_san_pham, anh, gia_ban, so_luong_ton, tong_ban = row
-                
-                image_url = None
-                if anh:
-                    image_url = f"{base_url}/images/products/{anh}"
-                
-                products.append({
-                    "maSanPham": ma_san_pham,
-                    "tenSanPham": ten_san_pham,
-                    "anh": anh,
-                    "anhUrl": image_url,
-                    "giaBan": float(gia_ban) if gia_ban else 0,
-                    "soLuongTon": so_luong_ton if so_luong_ton else 0,
-                    "tongBan": tong_ban if tong_ban else 0,
-                })
+            # Download ảnh và trả về base64 để frontend hiển thị trực tiếp
+            import base64
+            import urllib.parse
+            import httpx
+
+            async with httpx.AsyncClient(verify=False, timeout=10.0) as client:
+                for row in rows:
+                    ma_san_pham, ten_san_pham, anh, gia_ban, so_luong_ton, tong_ban = row
+                    
+                    image_url = None
+                    image_data = None
+                    image_mime_type = None
+                    if anh:
+                        encoded = urllib.parse.quote(str(anh), safe='')
+                        image_url = f"{base_url}/images/products/{encoded}"
+                        try:
+                            resp = await client.get(image_url)
+                            if resp.status_code == 200:
+                                image_data = base64.b64encode(resp.content).decode("utf-8")
+                                image_mime_type = resp.headers.get("content-type", "image/jpeg")
+                        except Exception:
+                            image_data = None
+                            image_mime_type = None
+                    
+                    products.append({
+                        "maSanPham": ma_san_pham,
+                        "tenSanPham": ten_san_pham,
+                        "anh": anh,
+                        "anhUrl": image_url,
+                        "imageData": image_data,
+                        "imageMimeType": image_mime_type,
+                        "giaBan": float(gia_ban) if gia_ban else 0,
+                        "soLuongTon": so_luong_ton if so_luong_ton else 0,
+                        "tongBan": tong_ban if tong_ban else 0,
+                    })
             
             result = {
                 "products": products if limit > 1 else products[0] if products else None,
