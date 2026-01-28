@@ -20,6 +20,7 @@ class HomeAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
+      automaticallyImplyLeading: false,
       expandedHeight: 0,
       collapsedHeight: kToolbarHeight + 20,
       floating: false,
@@ -28,6 +29,7 @@ class HomeAppBar extends StatelessWidget {
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.1),
       title: Container(
+        margin: EdgeInsets.only(left: 10),
         height: kToolbarHeight,
         child: Row(
           children: [

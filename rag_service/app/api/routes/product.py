@@ -720,6 +720,48 @@ async def search_products_for_chat(
                     }
                     products.append(product)
         
+        # 🔍 Bộ lọc từ khóa đơn giản để tránh sản phẩm "khác loại" quá xa
+        # Ví dụ: query "rau củ" sẽ không trả về "Thịt bò" nếu tên/mô tả không chứa từ "rau"/"củ"
+        if products:
+            try:
+                import re
+                # Các từ ít thông tin (bỏ qua khi so khớp)
+                stopwords = {
+                    "hình", "ảnh", "hình ảnh", "hinh", "anh",
+                    "lấy", "lay", "cho", "ra", "xem", "xem thử",
+                    "sản", "phẩm", "san", "pham", "sản phẩm",
+                    "của", "về", "với", "giúp", "mình", "tôi"
+                }
+
+                def _normalize(text: str) -> str:
+                    text = text.lower()
+                    text = re.sub(r"[^0-9a-zA-ZÀ-ỹ\s]", " ", text)
+                    text = re.sub(r"\s+", " ", text).strip()
+                    return text
+
+                norm_query = _normalize(query)
+                query_tokens = [
+                    tok for tok in norm_query.split()
+                    if tok and tok not in stopwords
+                ]
+
+                if query_tokens:
+                    filtered_products = []
+                    for p in products:
+                        name = _normalize((p.get("product_name") or ""))
+                        desc = _normalize((p.get("description") or ""))
+                        combined = f"{name} {desc}".strip()
+                        if any(tok in combined for tok in query_tokens):
+                            filtered_products.append(p)
+
+                    if filtered_products:
+                        logger.info(f"  🔍 Lexical filter giữ lại {len(filtered_products)}/{len(products)} products")
+                        products = filtered_products
+                    else:
+                        logger.info("  🚫 Lexical filter loại bỏ toàn bộ vector results (không còn sản phẩm thực sự khớp từ khóa)")
+            except Exception as lexical_err:
+                logger.warning(f"  ⚠️ Lexical filter failed, dùng nguyên vector results: {lexical_err}")
+        
         elapsed_time = time.time() - start_time
         logger.info(f"✅ Chat search tìm thấy {len(products)} products trong {elapsed_time:.2f} giây")
         

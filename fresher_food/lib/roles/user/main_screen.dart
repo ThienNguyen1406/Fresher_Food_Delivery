@@ -11,6 +11,8 @@ import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:fresher_food/widgets/quick_chatbot_dialog.dart';
 import 'package:lottie/lottie.dart';
+import 'dart:io';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -78,23 +80,27 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
 
-        // TODO: Implement image upload
-        // Tạm thời sử dụng file path local
-        final imageUrl = pickedFile.path; // Cần upload lên server
+        // Upload avatar lên server (dùng cùng flow với ProfileEditPage)
+        final file = File(pickedFile.path);
+        final result = await _userApi.uploadAvatar(
+          (await SharedPreferences.getInstance())
+                  .getString('maTaiKhoan') ??
+              '',
+          file,
+        );
 
-        if (imageUrl.isNotEmpty && mounted) {
-          final success = await _userApi.updateAvatar(imageUrl);
-          if (success && mounted) {
-            await _loadUserInfo();
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Cập nhật avatar thành công')),
-            );
-          }
+        if (mounted && result != null && result['success'] == true) {
+          await _loadUserInfo();
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cập nhật avatar thành công')),
+          );
         } else if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Lỗi upload ảnh')),
+            SnackBar(
+              content: Text(result?['error'] ?? 'Lỗi upload ảnh'),
+            ),
           );
         }
       }
@@ -502,13 +508,23 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Widget _buildDrawer(BuildContext context) {
-    return AvatarWithMenuWidget.buildDrawer(
-      context: context,
-      avatarUrl: _avatarUrl,
-      userName: _userInfo?['tenTaiKhoan'] ?? 'Người dùng',
-      onPickImage: _handlePickImage,
-      onDeleteAvatar: _handleDeleteAvatar,
-      onLogout: _handleLogout,
+    // Luôn lấy user info mới nhất để đồng bộ avatar giữa Home & Drawer
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _userApi.getUserInfo(),
+      builder: (context, snapshot) {
+        final data = snapshot.data ?? _userInfo ?? {};
+        final avatarUrl = data['avatar'] ?? _avatarUrl;
+        final userName = data['tenTaiKhoan'] ?? 'Người dùng';
+
+        return AvatarWithMenuWidget.buildDrawer(
+          context: context,
+          avatarUrl: avatarUrl,
+          userName: userName,
+          onPickImage: _handlePickImage,
+          onDeleteAvatar: _handleDeleteAvatar,
+          onLogout: _handleLogout,
+        );
+      },
     );
   }
 
@@ -517,6 +533,8 @@ class _MainScreenState extends State<MainScreen> {
     final localizations = AppLocalizations.of(context)!;
 
     return AppBar(
+      // Ẩn nút menu (3 gạch) vì đã có menu khi bấm vào avatar
+      automaticallyImplyLeading: false,
       title: Text(
         localizations.account,
         style: TextStyle(

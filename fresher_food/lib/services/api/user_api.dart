@@ -159,6 +159,13 @@ class UserApi {
 
         print('User info data: $userData');
 
+        // Chuẩn hóa avatar thành full URL (nếu có)
+        final avatarPath = userData['avatar']?.toString() ?? user.avatar;
+        String? avatarUrl;
+        if (avatarPath != null && avatarPath.isNotEmpty) {
+          avatarUrl = '${Constant().baseUrl.replaceAll('/api', '')}/$avatarPath';
+        }
+
         return {
           'maTaiKhoan': userData['maTaiKhoan']?.toString() ?? user.maTaiKhoan,
           'tenTaiKhoan': userData['tenNguoiDung']?.toString() ??
@@ -169,12 +176,21 @@ class UserApi {
           'sdt': userData['sdt']?.toString() ?? user.sdt,
           'diaChi': userData['diaChi']?.toString() ?? user.diaChi,
           'vaiTro': userData['vaiTro']?.toString() ?? user.vaiTro,
-          'avatar': userData['avatar']?.toString() ?? user.avatar,
+          'avatar': avatarUrl,
         };
       } else {
         // Nếu API lỗi, lấy từ SharedPreferences
         print('API failed, using cached data');
         final prefs = await SharedPreferences.getInstance();
+        final avatarPath = prefs.getString('avatar');
+        String? avatarUrl;
+        // Tránh dùng path local của Android (vd: /data/user/0/...) làm URL
+        if (avatarPath != null &&
+            avatarPath.isNotEmpty &&
+            !avatarPath.startsWith('/data/')) {
+          avatarUrl =
+              '${Constant().baseUrl.replaceAll('/api', '')}/$avatarPath';
+        }
         return {
           'maTaiKhoan': prefs.getString('maTaiKhoan') ?? '',
           'tenTaiKhoan': prefs.getString('tenNguoiDung') ??
@@ -185,13 +201,22 @@ class UserApi {
           'sdt': prefs.getString('sdt') ?? '',
           'diaChi': prefs.getString('diaChi') ?? '',
           'vaiTro': prefs.getString('vaiTro') ?? 'user',
-          'avatar': prefs.getString('avatar'),
+          'avatar': avatarUrl,
         };
       }
     } catch (e) {
       print('Error getting user info: $e');
       // Fallback về SharedPreferences
       final prefs = await SharedPreferences.getInstance();
+      final avatarPath = prefs.getString('avatar');
+      String? avatarUrl;
+      // Tránh dùng path local của Android (vd: /data/user/0/...) làm URL
+      if (avatarPath != null &&
+          avatarPath.isNotEmpty &&
+          !avatarPath.startsWith('/data/')) {
+        avatarUrl =
+            '${Constant().baseUrl.replaceAll('/api', '')}/$avatarPath';
+      }
       return {
         'maTaiKhoan': prefs.getString('maTaiKhoan') ?? '',
         'tenTaiKhoan': prefs.getString('tenNguoiDung') ??
@@ -202,7 +227,7 @@ class UserApi {
         'sdt': prefs.getString('sdt') ?? '',
         'diaChi': prefs.getString('diaChi') ?? '',
         'vaiTro': prefs.getString('vaiTro') ?? 'user',
-        'avatar': prefs.getString('avatar'),
+        'avatar': avatarUrl,
       };
     }
   }

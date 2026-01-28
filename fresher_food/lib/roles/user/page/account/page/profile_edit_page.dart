@@ -4,7 +4,6 @@ import 'package:iconsax/iconsax.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
-import 'package:fresher_food/utils/constant.dart';
 
 class ProfileEditPage extends StatefulWidget {
   const ProfileEditPage({super.key});
@@ -51,10 +50,11 @@ class _ProfileEditPageState extends State<ProfileEditPage> {
         _emailController.text = userInfo['email'] ?? '';
         _sdtController.text = userInfo['sdt'] ?? '';
         _diaChiController.text = userInfo['diaChi'] ?? '';
-        _avatarPath = userInfo['avatar'];
-        if (_avatarPath != null && _avatarPath!.isNotEmpty) {
-          _avatarUrl = '${Constant().baseUrl.replaceAll('/api', '')}/$_avatarPath';
-        }
+        // API getUserInfo hiện trả về trường 'avatar' đã là URL đầy đủ
+        final avatarFromApi = userInfo['avatar'] as String?;
+        _avatarUrl = avatarFromApi;
+        // Dùng _avatarPath chỉ để bật/tắt nút "Xóa ảnh đại diện"
+        _avatarPath = avatarFromApi;
         _isLoading = false;
       });
     } catch (e) {
