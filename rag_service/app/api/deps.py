@@ -17,6 +17,7 @@ from app.core.ingest_pipeline import IngestPipeline
 from app.core.image_ingest_pipeline import ImageIngestPipeline
 from app.core.product_ingest_pipeline import ProductIngestPipeline
 from app.core.prompt_builder import PromptBuilder
+from app.infrastructure.llm.openai import OpenAILLM, LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ _rag_pipeline: RAGPipeline = None
 _ingest_pipeline: IngestPipeline = None
 _image_ingest_pipeline: ImageIngestPipeline = None
 _product_ingest_pipeline: ProductIngestPipeline = None
+_llm_provider: LLMProvider = None
 
 
 def get_document_processor() -> DocumentProcessor:
@@ -211,4 +213,18 @@ def get_prompt_builder() -> PromptBuilder:
         PromptBuilder instance
     """
     return PromptBuilder()
+
+
+def get_llm_provider() -> LLMProvider:
+    """
+    Lấy instance của LLMProvider (singleton)
+    Mặc định sử dụng OpenAI với fallback Ollama
+    
+    Returns:
+        LLMProvider instance
+    """
+    global _llm_provider
+    if _llm_provider is None:
+        _llm_provider = OpenAILLM()
+    return _llm_provider
 

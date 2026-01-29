@@ -927,8 +927,17 @@ namespace FressFood.Controllers
                                     string? ragContext = null;
                                     try
                                     {
-                                        _logger.LogInformation($"[Task.Run] Attempting to retrieve RAG context for query: '{capturedNoiDung}'");
-                                        var ragResponse = await _ragService.RetrieveContextAsync(capturedNoiDung, topK: 5);
+                                        // Loại bỏ [IMAGE_DATA] tag trước khi gửi đến RAG
+                                        // Base64 image data quá dài sẽ gây lỗi token limit khi tạo embedding
+                                        var queryForRAG = System.Text.RegularExpressions.Regex.Replace(
+                                            capturedNoiDung ?? string.Empty,
+                                            @"\[IMAGE_DATA\].*?\[/IMAGE_DATA\]",
+                                            string.Empty,
+                                            System.Text.RegularExpressions.RegexOptions.Singleline
+                                        ).Trim();
+                                        
+                                        _logger.LogInformation($"[Task.Run] Attempting to retrieve RAG context for query: '{queryForRAG}'");
+                                        var ragResponse = await _ragService.RetrieveContextAsync(queryForRAG, topK: 5);
                                         
                                         if (ragResponse != null)
                                         {
@@ -1476,8 +1485,17 @@ namespace FressFood.Controllers
                 }
 
                 // Retrieve context từ RAG
-                _logger.LogInformation("Retrieving context from RAG service...");
-                var ragResponse = await _ragService.RetrieveContextAsync(request.Question, topK: 5, request.FileId);
+                // Loại bỏ [IMAGE_DATA] tag trước khi gửi đến RAG
+                // Base64 image data quá dài sẽ gây lỗi token limit khi tạo embedding
+                var questionForRAG = System.Text.RegularExpressions.Regex.Replace(
+                    request.Question ?? string.Empty,
+                    @"\[IMAGE_DATA\].*?\[/IMAGE_DATA\]",
+                    string.Empty,
+                    System.Text.RegularExpressions.RegexOptions.Singleline
+                ).Trim();
+                
+                _logger.LogInformation($"Retrieving context from RAG service... (original length: {request.Question?.Length ?? 0}, after removing image data: {questionForRAG.Length})");
+                var ragResponse = await _ragService.RetrieveContextAsync(questionForRAG, topK: 5, request.FileId);
 
                 string? context = null;
                 bool hasContext = false;

@@ -9,10 +9,15 @@ from app.api.deps import (
     get_product_ingest_pipeline,
     get_image_vector_store,
     get_image_embedding_service,
-    get_embedding_service
+    get_embedding_service,
+    get_llm_provider,
+    get_prompt_builder
 )
 from app.core.product_ingest_pipeline import ProductIngestPipeline
+from app.core.prompt_builder import PromptBuilder
+from app.core.settings import Settings
 from app.infrastructure.vector_store.image_vector_store import ImageVectorStore
+from app.infrastructure.llm.openai import LLMProvider
 from app.services.image import ImageEmbeddingService
 from app.services.embedding import EmbeddingService
 
@@ -52,6 +57,7 @@ class ProductSearchResult(BaseModel):
 class ProductSearchResponse(BaseModel):
     results: List[ProductSearchResult]
     query_type: str  # "image", "text", or "chat"
+    description: Optional[str] = None  # Mô tả từ LLM (nếu có)
     
 class ChatProductResponse(BaseModel):
     products: List[Dict]
@@ -154,8 +160,11 @@ async def search_products_by_image(
     image: UploadFile = File(...),
     category_id: Optional[str] = Query(None, description="Filter by category ID"),
     top_k: int = Query(10, ge=1, le=50),
+    user_description: Optional[str] = Query(None, description="Mô tả của người dùng về ảnh"),
     image_embedding_service: ImageEmbeddingService = Depends(get_image_embedding_service),
-    vector_store: ImageVectorStore = Depends(get_image_vector_store)
+    vector_store: ImageVectorStore = Depends(get_image_vector_store),
+    llm_provider: LLMProvider = Depends(get_llm_provider),
+    prompt_builder: PromptBuilder = Depends(get_prompt_builder)
 ):
     """
     Image to Image Search - Tìm kiếm sản phẩm bằng ảnh
@@ -171,12 +180,146 @@ async def search_products_by_image(
         # Đọc ảnh query
         contents = await image.read()
         
-        # Tạo embedding từ ảnh query
-        logger.info(f"🔢 Đang tạo embedding từ ảnh query...")
-        query_embedding = await image_embedding_service.create_embedding(contents)
+        # BƯỚC 1: Tạo caption chi tiết từ ảnh bằng Vision model (nếu có và được bật)
+        # Điều này giúp embedding chính xác hơn thay vì chỉ dùng image embedding
+        vision_caption = None
+        detected_category = None
         
-        if query_embedding is None:
+        # Kiểm tra config: có bật Vision caption không?
+        use_vision = Settings.USE_VISION_CAPTION
+        
+        try:
+            if use_vision and llm_provider and hasattr(llm_provider, 'client') and llm_provider.client:
+                logger.info("👁️  Đang tạo caption chi tiết từ ảnh bằng Vision model...")
+                import base64
+                image_base64 = base64.b64encode(contents).decode('utf-8')
+                
+                # System prompt - TUYỆT ĐỐI không dùng: identify, recognize, what product is this, brand name
+                system_message = """You are a visual description assistant for an e-commerce search engine.
+Your task is to describe only what is visually observable in the image.
+Do not identify brand names or confirm the exact product."""
+                
+                # User prompt - CHUẨN (đã test, không bị block)
+                vision_prompt = """Describe the visible characteristics of the product in the image.
+
+Focus on:
+- Packaging type (box, bottle, bag, carton, can, etc.)
+- Main colors (green, brown, red, white, etc.)
+- Shape (rectangular, round, cylindrical, etc.)
+- Visible text (if any, describe what you see, not what it says)
+- Product category in a generic way (drink, food, household item, etc.)
+
+Do not guess the brand or product name.
+Return a short neutral description in both English and Vietnamese, separated by spaces.
+
+Example: "green rectangular box packaging liquid container beverage drink hộp màu xanh hình chữ nhật"
+Example: "red fresh solid food protein appearance thực phẩm màu đỏ tươi"
+Example: "clear transparent bottle liquid water appearance chai trong suốt chứa chất lỏng"
+"""
+                
+                try:
+                    # Sử dụng OpenAI Vision API (GPT-4V)
+                    vision_response = llm_provider.client.chat.completions.create(
+                        model="gpt-4o",  # hoặc "gpt-4-vision-preview"
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": system_message
+                            },
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": vision_prompt},
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{image_base64}"
+                                        }
+                                    }
+                                ]
+                            }
+                        ],
+                        max_tokens=150,
+                        temperature=0.2
+                    )
+                    vision_caption = vision_response.choices[0].message.content.strip()
+                    
+                    # 🔍 PHÁT HIỆN KHI VISION TỪ CHỐI (policy block)
+                    # Vision model có thể từ chối với các message như:
+                    # - "I'm sorry, I can't help with identifying..."
+                    # - "I cannot identify or describe products..."
+                    # - "I can't assist with identifying..."
+                    caption_lower = vision_caption.lower()
+                    rejection_keywords = [
+                        "i'm sorry", "i can't help", "i cannot", "i can't assist",
+                        "i'm not able", "i'm unable", "cannot identify", "can't identify",
+                        "unable to", "not able to", "sorry, i can't"
+                    ]
+                    
+                    is_rejection = any(keyword in caption_lower for keyword in rejection_keywords)
+                    
+                    if is_rejection:
+                        logger.warning(f"⚠️  Vision model đã từ chối mô tả ảnh (policy block). Bỏ qua caption này.")
+                        logger.warning(f"   Caption bị từ chối: {vision_caption[:150]}...")
+                        # Fallback: sử dụng user_description nếu có
+                        if user_description:
+                            logger.info(f"✅ Fallback: Sử dụng user_description thay cho Vision caption")
+                            vision_caption = user_description
+                        else:
+                            vision_caption = None  # Bỏ qua caption này, chỉ dùng image embedding
+                    else:
+                        logger.info(f"✅ Đã tạo caption từ Vision: {vision_caption[:100]}...")
+                        
+                        # Detect category từ Vision caption để filter kết quả
+                        # Nếu caption có từ khóa về đồ uống/sữa → filter category "Đồ uống"
+                        # Nếu caption có từ khóa về thịt → filter category "Thịt cá"
+                        if any(kw in caption_lower for kw in ["drink", "beverage", "sữa", "milk", "nước", "water", "milo", "cacao"]):
+                            # Có thể là đồ uống - nhưng không filter category_id vì có thể không chính xác
+                            # Thay vào đó, sẽ dùng caption để tăng độ chính xác
+                            pass
+                except Exception as vision_error:
+                    logger.warning(f"⚠️  Không thể tạo caption từ Vision model: {str(vision_error)}")
+                    # Fallback: sử dụng user_description nếu có
+                    if user_description:
+                        vision_caption = user_description
+        except Exception as e:
+            logger.warning(f"⚠️  Lỗi khi tạo Vision caption: {str(e)}")
+            # Fallback: sử dụng user_description nếu có
+            if user_description:
+                vision_caption = user_description
+        
+        # BƯỚC 2: Tạo embedding từ ảnh query
+        logger.info(f"🔢 Đang tạo embedding từ ảnh query...")
+        query_image_embedding = await image_embedding_service.create_embedding(contents)
+        
+        if query_image_embedding is None:
             raise HTTPException(status_code=500, detail="Không thể tạo embedding từ ảnh query")
+        
+        # BƯỚC 3: Nếu có Vision caption, tạo text embedding và kết hợp
+        # Best Practice: 
+        # - Khi Vision OK: image_embedding * 0.6 + text_embedding * 0.4
+        # - Khi Vision bị block: image_embedding * 1.0 (chỉ dùng image embedding)
+        query_embedding = query_image_embedding
+        if vision_caption:
+            try:
+                logger.info(f"🔢 Đang tạo text embedding từ Vision caption...")
+                # Sử dụng image_embedding_service đã được inject để tạo text embedding
+                query_text_embedding = image_embedding_service.create_text_embedding(vision_caption)
+                
+                if query_text_embedding is not None:
+                    # Kết hợp: 60% image embedding, 40% text embedding từ caption
+                    # Image embedding quan trọng hơn vì nó capture visual similarity trực tiếp
+                    # Text embedding từ caption giúp bổ sung semantic information
+                    import numpy as np
+                    img_norm = query_image_embedding / (np.linalg.norm(query_image_embedding) + 1e-8)
+                    txt_norm = query_text_embedding / (np.linalg.norm(query_text_embedding) + 1e-8)
+                    query_embedding = 0.6 * img_norm + 0.4 * txt_norm
+                    logger.info(f"✅ Đã kết hợp image embedding (60%) + text embedding từ caption (40%)")
+                    logger.info(f"   Vision caption: {vision_caption[:150]}...")
+            except Exception as e:
+                logger.warning(f"⚠️  Không thể tạo text embedding từ caption: {str(e)}")
+                # Fallback: chỉ dùng image embedding
+                query_embedding = query_image_embedding
         
         # Tìm kiếm trong vector database
         logger.info(f"🔍 Đang tìm kiếm trong vector database...")
@@ -188,14 +331,16 @@ async def search_products_by_image(
         
         # Search (Chroma query is synchronous, need to run in thread)
         import asyncio
+        # Tăng top_k lên để có nhiều kết quả hơn, sau đó filter
+        search_top_k = top_k * 2  # Lấy nhiều hơn để filter
         results = await asyncio.to_thread(
             vector_store.collection.query,
             query_embeddings=[query_embedding.tolist()],
-            n_results=top_k,
+            n_results=search_top_k,
             where=where_clause
         )
         
-        # Parse results
+        # Parse results và filter dựa trên Vision caption (nếu có)
         products = []
         if results.get('ids') and len(results['ids'][0]) > 0:
             for i in range(len(results['ids'][0])):
@@ -203,22 +348,95 @@ async def search_products_by_image(
                 distance = results['distances'][0][i] if 'distances' in results and results['distances'] else 1.0
                 similarity = 1 - distance
                 
+                product_name = metadata.get('file_name', '')
+                category_name = metadata.get('category_name', '')
+                
+                # POST-PROCESSING: Filter kết quả dựa trên Vision caption (nếu có)
+                # Nếu có Vision caption, kiểm tra semantic match
+                if vision_caption:
+                    caption_lower = vision_caption.lower()
+                    product_lower = product_name.lower()
+                    category_lower = category_name.lower() if category_name else ""
+                    
+                    # Kiểm tra semantic match
+                    # Ví dụ: Nếu caption có "milo", "drink" → product phải là đồ uống, không phải thịt
+                    is_semantic_match = False
+                    
+                    # Check nếu product name có từ khóa trong caption
+                    caption_keywords = [kw for kw in caption_lower.split() if len(kw) > 3]  # Lọc từ ngắn
+                    if any(kw in product_lower for kw in caption_keywords[:10]):  # Check 10 từ đầu
+                        is_semantic_match = True
+                    
+                    # Check category match
+                    if not is_semantic_match:
+                        # Nếu caption về đồ uống và product là đồ uống
+                        if any(kw in caption_lower for kw in ["drink", "beverage", "sữa", "milk", "nước", "water", "milo", "cacao"]) and \
+                           any(kw in category_lower for kw in ["đồ uống", "drink", "beverage"]):
+                            is_semantic_match = True
+                        # Nếu caption về thịt và product là thịt
+                        elif any(kw in caption_lower for kw in ["meat", "beef", "thịt", "pork", "chicken", "gà", "heo"]) and \
+                             any(kw in category_lower for kw in ["thịt", "meat"]):
+                            is_semantic_match = True
+                        # Nếu caption về rau và product là rau
+                        elif any(kw in caption_lower for kw in ["vegetable", "rau", "cải", "carrot", "cà rốt"]) and \
+                             any(kw in category_lower for kw in ["rau", "vegetable"]):
+                            is_semantic_match = True
+                    
+                    # Nếu không match semantic và similarity thấp, skip product này
+                    if not is_semantic_match and similarity < 0.65:
+                        logger.info(f"⏭️  Skip product '{product_name}' (similarity: {similarity:.2f}, không match semantic với caption)")
+                        continue
+                
                 product = ProductSearchResult(
                     product_id=metadata.get('file_id', ''),
-                    product_name=metadata.get('file_name', ''),
+                    product_name=product_name,
                     category_id=metadata.get('category_id', ''),
-                    category_name=metadata.get('category_name', ''),
+                    category_name=category_name,
                     similarity=float(similarity),
                     price=float(metadata.get('price', 0)) if metadata.get('price') else None
                 )
                 products.append(product)
+                
+                # Chỉ lấy top_k products sau khi filter
+                if len(products) >= top_k:
+                    break
         
         elapsed_time = time.time() - start_time
-        logger.info(f"✅ Tìm thấy {len(products)} products trong {elapsed_time:.2f} giây")
+        logger.info(f"✅ Tìm thấy {len(products)} products sau khi filter (từ {len(results.get('ids', [[]])[0]) if results.get('ids') else 0} kết quả ban đầu) trong {elapsed_time:.2f} giây")
+        
+        # Tạo mô tả từ LLM nếu có sản phẩm
+        description = None
+        if products:
+            try:
+                logger.info("🤖 Đang tạo mô tả từ LLM...")
+                # Chuẩn bị dữ liệu sản phẩm cho prompt
+                products_data = []
+                for p in products:
+                    products_data.append({
+                        'product_name': p.product_name,
+                        'category_name': p.category_name,
+                        'price': p.price,
+                        'similarity': p.similarity
+                    })
+                
+                # Tạo prompt
+                prompt = prompt_builder.build_image_search_description_prompt(
+                    products=products_data,
+                    user_description=user_description
+                )
+                
+                # Gọi LLM để tạo mô tả
+                description = await llm_provider.generate(prompt)
+                logger.info(f"✅ Đã tạo mô tả từ LLM: {len(description)} ký tự")
+            except Exception as e:
+                logger.warning(f"⚠️  Không thể tạo mô tả từ LLM: {str(e)}")
+                # Tiếp tục mà không có description nếu LLM lỗi
+                description = None
         
         return ProductSearchResponse(
             results=products,
-            query_type="image"
+            query_type="image",
+            description=description
         )
     
     except HTTPException:

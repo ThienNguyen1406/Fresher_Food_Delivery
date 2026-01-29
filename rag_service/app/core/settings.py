@@ -58,6 +58,11 @@ class Settings:
     # Model Ollama sử dụng
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2")
     
+    # ========== Vision Model (GPT-4V) ==========
+    # Có sử dụng Vision model để tạo caption từ ảnh không (mặc định: true)
+    # Nếu tắt, sẽ chỉ dùng image embedding (CLIP) để tìm kiếm
+    USE_VISION_CAPTION = os.getenv("USE_VISION_CAPTION", "true").lower() == "true"
+    
     # ========== Reranker (Sắp xếp lại kết quả) ==========
     # LƯU Ý: Reranker làm chậm phản hồi (cần tải model 1GB+)
     # Khuyến nghị: Tắt reranker nếu dùng OpenAI embeddings (đã đủ tốt)

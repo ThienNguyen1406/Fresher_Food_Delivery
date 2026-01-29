@@ -87,10 +87,14 @@ class ProductIngestPipeline:
             primary_embedding = None
             
             # Tạo text embedding bằng CLIP text encoder (512 dim) từ product name + description
+            # QUAN TRỌNG: Enrich text với semantic keywords để embedding chính xác hơn
             from app.api.deps import get_image_embedding_service
             image_embedding_service = get_image_embedding_service()
             
-            product_text = f"{product_name} {product_data.get('description', '')}".strip()
+            # Enrich product text với semantic information
+            # Ví dụ: "Milo" → "Nestlé Milo chocolate malt milk drink carton beverage"
+            # "Thịt bò" → "Beef meat fresh raw protein food"
+            product_text = self._enrich_product_text(product_data, product_name)
             text_clip_embedding = None
             if product_text:
                 text_clip_embedding = image_embedding_service.create_text_embedding(product_text)
@@ -268,4 +272,119 @@ class ProductIngestPipeline:
         except Exception as e:
             logger.error(f"❌ Lỗi khi xử lý batch products: {str(e)}", exc_info=True)
             raise
+    
+    def _enrich_product_text(self, product_data: Dict, product_name: str) -> str:
+        """
+        Enrich product text với semantic keywords để embedding chính xác hơn
+        
+        Ví dụ:
+        - "Milo" → "Nestlé Milo chocolate malt milk drink carton beverage dairy"
+        - "Thịt bò" → "Beef meat fresh raw protein food meat category"
+        - "Nước suối" → "Mineral water bottled drink beverage"
+        
+        Args:
+            product_data: Dict chứa thông tin product
+            product_name: Tên sản phẩm
+            
+        Returns:
+            Text đã được enrich với semantic keywords
+        """
+        text_parts = []
+        
+        # 1. Tên sản phẩm gốc
+        if product_name:
+            text_parts.append(product_name)
+        
+        # 2. Mô tả (nếu có)
+        description = product_data.get('description', '')
+        if description:
+            text_parts.append(description)
+        
+        # 3. Category name (quan trọng để phân biệt category)
+        category_name = product_data.get('category_name', '')
+        if category_name:
+            text_parts.append(category_name)
+        
+        # 4. Thêm semantic keywords dựa trên category và product name
+        # Điều này giúp phân biệt rõ các loại sản phẩm khác nhau
+        semantic_keywords = self._extract_semantic_keywords(product_name, category_name, description)
+        if semantic_keywords:
+            text_parts.extend(semantic_keywords)
+        
+        # 5. Origin và Unit (nếu có)
+        origin = product_data.get('origin', '')
+        if origin:
+            text_parts.append(f"from {origin}")
+        
+        unit = product_data.get('unit', '')
+        if unit:
+            text_parts.append(f"unit {unit}")
+        
+        return " ".join(text_parts)
+    
+    def _extract_semantic_keywords(self, product_name: str, category_name: str, description: str) -> List[str]:
+        """
+        Extract semantic keywords từ product name và category
+        Để giúp embedding phân biệt rõ các loại sản phẩm
+        
+        Ví dụ:
+        - "Milo" + "Đồ uống" → ["chocolate", "malt", "milk", "drink", "beverage", "carton", "dairy"]
+        - "Thịt bò" + "Thịt cá" → ["beef", "meat", "protein", "fresh", "raw", "food"]
+        - "Nước suối" + "Đồ uống" → ["water", "mineral", "bottled", "drink", "beverage"]
+        """
+        keywords = []
+        product_lower = product_name.lower()
+        category_lower = category_name.lower() if category_name else ""
+        desc_lower = description.lower() if description else ""
+        
+        # Keywords dựa trên category
+        if "đồ uống" in category_lower or "drink" in category_lower or "beverage" in category_lower:
+            keywords.extend(["drink", "beverage", "liquid"])
+            if "sữa" in product_lower or "milk" in product_lower:
+                keywords.extend(["milk", "dairy", "carton", "bottle"])
+            if "nước" in product_lower or "water" in product_lower:
+                keywords.extend(["water", "mineral", "bottled"])
+            if "milo" in product_lower or "ovaltine" in product_lower or "cacao" in product_lower:
+                keywords.extend(["chocolate", "malt", "powder", "instant"])
+        
+        if "thịt" in category_lower or "meat" in category_lower:
+            keywords.extend(["meat", "protein", "fresh", "raw", "food"])
+            if "bò" in product_lower or "beef" in product_lower:
+                keywords.extend(["beef", "cow", "red meat"])
+            if "heo" in product_lower or "pork" in product_lower:
+                keywords.extend(["pork", "pig"])
+            if "gà" in product_lower or "chicken" in product_lower:
+                keywords.extend(["chicken", "poultry"])
+        
+        if "rau" in category_lower or "vegetable" in category_lower:
+            keywords.extend(["vegetable", "fresh", "green", "produce"])
+        
+        if "trái cây" in category_lower or "fruit" in category_lower:
+            keywords.extend(["fruit", "fresh", "sweet", "produce"])
+        
+        if "cá" in category_lower or "fish" in category_lower:
+            keywords.extend(["fish", "seafood", "protein", "fresh"])
+        
+        # Keywords dựa trên product name
+        if "milo" in product_lower:
+            keywords.extend(["nestlé", "chocolate", "malt", "milk", "drink", "carton"])
+        if "nước suối" in product_lower or "mineral water" in product_lower:
+            keywords.extend(["water", "mineral", "bottled", "pure"])
+        if "thịt bò" in product_lower or "beef" in product_lower:
+            keywords.extend(["beef", "cow", "red meat", "protein"])
+        if "sữa" in product_lower and "milo" not in product_lower:
+            keywords.extend(["milk", "dairy", "white", "liquid"])
+        
+        # Keywords từ description nếu có
+        if "chocolate" in desc_lower:
+            keywords.append("chocolate")
+        if "malt" in desc_lower:
+            keywords.append("malt")
+        if "carton" in desc_lower or "hộp" in desc_lower:
+            keywords.append("carton")
+        if "bottle" in desc_lower or "chai" in desc_lower:
+            keywords.append("bottle")
+        
+        # Loại bỏ duplicates và trả về
+        return list(set(keywords))
 

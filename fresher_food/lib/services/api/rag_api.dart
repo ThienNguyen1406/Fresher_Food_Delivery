@@ -145,5 +145,50 @@ class RagApi {
       return false;
     }
   }
+
+  /// Tìm kiếm sản phẩm bằng ảnh (Image to Image Search)
+  Future<Map<String, dynamic>?> searchProductsByImage({
+    required File imageFile,
+    String? categoryId,
+    String? userDescription,
+    int topK = 10,
+  }) async {
+    try {
+      final uri = Uri.parse('$_ragServiceUrl/api/products/search/image')
+          .replace(queryParameters: {
+        if (categoryId != null) 'category_id': categoryId,
+        if (userDescription != null && userDescription.isNotEmpty) 'user_description': userDescription,
+        'top_k': topK.toString(),
+      });
+
+      final request = http.MultipartRequest('POST', uri);
+
+      final fileStream = http.ByteStream(imageFile.openRead());
+      final fileLength = await imageFile.length();
+      final multipartFile = http.MultipartFile(
+        'image',
+        fileStream,
+        fileLength,
+        filename: imageFile.path.split('/').last,
+      );
+      request.files.add(multipartFile);
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 60),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        print('Error searching products by image: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      print('Exception searching products by image: $e');
+      return null;
+    }
+  }
 }
 

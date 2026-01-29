@@ -81,4 +81,58 @@ class PromptBuilder:
             "Bạn có thể trả lời các câu hỏi về sản phẩm, đơn hàng, và các thông tin khác trong hệ thống. "
             "Hãy trả lời một cách thân thiện, chính xác và hữu ích."
         )
+    
+    @staticmethod
+    def build_image_search_description_prompt(
+        products: list,
+        user_description: Optional[str] = None
+    ) -> str:
+        """
+        Xây dựng prompt để LLM tạo mô tả từ kết quả tìm kiếm bằng ảnh
+        
+        Args:
+            products: Danh sách sản phẩm tìm được (có product_name, category_name, price, similarity)
+            user_description: Mô tả của người dùng về ảnh (nếu có)
+            
+        Returns:
+            Prompt string để LLM tạo mô tả
+        """
+        prompt_parts = []
+        
+        prompt_parts.append("Bạn là trợ lý AI cho hệ thống tìm kiếm sản phẩm bằng ảnh.")
+        prompt_parts.append("Người dùng đã tìm kiếm sản phẩm bằng cách upload một bức ảnh.")
+        
+        if user_description:
+            prompt_parts.append(f"Mô tả của người dùng về ảnh: {user_description}")
+        
+        prompt_parts.append("")
+        prompt_parts.append("Dưới đây là các sản phẩm tương tự đã tìm được:")
+        prompt_parts.append("")
+        
+        for i, product in enumerate(products[:10], 1):
+            name = product.get('product_name', 'N/A')
+            category = product.get('category_name', '')
+            price = product.get('price')
+            similarity = product.get('similarity', 0.0)
+            
+            product_info = f"{i}. {name}"
+            if category:
+                product_info += f" (Danh mục: {category})"
+            if price:
+                product_info += f" - Giá: {price:,.0f}đ"
+            product_info += f" - Độ tương đồng: {similarity*100:.1f}%"
+            
+            prompt_parts.append(product_info)
+        
+        prompt_parts.append("")
+        prompt_parts.append("Hãy tạo một mô tả ngắn gọn, tự nhiên và thân thiện về kết quả tìm kiếm này.")
+        prompt_parts.append("Mô tả nên:")
+        prompt_parts.append("- Chào hỏi người dùng")
+        prompt_parts.append("- Nêu số lượng sản phẩm tìm được")
+        prompt_parts.append("- Giới thiệu 2-3 sản phẩm nổi bật nhất (tên, giá)")
+        prompt_parts.append("- Gợi ý người dùng có thể xem thêm nếu muốn")
+        prompt_parts.append("- Viết bằng tiếng Việt, tự nhiên như đang trò chuyện")
+        prompt_parts.append("- Giới hạn trong 150-200 từ")
+        
+        return "\n".join(prompt_parts)
 
