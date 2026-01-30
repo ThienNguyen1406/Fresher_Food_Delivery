@@ -27,10 +27,6 @@ class ImageIngestPipeline:
     ):
         """
         Khởi tạo Image Ingest Pipeline
-        
-        Args:
-            image_embedding_service: Service tạo embedding từ ảnh
-            vector_store: Vector store để lưu embeddings
         """
         self.image_embedding_service = image_embedding_service
         self.vector_store = vector_store
@@ -120,14 +116,7 @@ class ImageIngestPipeline:
         metadata_list: Optional[List[dict]] = None
     ) -> List[str]:
         """
-        Xử lý nhiều ảnh cùng lúc (batch)
-        
-        Args:
-            images: Danh sách ảnh dưới dạng bytes
-            image_names: Danh sách tên file ảnh
-            image_ids: Danh sách ID ảnh (tùy chọn)
-            metadata_list: Danh sách metadata (tùy chọn)
-            
+        Xử lý nhiều ảnh cùng lúc (batch)  
         Returns:
             Danh sách image_id đã xử lý
         """

@@ -5,6 +5,12 @@ import 'package:fresher_food/models/Category.dart';
 import 'package:fresher_food/services/api/category_api.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:image_picker/image_picker.dart';
+import 'widgets/category_header.dart';
+import 'widgets/category_search_bar.dart';
+import 'widgets/category_loading_indicator.dart';
+import 'widgets/category_empty_state.dart';
+import 'widgets/category_grid.dart';
+import 'widgets/category_delete_dialog.dart';
 
 /// Màn hình quản lý danh mục - CRUD danh mục sản phẩm
 class QuanLyDanhMucScreen extends StatefulWidget {
@@ -92,110 +98,28 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
   void _showDeleteConfirmation(Category category) {
     showDialog(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.orange[50],
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Iconsax.warning_2, color: Colors.orange[700], size: 24),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Xác nhận xóa',
-                      style: TextStyle(
-                        color: Colors.orange[700],
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  children: [
-                    Text(
-                      'Bạn có chắc muốn xóa danh mục "${category.tenDanhMuc}"?',
-                      style: const TextStyle(fontSize: 16),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Hành động này không thể hoàn tác',
-                      style: TextStyle(color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.grey[50],
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(20),
-                    bottomRight: Radius.circular(20),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.grey,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      child: const Text('Hủy'),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () async {
-                        Navigator.pop(context);
-                        try {
-                          final success = await _apiService.deleteCategory(category.maDanhMuc);
-                          if (success) {
-                            _loadCategories();
-                            _showSuccessSnackbar('Xóa thành công');
-                          } else {
-                            throw Exception('Xóa thất bại');
-                          }
-                        } catch (e) {
-                          // Loại bỏ "Exception: " prefix nếu có
-                          String errorMessage = e.toString();
-                          if (errorMessage.startsWith('Exception: ')) {
-                            errorMessage = errorMessage.substring(11);
-                          }
-                          _showErrorDialog('Lỗi', errorMessage);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      child: const Text('Xóa'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
+      builder: (context) => CategoryDeleteDialog(
+        category: category,
+        onDelete: (categoryId) async {
+          try {
+            final success = await _apiService.deleteCategory(categoryId);
+            if (success) {
+              _loadCategories();
+              return true;
+            } else {
+              throw Exception('Xóa thất bại');
+            }
+          } catch (e) {
+            String errorMessage = e.toString();
+            if (errorMessage.startsWith('Exception: ')) {
+              errorMessage = errorMessage.substring(11);
+            }
+            if (context.mounted) {
+              _showErrorDialog('Lỗi', errorMessage);
+            }
+            return false;
+          }
+        },
       ),
     );
   }
@@ -291,314 +215,35 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
       body: Column(
         children: [
           // Header
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A4D2E).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Icon(Iconsax.category, color: Color(0xFF1A4D2E), size: 24),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'Quản lý danh mục',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF1A4D2E),
-                  ),
-                ),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1A4D2E).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Text(
-                    '${_filteredCategories.length} danh mục',
-                    style: const TextStyle(
-                      color: Color(0xFF1A4D2E),
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          CategoryHeader(categoryCount: _filteredCategories.length),
           
           // Search
-          Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.white,
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Tìm kiếm danh mục...',
-                prefixIcon: const Icon(Iconsax.search_normal, color: Colors.grey),
-                suffixIcon: _searchKeyword.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Iconsax.close_circle, color: Colors.grey),
-                        onPressed: () {
-                          _searchController.clear();
-                          _onSearch('');
-                        },
-                      )
-                    : null,
-                filled: true,
-                fillColor: const Color(0xFFF5F5F5),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                  borderSide: BorderSide.none,
-                ),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              ),
-              onChanged: _onSearch,
-            ),
+          CategorySearchBar(
+            controller: _searchController,
+            searchKeyword: _searchKeyword,
+            onSearchChanged: _onSearch,
+            onClear: () {
+              _searchController.clear();
+              _onSearch('');
+            },
           ),
           
           // Categories Grid
           Expanded(
             child: _isLoading
-                ? const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        CircularProgressIndicator(color: Color(0xFF1A4D2E)),
-                        SizedBox(height: 16),
-                        Text('Đang tải danh mục...', style: TextStyle(color: Colors.grey)),
-                      ],
-                    ),
-                  )
+                ? const CategoryLoadingIndicator()
                 : _filteredCategories.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(24),
-                              decoration: BoxDecoration(
-                                color: Colors.grey[50],
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                _searchKeyword.isEmpty ? Iconsax.category : Iconsax.search_normal,
-                                size: 64,
-                                color: Colors.grey,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                            Text(
-                              _searchKeyword.isEmpty ? 'Chưa có danh mục nào' : 'Không tìm thấy danh mục',
-                              style: const TextStyle(fontSize: 18, color: Colors.grey),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _searchKeyword.isEmpty ? 'Hãy thêm danh mục đầu tiên của bạn' : 'Thử tìm kiếm với từ khóa khác',
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                            if (_searchKeyword.isEmpty)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 24),
-                                child: ElevatedButton(
-                                  onPressed: _showAddCategoryDialog,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: const Color(0xFF1A4D2E),
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                  child: const Text('Thêm danh mục đầu tiên'),
-                                ),
-                              ),
-                          ],
-                        ),
+                    ? CategoryEmptyState(
+                        searchKeyword: _searchKeyword,
+                        onAddCategory: _showAddCategoryDialog,
                       )
-                    : RefreshIndicator(
+                    : CategoryGrid(
+                        categories: _filteredCategories,
+                        getCategoryColor: _getCategoryColor,
+                        getImageUrl: _getImageUrl,
+                        onEdit: _showEditCategoryDialog,
+                        onDelete: _showDeleteConfirmation,
                         onRefresh: _loadCategories,
-                        color: const Color(0xFF1A4D2E),
-                        child: GridView.builder(
-                          padding: const EdgeInsets.all(16),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 16,
-                            mainAxisSpacing: 16,
-                            childAspectRatio: 0.8,
-                          ),
-                          itemCount: _filteredCategories.length,
-                          itemBuilder: (context, index) {
-                            final category = _filteredCategories[index];
-                            final color = _getCategoryColor(index);
-                            
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 12,
-                                    offset: const Offset(0, 4),
-                                  ),
-                                ],
-                              ),
-                              child: Column(
-                                children: [
-                                  // Image Section
-                                  Container(
-                                    height: 120,
-                                    decoration: BoxDecoration(
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                      ),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: const BorderRadius.only(
-                                        topLeft: Radius.circular(16),
-                                        topRight: Radius.circular(16),
-                                      ),
-                                      child: category.icon != null && category.icon!.isNotEmpty
-                                          ? Image.network(
-                                              _getImageUrl(category.icon!),
-                                              width: double.infinity,
-                                              height: double.infinity,
-                                              fit: BoxFit.cover,
-                                              loadingBuilder: (context, child, loadingProgress) {
-                                                if (loadingProgress == null) return child;
-                                                return Container(
-                                                  color: Colors.grey[200],
-                                                  child: Center(
-                                                    child: CircularProgressIndicator(
-                                                      value: loadingProgress.expectedTotalBytes != null
-                                                          ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes!
-                                                          : null,
-                                                      color: const Color(0xFF1A4D2E),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              errorBuilder: (context, error, stackTrace) {
-                                                return Container(
-                                                  color: color.withOpacity(0.3),
-                                                  child: Image.asset(
-                                                    'lib/assets/img/loginImg.png',
-                                                    fit: BoxFit.cover,
-                                                    width: double.infinity,
-                                                    height: double.infinity,
-                                                  ),
-                                                );
-                                              },
-                                            )
-                                          : Container(
-                                              color: color.withOpacity(0.3),
-                                              child: Image(
-                                                  image: AssetImage("lib/assets/img/loginImg.png")
-                                              ),
-                                            ),
-                                    ),
-                                  ),
-                                  
-                                  // Content Section
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                            decoration: BoxDecoration(
-                                              color: Colors.grey.shade100,
-                                              borderRadius: BorderRadius.circular(4),
-                                            ),
-                                            child: Text(
-                                              category.maDanhMuc,
-                                              style: TextStyle(
-                                                fontSize: 10,
-                                                fontWeight: FontWeight.w600,
-                                                color: Colors.grey[700],
-                                              ),
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            category.tenDanhMuc,
-                                            style: const TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.black87,
-                                            ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const Spacer(),
-                                          Row(
-                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                            children: [
-                                              Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.green.withOpacity(0.1),
-                                                  borderRadius: BorderRadius.circular(6),
-                                                ),
-                                                child: Row(
-                                                  children: [
-                                                    const Icon(Iconsax.box, size: 12, color: Colors.green),
-                                                    const SizedBox(width: 2),
-                                                    Text(
-                                                      '${category.soLuongSanPham} SP',
-                                                      style: const TextStyle(
-                                                        color: Colors.green,
-                                                        fontSize: 10,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                              Row(
-                                                children: [
-                                                  _buildActionButton(
-                                                    onPressed: () => _showEditCategoryDialog(category),
-                                                    icon: Iconsax.edit,
-                                                    color: Color(0xFF2196F3),
-                                                    size: 14,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  _buildActionButton(
-                                                    onPressed: () => _showDeleteConfirmation(category),
-                                                    icon: Iconsax.trash,
-                                                    color: Colors.red,
-                                                    size: 14,
-                                                  ),
-                                                ],
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        ),
                       ),
           ),
         ],
@@ -620,27 +265,6 @@ class _QuanLyDanhMucScreenState extends State<QuanLyDanhMucScreen> {
     return iconPath;
   }
 
-  Widget _buildActionButton({
-    required VoidCallback onPressed,
-    required IconData icon,
-    required Color color,
-    double size = 18,
-  }) {
-    return Container(
-      width: size + 8,
-      height: size + 8,
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: IconButton(
-        icon: Icon(icon, size: size, color: color),
-        onPressed: onPressed,
-        padding: EdgeInsets.zero,
-        style: IconButton.styleFrom(tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-      ),
-    );
-  }
 }
 
 class CategoryDialog extends StatefulWidget {

@@ -4,6 +4,12 @@ import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/services/api/sale_api.dart';
 import 'package:fresher_food/services/api/product_api.dart';
 import 'package:intl/intl.dart';
+import 'widgets/promotion_search_bar.dart';
+import 'widgets/promotion_loading_indicator.dart';
+import 'widgets/promotion_empty_state.dart';
+import 'widgets/promotion_list.dart';
+import 'widgets/promotion_delete_dialog.dart';
+import 'widgets/promotion_floating_buttons.dart';
 
 class QuanLyKhuyenMaiScreen extends StatefulWidget {
   const QuanLyKhuyenMaiScreen({super.key});
@@ -121,28 +127,11 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
   }
 
   Future<void> _deleteSale(String id) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Xác nhận xóa',
-            style: TextStyle(fontWeight: FontWeight.bold, color: _textPrimary)),
-        content: const Text('Bạn có chắc muốn xóa khuyến mãi này?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text('Hủy', style: TextStyle(color: _textSecondary)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: _errorColor,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xóa', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
+    final confirm = await PromotionDeleteDialog.show(
+      context,
+      textPrimary: _textPrimary,
+      textSecondary: _textSecondary,
+      errorColor: _errorColor,
     );
 
     if (confirm == true) {
@@ -461,343 +450,43 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
     );
   }
 
-  Color _getStatusColor(Sale sale) {
-    if (sale.isExpired) return _textSecondary;
-    if (sale.isActive) return _successColor;
-    if (sale.isUpcoming) return _warningColor;
-    return _textSecondary;
-  }
-
-  String _getStatusText(Sale sale) {
-    if (sale.isExpired) return 'Đã hết hạn';
-    if (sale.isActive) return 'Đang hoạt động';
-    if (sale.isUpcoming) return 'Sắp diễn ra';
-    return 'Không hoạt động';
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _backgroundColor,
-      floatingActionButton: Column(
-        mainAxisAlignment: MainAxisAlignment.end,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          // Floating action button cho khuyến mãi toàn bộ sản phẩm
-          FloatingActionButton(
-            heroTag: "global_sale",
-            onPressed: () => _showAddEditDialog(isGlobalSale: true),
-            backgroundColor: Colors.orange,
-            elevation: 4,
-            mini: true,
-            child: const Icon(Icons.public, color: Colors.white, size: 20),
-            tooltip: 'Khuyến mãi toàn bộ sản phẩm',
-          ),
-          const SizedBox(height: 12),
-          // Floating action button cho khuyến mãi sản phẩm cụ thể
-          FloatingActionButton(
-            heroTag: "product_sale",
-            onPressed: () => _showAddEditDialog(isGlobalSale: false),
-            backgroundColor: _primaryColor,
-            elevation: 4,
-            child: const Icon(Icons.add, color: Colors.white, size: 28),
-            tooltip: 'Khuyến mãi sản phẩm',
-          ),
-        ],
+      floatingActionButton: PromotionFloatingButtons(
+        onGlobalSalePressed: () => _showAddEditDialog(isGlobalSale: true),
+        onProductSalePressed: () => _showAddEditDialog(isGlobalSale: false),
+        primaryColor: _primaryColor,
       ),
       body: Column(
         children: [
           // Search bar
-          Container(
-            padding: const EdgeInsets.fromLTRB(24, 56, 24, 24),
-            color: _surfaceColor,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) => _filterSales(),
-                decoration: InputDecoration(
-                  hintText: 'Tìm kiếm khuyến mãi...',
-                  prefixIcon: Icon(Icons.search, color: _textSecondary),
-                  filled: true,
-                  fillColor: _backgroundColor,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                ),
-              ),
-            ),
+          PromotionSearchBar(
+            controller: _searchController,
+            onChanged: _filterSales,
+            backgroundColor: _backgroundColor,
+            surfaceColor: _surfaceColor,
+            textSecondary: _textSecondary,
           ),
           // Content
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? const PromotionLoadingIndicator()
                 : _filteredSales.isEmpty
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.local_offer_outlined,
-                                size: 64, color: _textSecondary),
-                            const SizedBox(height: 16),
-                            Text(
-                              'Chưa có khuyến mãi nào',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: _textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : RefreshIndicator(
+                    ? PromotionEmptyState(textSecondary: _textSecondary)
+                    : PromotionList(
+                        sales: _filteredSales,
                         onRefresh: _loadData,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filteredSales.length,
-                          itemBuilder: (context, index) {
-                            final sale = _filteredSales[index];
-                            return _buildSaleCard(sale);
-                          },
-                        ),
+                        onEdit: (sale) => _showAddEditDialog(sale: sale),
+                        onDelete: _deleteSale,
+                        textPrimary: _textPrimary,
+                        textSecondary: _textSecondary,
+                        primaryColor: _primaryColor,
+                        errorColor: _errorColor,
                       ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildSaleCard(Sale sale) {
-    final statusColor = _getStatusColor(sale);
-    final statusText = _getStatusText(sale);
-    final dateFormat = DateFormat('dd/MM/yyyy HH:mm');
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (sale.maSanPham == 'ALL')
-                            Container(
-                              margin: const EdgeInsets.only(right: 8),
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.orange.shade100,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.public, size: 14, color: Colors.orange.shade700),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'TOÀN BỘ',
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.orange.shade700,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          Expanded(
-                            child: Text(
-                              sale.tenSanPham ?? sale.maSanPham,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: _textPrimary,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (sale.maSanPham != 'ALL') ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Mã SP: ${sale.maSanPham}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _textSecondary,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Icon(
-                  sale.loaiGiaTri == 'Percent' ? Icons.percent : Icons.attach_money, 
-                  size: 20, 
-                  color: _primaryColor
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  sale.loaiGiaTri == 'Percent'
-                      ? '${sale.giaTriKhuyenMai.toStringAsFixed(0)}%'
-                      : '${NumberFormat('#,###').format(sale.giaTriKhuyenMai.toInt())} VNĐ',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: _primaryColor,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: sale.loaiGiaTri == 'Percent' 
-                        ? Colors.blue.shade50 
-                        : Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    sale.loaiGiaTri == 'Percent' ? 'THEO %' : 'THEO SỐ TIỀN',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                      color: sale.loaiGiaTri == 'Percent' 
-                          ? Colors.blue.shade700 
-                          : Colors.green.shade700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (sale.moTaChuongTrinh != null &&
-                sale.moTaChuongTrinh!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Text(
-                sale.moTaChuongTrinh!,
-                style: TextStyle(fontSize: 14, color: _textSecondary),
-              ),
-            ],
-            const SizedBox(height: 16),
-            Divider(color: _textSecondary.withOpacity(0.2)),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ngày bắt đầu',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        dateFormat.format(sale.ngayBatDau),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: _textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Ngày kết thúc',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _textSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        dateFormat.format(sale.ngayKetThuc),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: _textPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton.icon(
-                  onPressed: () => _showAddEditDialog(sale: sale),
-                  icon: const Icon(Icons.edit, size: 18),
-                  label: const Text('Sửa'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: _primaryColor,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                TextButton.icon(
-                  onPressed: () => _deleteSale(sale.idSale),
-                  icon: const Icon(Icons.delete, size: 18),
-                  label: const Text('Xóa'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: _errorColor,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

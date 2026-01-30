@@ -171,6 +171,53 @@ class ImageEmbeddingService:
             logger.error(f"Error creating CLIP text embedding: {str(e)}")
             return None
     
+    def create_query_embedding(
+        self,
+        image_bytes: Optional[bytes] = None,
+        caption: Optional[str] = None
+    ) -> Optional[np.ndarray]:
+        """
+        🔥 TỐI ƯU: Tạo query embedding từ image + caption (nếu có)
+        Service layer chịu trách nhiệm normalize + combine
+        API layer KHÔNG được normalize
+        
+        Args:
+            image_bytes: Ảnh query (tùy chọn)
+            caption: Text caption từ Vision (tùy chọn)
+            
+        Returns:
+            Query embedding đã normalize + combine (60% image + 40% caption nếu có cả 2)
+        """
+        image_emb = None
+        text_emb = None
+        
+        # Tạo image embedding
+        if image_bytes:
+            image_emb = self._create_clip_embedding(image_bytes)
+        
+        # Tạo text embedding từ caption
+        if caption:
+            text_emb = self.create_text_embedding(caption)
+        
+        # Combine: 60% image + 40% text (nếu có cả 2)
+        if image_emb is not None and text_emb is not None:
+            # Normalize cả 2
+            img_norm = image_emb / (np.linalg.norm(image_emb) + 1e-8)
+            txt_norm = text_emb / (np.linalg.norm(text_emb) + 1e-8)
+            # Weighted average: 60% image, 40% text
+            combined = 0.6 * img_norm + 0.4 * txt_norm
+            # Normalize lại sau khi combine
+            combined = combined / (np.linalg.norm(combined) + 1e-8)
+            return combined.astype(np.float32)
+        elif image_emb is not None:
+            # Chỉ có image (đã normalize trong CLIP)
+            return image_emb
+        elif text_emb is not None:
+            # Chỉ có text (đã normalize trong CLIP)
+            return text_emb
+        
+        return None
+    
     def _create_clip_embedding(self, image_bytes: bytes) -> np.ndarray:
         """Tạo embedding sử dụng CLIP model"""
         try:

@@ -3,6 +3,11 @@ import 'package:fresher_food/models/Order.dart';
 import 'package:fresher_food/roles/user/page/order/order_detail/page/order_detail_page.dart';
 import 'package:fresher_food/services/api/order_api.dart';
 import 'package:iconsax/iconsax.dart';
+import 'widgets/order_header.dart';
+import 'widgets/order_tab_bar.dart';
+import 'widgets/order_list.dart';
+import 'widgets/order_loading_indicator.dart';
+import 'widgets/order_empty_state.dart';
 
 /// Màn hình quản lý đơn hàng - xem, lọc và cập nhật trạng thái đơn hàng
 class QuanLyDonHangScreen extends StatefulWidget {
@@ -27,6 +32,7 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
   List<Order> _orders = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
   DateTime? _startDate;
   DateTime? _endDate;
 
@@ -61,6 +67,12 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
   void initState() {
     super.initState();
     _loadOrders();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   /// Khối chức năng: Load tất cả đơn hàng từ API
@@ -299,19 +311,65 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
       backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
-          // Header với search và filter (đã bỏ title)
-          _buildHeader(),
+          // Header với search và filter
+          OrderHeader(
+            searchController: _searchController,
+            onSearchChanged: (value) {
+              setState(() {
+                _searchQuery = value;
+              });
+            },
+            onExportExcel: _exportToExcel,
+            onFilter: _showFilterDialog,
+            primaryColor: _primaryColor,
+            secondaryColor: _secondaryColor,
+            accentColor: _accentColor,
+            backgroundColor: _backgroundColor,
+            surfaceColor: _surfaceColor,
+            textLightColor: _textLightColor,
+          ),
 
           // Tab bar
-          _buildTabBar(),
+          OrderTabBar(
+            tabs: _tabs,
+            selectedTab: _selectedTab,
+            onTabChanged: (index) {
+              setState(() {
+                _selectedTab = index;
+              });
+            },
+            primaryColor: _primaryColor,
+            surfaceColor: _surfaceColor,
+            textLightColor: _textLightColor,
+          ),
 
           // Danh sách đơn hàng
           Expanded(
             child: _isLoading
-                ? _buildLoadingIndicator()
+                ? OrderLoadingIndicator(
+                    primaryColor: _primaryColor,
+                    textLightColor: _textLightColor,
+                  )
                 : filteredOrders.isEmpty
-                    ? _buildEmptyState()
-                    : _buildOrderList(filteredOrders),
+                    ? OrderEmptyState(
+                        backgroundColor: _backgroundColor,
+                        textColor: _textColor,
+                        textLightColor: _textLightColor,
+                      )
+                    : OrderList(
+                        orders: filteredOrders,
+                        statusMap: _statusMap,
+                        statusColorMap: _statusColorMap,
+                        onViewDetail: _viewOrderDetail,
+                        onUpdateStatus: _showStatusUpdateDialog,
+                        formatDate: _formatDate,
+                        onRefresh: _loadOrders,
+                        primaryColor: _primaryColor,
+                        accentColor: _accentColor,
+                        surfaceColor: _surfaceColor,
+                        textColor: _textColor,
+                        textLightColor: _textLightColor,
+                      ),
           ),
         ],
       ),
@@ -324,451 +382,6 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: const BorderRadius.only(
-          bottomLeft: Radius.circular(24),
-          bottomRight: Radius.circular(24),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // Đã bỏ hoàn toàn dòng title "Quản lý đơn hàng"
-          const SizedBox(height: 8), // Giữ khoảng cách nhẹ
-          Row(
-            children: [
-              Expanded(
-                child: Container(
-                  height: 52,
-                  decoration: BoxDecoration(
-                    color: _backgroundColor,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: TextField(
-                    enableInteractiveSelection: true,
-                    enableSuggestions: true,
-                    autocorrect: true,
-                    textInputAction: TextInputAction.search,
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
-                    decoration: InputDecoration(
-                      hintText: 'Tìm kiếm theo mã đơn, số ĐT...',
-                      hintStyle: TextStyle(color: _textLightColor),
-                      prefixIcon:
-                          Icon(Iconsax.search_normal, color: _textLightColor),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              // Export Excel button
-              Container(
-                height: 52,
-                width: 52,
-                decoration: BoxDecoration(
-                  color: _accentColor,
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _accentColor.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Iconsax.document_download, color: Colors.white),
-                  tooltip: 'Xuất Excel',
-                  onPressed: _exportToExcel,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Container(
-                height: 52,
-                width: 52,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [_primaryColor, _secondaryColor],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _primaryColor.withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Iconsax.filter, color: Colors.white),
-                  onPressed: _showFilterDialog,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTabBar() {
-    return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: _tabs.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: ElevatedButton(
-              onPressed: () {
-                setState(() {
-                  _selectedTab = index;
-                });
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor:
-                    _selectedTab == index ? _primaryColor : _surfaceColor,
-                foregroundColor:
-                    _selectedTab == index ? Colors.white : _textLightColor,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(
-                    color: _selectedTab == index
-                        ? _primaryColor
-                        : Colors.grey.shade300,
-                    width: 1.5,
-                  ),
-                ),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: Text(
-                _tabs[index],
-                style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildOrderList(List<Order> orders) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: RefreshIndicator(
-        onRefresh: _loadOrders,
-        backgroundColor: _surfaceColor,
-        color: _primaryColor,
-        child: ListView.builder(
-          itemCount: orders.length,
-          itemBuilder: (context, index) {
-            final order = orders[index];
-            return _buildOrderCard(order);
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(Order order) {
-    final statusText = _statusMap[order.trangThai] ?? 'Không xác định';
-    final statusColor = _statusColorMap[order.trangThai] ?? Colors.grey;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: _surfaceColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-        border: Border.all(color: Colors.grey.shade100, width: 1),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header với mã đơn hàng và trạng thái
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Mã đơn hàng',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _textLightColor,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        order.maDonHang,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 16,
-                          color: _textColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: statusColor.withOpacity(0.2)),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: TextStyle(
-                      color: statusColor,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Thông tin khách hàng
-            Row(
-              children: [
-                Icon(Iconsax.profile_circle, size: 16, color: _textLightColor),
-                const SizedBox(width: 8),
-                Text(
-                  'Mã TK: ${order.maTaiKhoan}',
-                  style:
-                      TextStyle(color: _textColor, fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(width: 16),
-                Icon(Iconsax.call, size: 16, color: _textLightColor),
-                const SizedBox(width: 8),
-                Text(
-                  order.soDienThoai ?? 'Chưa có SĐT',
-                  style: TextStyle(color: _textColor),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Thông tin đơn hàng
-            Row(
-              children: [
-                Icon(Iconsax.calendar, size: 16, color: _textLightColor),
-                const SizedBox(width: 8),
-                Text(
-                  'Ngày: ${_formatDate(order.ngayDat)}',
-                  style: TextStyle(color: _textColor),
-                ),
-              ],
-            ),
-
-            // Địa chỉ giao hàng
-            if (order.diaChiGiaoHang != null &&
-                order.diaChiGiaoHang!.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Iconsax.location, size: 16, color: _textLightColor),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      order.diaChiGiaoHang!,
-                      style: TextStyle(
-                        color: _textLightColor,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-
-            const SizedBox(height: 16),
-
-            // Tổng tiền và actions
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      order.trangThaiThanhToan,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: _primaryColor,
-                      ),
-                    ),
-                    if (order.phuongThucThanhToan != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'PTTT: ${order.phuongThucThanhToan}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _textLightColor,
-                        ),
-                      ),
-                    ]
-                  ],
-                ),
-                Row(
-                  children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: _accentColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: Icon(Iconsax.eye, size: 20, color: _accentColor),
-                        onPressed: () => _viewOrderDetail(order),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // Disable nút chỉnh sửa nếu trạng thái là "Hoàn thành" hoặc "Đã hủy"
-                    Container(
-                      decoration: BoxDecoration(
-                        color: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
-                            ? Colors.grey.withOpacity(0.1)
-                            : _primaryColor.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: IconButton(
-                        icon: Icon(
-                          Iconsax.edit,
-                          size: 20,
-                          color: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
-                              ? Colors.grey
-                              : _primaryColor,
-                        ),
-                        onPressed: (order.trangThai == 'completed' || order.trangThai == 'cancelled')
-                            ? null
-                            : () => _showStatusUpdateDialog(order),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingIndicator() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          SizedBox(
-            width: 60,
-            height: 60,
-            child: CircularProgressIndicator(
-              strokeWidth: 3,
-              valueColor: AlwaysStoppedAnimation<Color>(_primaryColor),
-              backgroundColor: _primaryColor.withOpacity(0.1),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'Đang tải đơn hàng...',
-            style: TextStyle(
-              color: _textLightColor,
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: _backgroundColor,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Iconsax.shopping_bag,
-                size: 50,
-                color: _textLightColor,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Không có đơn hàng nào',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: _textColor,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Hãy thử thay đổi bộ lọc hoặc tìm kiếm',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: _textLightColor,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';

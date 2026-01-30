@@ -34,7 +34,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final NotificationApi _notificationApi = NotificationApi();
   Timer? _refreshTimer;
 
-  /// Khối chức năng: Lấy danh sách các màn hình quản lý với localization
+  /// Lấy danh sách các màn hình quản lý với localization
   List<Map<String, dynamic>> _getScreens(BuildContext context) {
     final localizations = AppLocalizations.of(context)!;
     return [
@@ -91,7 +91,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ];
   }
 
-  /// Khối khởi tạo: Load thông tin user, tin nhắn chưa đọc, thông báo chưa đọc và tự động refresh mỗi 10 giây
+  /// Load thông tin user, tin nhắn chưa đọc, thông báo chưa đọc và tự động refresh mỗi 10 giây
   @override
   void initState() {
     super.initState();
@@ -112,7 +112,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     super.dispose();
   }
 
-  /// Khối chức năng: Load thông tin người dùng admin
+  /// Load thông tin người dùng admin
   Future<void> _loadUserInfo() async {
     try {
       final user = await UserApi().getUserInfo();
@@ -124,7 +124,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  /// Khối chức năng: Load số lượng tin nhắn chưa đọc từ chat
+  /// Load số lượng tin nhắn chưa đọc từ chat
   Future<void> _loadUnreadMessagesCount() async {
     try {
       final chats = await _chatApi.getAdminChats();
@@ -142,7 +142,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  /// Khối chức năng: Load số lượng thông báo chưa đọc
+  /// Load số lượng thông báo chưa đọc
   Future<void> _loadUnreadNotificationsCount() async {
     try {
       final user = await UserApi().getCurrentUser();
@@ -159,7 +159,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  /// Khối giao diện chính: Hiển thị AppBar, Drawer và màn hình quản lý được chọn
+  /// Hiển thị AppBar, Drawer và màn hình quản lý được chọn
   @override
   Widget build(BuildContext context) {
     final screens = _getScreens(context);

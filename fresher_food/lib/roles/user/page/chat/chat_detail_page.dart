@@ -5,8 +5,12 @@ import 'package:fresher_food/services/api/rag_api.dart';
 import 'package:fresher_food/services/api/category_api.dart';
 import 'package:fresher_food/services/api/product_api.dart';
 import 'package:fresher_food/services/api_service.dart';
-import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:fresher_food/utils/constant.dart';
+import 'package:fresher_food/roles/user/page/chat/widgets/chat_app_bar.dart';
+import 'package:fresher_food/roles/user/page/chat/widgets/message_input.dart';
+import 'package:fresher_food/roles/user/page/chat/widgets/messages_list.dart';
+import 'package:fresher_food/roles/user/page/chat/widgets/loading_widget.dart';
+import 'package:fresher_food/roles/user/page/chat/widgets/empty_widget.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import 'dart:io';
@@ -276,9 +280,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     }
 
     try {
+      // TỐI ƯU: Load ít hơn ban đầu để nhanh hơn (chỉ 5 messages đầu)
       final result = await _chatApi.getMessages(
         maChat: widget.maChat,
-        limit: 10,
+        limit: 5, // Giảm từ 10 xuống 5 để load nhanh hơn
       );
       
       if (mounted) {
@@ -290,11 +295,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         _hasMoreMessagesNotifier.value = hasMore;
         _isLoadingNotifier.value = false;
 
-        // Mark as read
-        await _chatApi.markAsRead(
+        // Mark as read (async, không block UI)
+        _chatApi.markAsRead(
           maChat: widget.maChat,
           maNguoiDoc: widget.currentUserId,
-        );
+        ).catchError((e) {
+          // Silent fail
+          return false;
+        });
 
         // Scroll to bottom
         if (_messages.isNotEmpty && _scrollController.hasClients) {
@@ -457,6 +465,37 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
     _isSendingNotifier.value = true;
 
+    // OPTIMISTIC UPDATE: Thêm message vào UI ngay lập tức
+    final tempMessageId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    final optimisticMessage = Message(
+      maTinNhan: tempMessageId,
+      maChat: widget.maChat,
+      maNguoiGui: widget.currentUserId,
+      loaiNguoiGui: 'User',
+      noiDung: text,
+      ngayGui: DateTime.now(),
+      daDoc: false,
+    );
+    
+    // Thêm message vào UI ngay lập tức
+    final currentMessages = List<Message>.from(_messages);
+    currentMessages.add(optimisticMessage);
+    _messagesNotifier.value = currentMessages;
+    
+    // Clear input ngay lập tức
+    _messageController.clear();
+    
+    // Scroll to bottom ngay lập tức
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients && mounted) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+
     try {
       // Nếu có file đã upload, hỏi đáp với RAG
       if (_selectedFileId != null) {
@@ -468,7 +507,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         );
 
         if (response != null && mounted) {
-          // Gửi câu hỏi của user
+          // Gửi câu hỏi của user (đã hiển thị optimistic message rồi)
           await _chatApi.sendMessage(
             maChat: widget.maChat,
             maNguoiGui: widget.currentUserId,
@@ -476,8 +515,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             noiDung: text,
           );
 
-          // Bot sẽ tự động trả lời (đã xử lý ở backend)
-          _messageController.clear();
+          // Load lại messages từ server để có message ID thật
           _loadNewMessages();
           // Bắt đầu chờ bot phản hồi (sẽ hiển thị typing indicator)
           _waitForBotResponse();
@@ -489,7 +527,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             loaiNguoiGui: 'User',
             noiDung: text,
           );
-          _messageController.clear();
+          // Load lại messages từ server
           _loadNewMessages();
           // Bắt đầu chờ bot phản hồi (sẽ hiển thị typing indicator)
           _waitForBotResponse();
@@ -504,21 +542,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         );
 
         if (success && mounted) {
-          _messageController.clear();
-          // Refresh ngay lập tức và tiếp tục refresh mỗi 1 giây trong 10 giây để đợi bot phản hồi
+          // Load lại messages từ server để có message ID thật và sync
           _loadNewMessages();
           // Bắt đầu chờ bot phản hồi (sẽ hiển thị typing indicator)
           _waitForBotResponse();
         } else if (mounted) {
+          // Nếu gửi thất bại, xóa optimistic message
+          final updatedMessages = _messages.where((m) => m.maTinNhan != tempMessageId).toList();
+          _messagesNotifier.value = updatedMessages;
+          
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to send message')),
+            const SnackBar(content: Text('Không thể gửi tin nhắn. Vui lòng thử lại.')),
           );
         }
       }
     } catch (e) {
       if (mounted) {
+        // Nếu có lỗi, xóa optimistic message
+        final updatedMessages = _messages.where((m) => m.maTinNhan != tempMessageId).toList();
+        _messagesNotifier.value = updatedMessages;
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text('Lỗi: $e')),
         );
       }
     } finally {
@@ -762,21 +807,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             
             final productName = bestProduct['productName'] ?? 'N/A';
             final price = bestProduct['price'];
-            final similarity = bestProduct['similarity'] ?? 0.0;
             
-            // Rút gọn message - chỉ hiển thị thông tin cần thiết
-            textMessage = '$productName';
+            // Tạo message: "Mình tìm thấy sản phẩm <tên> - <giá>₫"
+            textMessage = 'Mình tìm thấy sản phẩm $productName';
             if (price != null) {
               textMessage += ' - ${price.toStringAsFixed(0)}₫';
             }
-            textMessage += ' (${(similarity * 100).toStringAsFixed(0)}% tương đồng)';
           } else {
             // Trường hợp 2: Không có sản phẩm nào có hình ảnh nhưng similarity >= 50%
-            // Lấy 2-3 sản phẩm đầu tiên (có similarity cao nhất)
-            selectedProducts = productsWithImages.take(3).toList();
+            // Lấy tối đa 3 sản phẩm có hình ảnh để tham khảo
+            // Ưu tiên sản phẩm có hình ảnh từ productsWithImages
+            final productsWithImageForFallback = productsWithImages.where((p) {
+              final imageData = p['imageData'] as String?;
+              return imageData != null && imageData.isNotEmpty;
+            }).take(3).toList();
             
-            // Rút gọn message - chỉ hiển thị danh sách sản phẩm gợi ý
-            textMessage = 'Sản phẩm gợi ý:\n';
+            // Nếu không có sản phẩm có hình ảnh, lấy 3 sản phẩm đầu tiên
+            selectedProducts = productsWithImageForFallback.isNotEmpty 
+                ? productsWithImageForFallback 
+                : productsWithImages.take(3).toList();
+            
+            // Tạo message với danh sách sản phẩm để tham khảo
+            textMessage = 'Bạn có thể tham khảo:\n';
             for (var i = 0; i < selectedProducts.length; i++) {
               final product = selectedProducts[i];
               final name = product['productName'] ?? 'N/A';
@@ -807,8 +859,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           );
         }
 
+        // KHÔNG gọi _waitForBotResponse() vì đã có kết quả tìm kiếm rồi
+        // Chỉ load messages mới để hiển thị kết quả
         _loadNewMessages();
-        _waitForBotResponse();
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1068,119 +1121,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     if (_cachedScreenWidth == null) {
       _cachedScreenWidth = MediaQuery.of(context).size.width;
     }
-    
-    final theme = Theme.of(context);
-    final localizations = AppLocalizations.of(context)!;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade600],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.support_agent,
-                color: Colors.white,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    localizations.supportChat,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  Text(
-                    'Hỗ trợ trực tuyến',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        shadowColor: Colors.black.withOpacity(0.1),
-        actions: [
-          // Menu options
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert, color: Colors.black87),
-            onSelected: (value) async {
-              if (value == 'delete') {
-                await _deleteChat();
-              } else if (value == 'new_chat') {
-                _createNewChat();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'new_chat',
-                child: Row(
-                  children: [
-                    Icon(Icons.add_circle_outline, size: 20),
-                    SizedBox(width: 8),
-                    Text('Tạo chat mới'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'delete',
-                child: Row(
-                  children: [
-                    Icon(Icons.delete_outline, size: 20, color: Colors.red),
-                    SizedBox(width: 8),
-                    Text('Xóa cuộc trò chuyện', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          // Nút upload file
-          Container(
-            margin: const EdgeInsets.only(right: 8),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              shape: BoxShape.circle,
-            ),
-            child: IconButton(
-              icon: Icon(
-                Icons.attach_file,
-                color: Colors.grey.shade700,
-                size: 22,
-              ),
-              onPressed: _isUploadingFileNotifier.value ? null : _uploadDocument,
-              tooltip: 'Upload file để hỏi đáp',
-            ),
-          ),
-        ],
+      appBar: ChatAppBar(
+        onDeleteChat: _deleteChat,
+        onCreateNewChat: _createNewChat,
+        onUploadDocument: _uploadDocument,
+        isUploadingFileNotifier: _isUploadingFileNotifier,
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -1204,872 +1152,35 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
                     valueListenable: _messagesNotifier,
                     builder: (context, messages, _) {
                       if (isLoading && messages.isEmpty) {
-                        return _buildLoadingWidget();
+                        return const LoadingWidget();
                       }
                       if (messages.isEmpty) {
-                        return _buildEmptyWidget(localizations);
+                        return const EmptyWidget();
                       }
-                      return _buildMessagesList(theme);
+                      return MessagesList(
+                        scrollController: _scrollController,
+                        messagesNotifier: _messagesNotifier,
+                        isLoadingMoreNotifier: _isLoadingMoreNotifier,
+                        isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
+                        screenWidth: _cachedScreenWidth ?? 400,
+                        timeFormat: _timeFormat,
+                        onRefresh: () => _loadMessages(),
+                      );
                     },
                   );
                 },
               ),
             ),
-            _buildMessageInput(localizations, theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-
-  // TỐI ƯU: Tách widget riêng để tránh rebuild không cần thiết
-  Widget _buildLoadingWidget() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF16A085)),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Đang tải tin nhắn...',
-            style: TextStyle(
-              color: Color(0xFF666666),
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyWidget(AppLocalizations localizations) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Colors.green.shade100,
-                  Colors.green.shade200,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.2),
-                  blurRadius: 20,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Icon(
-              Icons.chat_bubble_outline,
-              size: 60,
-              color: Colors.green.shade700,
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            localizations.noMessages,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey.shade800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Bắt đầu cuộc trò chuyện với chúng tôi',
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey.shade600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // TỐI ƯU: Tách messages list với ValueListenableBuilder
-  Widget _buildMessagesList(ThemeData theme) {
-    return RefreshIndicator(
-      onRefresh: () => _loadMessages(),
-      color: Colors.green.shade600,
-      child: Column(
-        children: [
-          // TỐI ƯU: Chỉ rebuild loading indicator khi cần
-          ValueListenableBuilder<bool>(
-            valueListenable: _isLoadingMoreNotifier,
-            builder: (context, isLoadingMore, _) {
-              if (!isLoadingMore) return const SizedBox.shrink();
-              return Container(
-                padding: const EdgeInsets.all(16),
-                child: const CircularProgressIndicator(),
-              );
-            },
-          ),
-          Expanded(
-            child: ValueListenableBuilder<List<Message>>(
-              valueListenable: _messagesNotifier,
-              builder: (context, messages, _) {
-                return ValueListenableBuilder<bool>(
-                  valueListenable: _isWaitingForBotResponseNotifier,
-                  builder: (context, isWaiting, _) {
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      reverse: false,
-                      itemCount: messages.length + (isWaiting ? 1 : 0),
-                      // TỐI ƯU: Tăng cacheExtent và thêm các flags
-                      cacheExtent: 2000,
-                      addAutomaticKeepAlives: false,
-                      addRepaintBoundaries: true,
-                      itemBuilder: (context, index) {
-                        if (isWaiting && index == messages.length) {
-                          return _TypingIndicatorWidget(screenWidth: _cachedScreenWidth ?? 400);
-                        }
-                        final message = messages[index];
-                        // TỐI ƯU: Sử dụng key ổn định và cache screenWidth
-                        return MessageBubble(
-                          key: ValueKey(message.maTinNhan),
-                          message: message,
-                          screenWidth: _cachedScreenWidth ?? 400,
-                          timeFormat: _timeFormat,
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMessageInput(AppLocalizations localizations, ThemeData theme) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
-      child: SafeArea(
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            // Nút image search và attach file
-            ValueListenableBuilder<bool>(
-              valueListenable: _isUploadingFileNotifier,
-              builder: (context, isUploading, _) {
-                if (isUploading) {
-                  return Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(12),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
-                      ),
-                    ),
-                  );
-                }
-                return Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.image,
-                      color: Colors.blue.shade600,
-                      size: 20,
-                    ),
-                    onPressed: _pickImageForSearch,
-                    tooltip: 'Chọn ảnh để tìm kiếm',
-                    padding: EdgeInsets.zero,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Hiển thị preview ảnh nếu có
-                  if (_selectedImage != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              _selectedImage!,
-                              width: double.infinity,
-                              height: 100,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          // Nút X để xóa ảnh
-                          Positioned(
-                            top: 4,
-                            right: 4,
-                            child: GestureDetector(
-                              onTap: _removeSelectedImage,
-                              child: Container(
-                                width: 24,
-                                height: 24,
-                                decoration: const BoxDecoration(
-                                  color: Colors.black54,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.close,
-                                  color: Colors.white,
-                                  size: 16,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  // Text input
-                  Container(
-                    constraints: const BoxConstraints(maxHeight: 120),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(24),
-                      border: Border.all(
-                        color: Colors.grey.shade200,
-                        width: 1,
-                      ),
-                    ),
-                    child: TextField(
-                      controller: _messageController,
-                      decoration: InputDecoration(
-                        hintText: _selectedImage != null
-                            ? 'Nhập mô tả về ảnh (tùy chọn)...'
-                            : localizations.typeMessage,
-                        hintStyle: TextStyle(
-                          color: Colors.grey.shade500,
-                          fontSize: 15,
-                        ),
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 20,
-                          vertical: 12,
-                        ),
-                      ),
-                      style: const TextStyle(
-                        fontSize: 15,
-                        color: Colors.black87,
-                      ),
-                      maxLines: null,
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            // Nút send
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.green.shade500,
-                    Colors.green.shade600,
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.4),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: _isSendingNotifier.value ? null : _sendMessage,
-                  borderRadius: BorderRadius.circular(22),
-                  child: ValueListenableBuilder<bool>(
-                    valueListenable: _isSendingNotifier,
-                    builder: (context, isSending, _) {
-                      return isSending
-                          ? const Padding(
-                              padding: EdgeInsets.all(12),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                              ),
-                            )
-                          : const Icon(
-                              Icons.send_rounded,
-                              color: Colors.white,
-                              size: 22,
-                            );
-                    },
-                  ),
-                ),
-              ),
+            MessageInput(
+              messageController: _messageController,
+              selectedImage: _selectedImage,
+              isSendingNotifier: _isSendingNotifier,
+              isUploadingFileNotifier: _isUploadingFileNotifier,
+              onSendMessage: _sendMessage,
+              onPickImage: _pickImageForSearch,
+              onRemoveImage: _removeSelectedImage,
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Dialog để nhập mô tả khi tìm kiếm bằng ảnh
-class _ImageSearchDialog extends StatefulWidget {
-  final String imagePath;
-
-  const _ImageSearchDialog({required this.imagePath});
-
-  @override
-  State<_ImageSearchDialog> createState() => _ImageSearchDialogState();
-}
-
-class _ImageSearchDialogState extends State<_ImageSearchDialog> {
-  final TextEditingController _descriptionController = TextEditingController();
-
-  @override
-  void dispose() {
-    _descriptionController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      title: const Row(
-        children: [
-          Icon(Icons.image, color: Colors.blue),
-          SizedBox(width: 8),
-          Expanded(child: Text('Tìm kiếm sản phẩm bằng ảnh')),
-        ],
-      ),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Hiển thị ảnh preview
-            Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.file(
-                  File(widget.imagePath),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Text field để nhập mô tả
-            TextField(
-              controller: _descriptionController,
-              decoration: InputDecoration(
-                labelText: 'Mô tả về ảnh (tùy chọn)',
-                hintText: 'Ví dụ: Tìm sản phẩm tương tự như ảnh này...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                prefixIcon: const Icon(Icons.description),
-              ),
-              maxLines: 3,
-              textCapitalization: TextCapitalization.sentences,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Hủy'),
-        ),
-        ElevatedButton(
-          onPressed: () => Navigator.pop(context, _descriptionController.text.trim()),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-          child: const Text('Tìm kiếm'),
-        ),
-      ],
-    );
-  }
-}
-
-/// TỐI ƯU: Typing indicator widget riêng với const
-class _TypingIndicatorWidget extends StatelessWidget {
-  final double screenWidth;
-
-  const _TypingIndicatorWidget({required this.screenWidth});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF16A085), Color(0xFF138D75)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: const Icon(
-              Icons.support_agent,
-              size: 18,
-              color: Colors.white,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: screenWidth * 0.75,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                  bottomLeft: Radius.circular(4),
-                  bottomRight: Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey,
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _TypingDot(delay: 0),
-                  const SizedBox(width: 4),
-                  _TypingDot(delay: 200),
-                  const SizedBox(width: 4),
-                  _TypingDot(delay: 400),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Widget bất biến để hiển thị message bubble - tối ưu hiệu năng
-class MessageBubble extends StatelessWidget {
-  final Message message;
-  final double screenWidth;
-  final DateFormat timeFormat;
-
-  const MessageBubble({
-    super.key,
-    required this.message,
-    required this.screenWidth,
-    required this.timeFormat,
-  });
-
-  /// Parse message và hiển thị với products images nếu có
-  Widget _buildMessageContent(String messageText, bool isFromUser) {
-    // Kiểm tra xem có [IMAGE_DATA] không (hình ảnh từ user)
-    final imageDataMatch = RegExp(r'\[IMAGE_DATA\](.*?)\[/IMAGE_DATA\]', dotAll: true).firstMatch(messageText);
-    
-    // Kiểm tra xem có [PRODUCTS_DATA] không
-    final productsDataMatch = RegExp(r'\[PRODUCTS_DATA\](.*?)\[/PRODUCTS_DATA\]', dotAll: true).firstMatch(messageText);
-    
-    // Extract text message (loại bỏ các tags)
-    String textMessage = messageText;
-    if (imageDataMatch != null) {
-      textMessage = textMessage.replaceAll(RegExp(r'\[IMAGE_DATA\].*?\[/IMAGE_DATA\]', dotAll: true), '').trim();
-    }
-    if (productsDataMatch != null) {
-      textMessage = textMessage.substring(0, productsDataMatch.start).trim();
-    }
-    
-    // Parse và hiển thị image từ user nếu có
-    String? userImageData;
-    if (imageDataMatch != null && isFromUser) {
-      try {
-        userImageData = imageDataMatch.group(1)?.trim();
-      } catch (e) {
-        print('Error parsing image data: $e');
-      }
-    }
-    
-    // Parse products data nếu có
-    List<dynamic> productsWithImages = [];
-    if (productsDataMatch != null) {
-      try {
-        final jsonStr = productsDataMatch.group(1)?.trim() ?? '';
-        final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
-        final products = productsData['products'] as List<dynamic>? ?? [];
-        
-        // Filter products có imageData
-        productsWithImages = products.where((p) {
-          final imageData = p['imageData'] as String?;
-          return imageData != null && imageData.isNotEmpty;
-        }).toList();
-      } catch (e) {
-        print('❌ Error parsing products data: $e');
-      }
-    }
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Hiển thị hình ảnh từ user nếu có
-        if (userImageData != null && userImageData.isNotEmpty) ...[
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            constraints: const BoxConstraints(maxWidth: 200, maxHeight: 200),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isFromUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
-                width: 1,
-              ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                base64Decode(userImageData),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 200,
-                    height: 200,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-        // Text message
-        if (textMessage.isNotEmpty)
-          Text(
-            textMessage,
-            style: TextStyle(
-              color: isFromUser ? Colors.white : Colors.grey.shade800,
-              fontSize: 15,
-              height: 1.4,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        // Products images - Hiển thị ảnh nếu có ít nhất 1 product có imageData
-        if (productsWithImages.isNotEmpty) ...[
-          if (textMessage.isNotEmpty) const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: productsWithImages.map((product) {
-              final imageData = product['imageData'] as String?;
-              
-              if (imageData != null && imageData.isNotEmpty) {
-                try {
-                  return Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        base64Decode(imageData),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('Error decoding image: $error');
-                          return Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image, color: Colors.grey),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  print('Error displaying image: $e');
-                  return Container(
-                    width: 120,
-                    height: 120,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  );
-                }
-              }
-              return const SizedBox.shrink();
-            }).toList(),
-          ),
-        ],
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isFromUser = message.isFromUser;
-    // TỐI ƯU: Sử dụng cached values thay vì tính toán lại
-    final maxWidth = screenWidth * 0.75;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Row(
-        mainAxisAlignment:
-            isFromUser ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          if (!isFromUser) ...[
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.green.shade400, Colors.green.shade600],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.support_agent,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 10),
-          ],
-          Flexible(
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: maxWidth,
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: isFromUser
-                    ? LinearGradient(
-                        colors: [Colors.green.shade500, Colors.green.shade600],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      )
-                    : null,
-                color: isFromUser ? null : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: isFromUser ? const Radius.circular(20) : const Radius.circular(4),
-                  bottomRight: isFromUser ? const Radius.circular(4) : const Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: (isFromUser ? Colors.green : Colors.black).withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Parse và hiển thị message với products images
-                  _buildMessageContent(message.noiDung, isFromUser),
-                  const SizedBox(height: 6),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        timeFormat.format(message.ngayGui),
-                        style: TextStyle(
-                          color: isFromUser
-                              ? Colors.white.withOpacity(0.8)
-                              : Colors.grey.shade500,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w400,
-                        ),
-                      ),
-                      if (isFromUser) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          message.daDoc ? Icons.done_all : Icons.done,
-                          size: 14,
-                          color: message.daDoc
-                              ? Colors.blue.shade300
-                              : Colors.white.withOpacity(0.6),
-                        ),
-                      ],
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (isFromUser) ...[
-            const SizedBox(width: 10),
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.blue.shade400, Colors.blue.shade600],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.person,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Widget hiển thị 1 chấm đang nhảy (typing animation) - giống quick_chatbot_dialog
-class _TypingDot extends StatefulWidget {
-  final int delay;
-
-  const _TypingDot({required this.delay});
-
-  @override
-  State<_TypingDot> createState() => _TypingDotState();
-}
-
-class _TypingDotState extends State<_TypingDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    )..repeat(reverse: true);
-
-    _animation = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
-    );
-
-    Future.delayed(Duration(milliseconds: widget.delay), () {
-      if (mounted) {
-        _controller.forward();
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Container(
-        width: 8,
-        height: 8,
-        decoration: BoxDecoration(
-          color: Colors.grey.shade600,
-          shape: BoxShape.circle,
         ),
       ),
     );

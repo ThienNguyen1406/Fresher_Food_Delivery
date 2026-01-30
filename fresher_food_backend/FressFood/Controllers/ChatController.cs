@@ -923,6 +923,20 @@ namespace FressFood.Controllers
                                         }
                                     }
                                     
+                                    // 🔥 FIX: Kiểm tra nếu message có [IMAGE_DATA] tag
+                                    // Frontend đang xử lý image search riêng, backend không nên trả về response
+                                    var hasImageData = !string.IsNullOrEmpty(capturedNoiDung) && 
+                                                       System.Text.RegularExpressions.Regex.IsMatch(
+                                                           capturedNoiDung, 
+                                                           @"\[IMAGE_DATA\].*?\[/IMAGE_DATA\]", 
+                                                           System.Text.RegularExpressions.RegexOptions.Singleline);
+                                    
+                                    if (hasImageData)
+                                    {
+                                        _logger.LogInformation($"[Task.Run] Message contains [IMAGE_DATA] tag. Frontend is handling image search separately. Skipping chatbot response.");
+                                        return; // Exit early - frontend sẽ xử lý image search riêng
+                                    }
+                                    
                                     // Thử retrieve context từ RAG nếu có
                                     string? ragContext = null;
                                     try
