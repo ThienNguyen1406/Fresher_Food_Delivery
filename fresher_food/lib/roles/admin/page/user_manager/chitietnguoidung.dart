@@ -67,7 +67,9 @@ class _ChiTietNguoiDungScreenState extends State<ChiTietNguoiDungScreen> {
     setState(() => _dangLuu = true);
 
     final data = {
+      "MaTaiKhoan": widget.nguoiDung['maTaiKhoan'] ?? '',
       "TenNguoiDung": _tenNguoiDungCtrl.text.trim(),
+      "MatKhau": "", // Backend sẽ giữ nguyên mật khẩu cũ nếu rỗng
       "HoTen": _hoTenCtrl.text.trim(),
       "Email": _emailCtrl.text.trim(),
       "Sdt": _sdtCtrl.text.trim(),

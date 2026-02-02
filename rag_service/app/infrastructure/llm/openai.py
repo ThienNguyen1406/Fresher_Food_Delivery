@@ -1,7 +1,3 @@
-"""
-OpenAI LLM implementation - Triển khai LLM từ OpenAI
-Khuyến nghị: GPT-4.1 với fallback Ollama
-"""
 import os
 import logging
 from typing import Optional
@@ -13,21 +9,14 @@ logger = logging.getLogger(__name__)
 class LLMProvider(ABC):
     """
     Abstract base class cho các LLM providers
-    
-    Định nghĩa interface chung cho tất cả các LLM implementations
+
     """
     
     @abstractmethod
     async def generate(self, prompt: str, context: Optional[str] = None) -> str:
         """
         Tạo phản hồi từ prompt
-        
-        Args:
-            prompt: Câu hỏi hoặc yêu cầu
-            context: Ngữ cảnh bổ sung (tùy chọn)
-            
-        Returns:
-            Phản hồi từ LLM
+         Phản hồi từ LLM
         """
         pass
 
@@ -35,8 +24,6 @@ class LLMProvider(ABC):
 class OpenAILLM(LLMProvider):
     """
     OpenAI LLM implementation - Khuyến nghị: GPT-4.1
-    
-    Sử dụng OpenAI API để tạo phản hồi, có fallback sang Ollama khi lỗi
     """
     
     def __init__(self):

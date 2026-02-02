@@ -15,6 +15,7 @@ import 'package:fresher_food/services/api/coupon_api.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/providers/theme_provider.dart';
 import 'package:fresher_food/providers/language_provider.dart';
+import 'package:fresher_food/providers/splash_provider.dart';
 import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:provider/provider.dart';
 import "package:flutter_stripe/flutter_stripe.dart";
@@ -131,6 +132,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (context) => OrderListProvider()),
         // Provider quản lý chi tiết sản phẩm
         ChangeNotifierProvider(create: (context) => ProductDetailProvider()),
+        // Provider quản lý splash screen
+        ChangeNotifierProvider(create: (context) => SplashProvider()),
       ],
       // Sử dụng Consumer2 để lắng nghe thay đổi từ ThemeProvider và LanguageProvider
       child: Consumer2<ThemeProvider, LanguageProvider>(

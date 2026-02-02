@@ -1,7 +1,3 @@
-"""
-Chroma vector store implementation - Triển khai vector store sử dụng Chroma
-Chroma là vector database local, phù hợp cho development và production nhỏ
-"""
 import os
 import logging
 from typing import List, Optional, Dict
@@ -18,11 +14,6 @@ logger = logging.getLogger(__name__)
 class ChromaVectorStore(VectorStore):
     """
     Chroma vector store implementation
-    
-    Chroma là vector database mã nguồn mở, lưu trữ local:
-    - Phù hợp cho development và production nhỏ
-    - Không cần server riêng
-    - Lưu trữ dữ liệu trên disk
     """
     
     def __init__(self):
@@ -123,9 +114,6 @@ class ChromaVectorStore(VectorStore):
         
         try:
             where = {"file_id": file_id} if file_id else None
-            
-            # TỐI ƯU: Không cần gọi collection.get() để đếm chunks
-            # Chroma query() sẽ tự xử lý và trả về empty nếu không có kết quả
             results = self.collection.query(
                 query_embeddings=[query_embedding.tolist()],
                 n_results=top_k,

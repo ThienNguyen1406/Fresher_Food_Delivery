@@ -1,6 +1,3 @@
-"""
-Image Vector Store - Vector store riêng cho images với collection và dimension riêng
-"""
 import os
 import logging
 from typing import List, Optional, Dict
@@ -18,7 +15,6 @@ logger = logging.getLogger(__name__)
 class ImageVectorStore(VectorStore):
     """
     Vector store riêng cho images
-    Sử dụng collection riêng với dimension 512 (CLIP embeddings)
     """
     
     def __init__(self):
@@ -50,17 +46,11 @@ class ImageVectorStore(VectorStore):
             # Kiểm tra collection đã tồn tại chưa
             try:
                 existing_collection = self.chroma_client.get_collection(name=collection_name)
-                # Nếu collection đã tồn tại, kiểm tra dimension
-                # Chroma không cho phép thay đổi dimension của collection đã tồn tại
-                # Nếu dimension không đúng, cần xóa và tạo lại
                 logger.info(f"Collection '{collection_name}' đã tồn tại")
             except Exception:
                 # Collection chưa tồn tại, tạo mới
                 logger.info(f"Tạo collection mới '{collection_name}' với dimension 512")
             
-            # Tạo hoặc lấy collection
-            # Chroma sẽ tự động detect dimension từ embedding đầu tiên
-            # Nếu collection đã tồn tại với dimension khác, sẽ báo lỗi khi add
             self.collection = self.chroma_client.get_or_create_collection(
                 name=collection_name,
                 metadata={"hnsw:space": "cosine"}
@@ -84,13 +74,6 @@ class ImageVectorStore(VectorStore):
     ) -> None:
         """
         Save image chunks with embeddings to Chroma
-        
-        Args:
-            chunks: List of DocumentChunk
-            embeddings: List of embedding vectors
-            file_type: File type
-            upload_date: Upload date
-            extra_metadata: Optional list of additional metadata dicts (one per chunk)
         """
         if not chunks or not embeddings:
             return

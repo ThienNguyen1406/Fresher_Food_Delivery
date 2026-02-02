@@ -1,7 +1,3 @@
-"""
-Ollama LLM implementation - Triển khai LLM từ Ollama (Fallback)
-Ollama là LLM chạy local, dùng làm fallback khi OpenAI lỗi
-"""
 import os
 import logging
 from typing import Optional
@@ -16,12 +12,6 @@ logger = logging.getLogger(__name__)
 class OllamaLLM(LLMProvider):
     """
     Ollama LLM implementation - Dùng làm fallback
-    
-    Ollama cho phép chạy LLM models local:
-    - Không cần API key
-    - Miễn phí
-    - Chạy trên máy local
-    - Phù hợp làm fallback khi OpenAI lỗi
     """
     
     def __init__(self):
@@ -34,13 +24,6 @@ class OllamaLLM(LLMProvider):
     async def generate(self, prompt: str, context: Optional[str] = None) -> str:
         """
         Tạo phản hồi sử dụng Ollama
-        
-        Args:
-            prompt: Câu hỏi hoặc yêu cầu
-            context: Ngữ cảnh bổ sung (tùy chọn)
-            
-        Returns:
-            Phản hồi từ Ollama
         """
         try:
             # Kết hợp context và prompt nếu có

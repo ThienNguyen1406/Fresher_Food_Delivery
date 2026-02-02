@@ -26,7 +26,7 @@ class EmbeddingService:
             self._init_openai()
         else:
             if self.use_openai:
-                logger.warning("⚠️  OpenAI embeddings được bật nhưng chưa có API Key!")
+                logger.warning("  OpenAI embeddings được bật nhưng chưa có API Key!")
                 logger.warning("   Để cấu hình: Thêm OPENAI_API_KEY vào file .env hoặc environment variable")
                 logger.warning("   Xem SETUP.md để biết chi tiết")
             logger.info("🔄 Chuyển sang Sentence Transformer (chậm hơn nhưng miễn phí)")

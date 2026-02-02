@@ -182,7 +182,6 @@ class ImageEmbeddingService:
         if caption:
             text_emb = self.create_text_embedding(caption)
         
-        # Combine: 60% image + 40% text (nếu có cả 2)
         if image_emb is not None and text_emb is not None:
             # Normalize cả 2
             img_norm = image_emb / (np.linalg.norm(image_emb) + 1e-8)

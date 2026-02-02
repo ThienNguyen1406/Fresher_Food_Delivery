@@ -1,7 +1,3 @@
-"""
-Reranker Service - Service sắp xếp lại các chunks đã tìm được để cải thiện độ liên quan
-Khuyến nghị: bge-reranker
-"""
 import logging
 from typing import List, Dict
 import numpy as np
@@ -17,14 +13,12 @@ class RerankerService:
     """
     
     def __init__(self):
-        """Khởi tạo Reranker Service - Lazy loading để tránh tải model khi không cần"""
         self.use_reranker = Settings.USE_RERANKER
         self.model = None
         self._model_loaded = False
-        # KHÔNG load model ngay trong __init__ để tránh chậm khi khởi động service
+    
     
     def _ensure_model_loaded(self):
-        """Lazy load model reranker chỉ khi thực sự cần sử dụng"""
         if self._model_loaded:
             return
         
