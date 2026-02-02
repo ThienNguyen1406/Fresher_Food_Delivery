@@ -1,7 +1,3 @@
-"""
-Embedding Service - Service tạo embedding vectors từ text
-Chuyển đổi text thành các vector số để có thể so sánh và tìm kiếm
-"""
 import os
 import logging
 from typing import List, Optional
@@ -16,11 +12,6 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """
     Service tạo embedding vectors từ text
-    
-    Embedding là cách chuyển đổi text thành các vector số để:
-    - So sánh độ tương đồng giữa các đoạn text
-    - Tìm kiếm semantic (tìm kiếm theo nghĩa, không chỉ từ khóa)
-    - Lưu trữ và tìm kiếm trong vector database
     """
     
     def __init__(self):
@@ -95,8 +86,6 @@ class EmbeddingService:
         TỐI ƯU: Sử dụng async client trực tiếp thay vì to_thread để nhanh hơn
         """
         try:
-            # TỐI ƯU: Gọi trực tiếp async API thay vì to_thread
-            # OpenAI client đã hỗ trợ async natively
             import asyncio
             response = await asyncio.to_thread(
                 self.openai_client.embeddings.create,
@@ -117,10 +106,7 @@ class EmbeddingService:
     
     async def create_embeddings(self, texts: List[str]) -> List[Optional[np.ndarray]]:
         """
-        Tạo embeddings cho nhiều texts (batch)
-        
-        Với OpenAI: Sử dụng batch API để tăng tốc
-        Với Sentence Transformer: Encode tất cả cùng lúc
+        Tạo embeddings cho nhiều texts
         """
         if not texts:
             return []

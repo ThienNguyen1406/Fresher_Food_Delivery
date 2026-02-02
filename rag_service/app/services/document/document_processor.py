@@ -1,6 +1,3 @@
-"""
-Document Processor Service - Extract text and chunk documents
-"""
 import io
 import uuid
 from typing import List

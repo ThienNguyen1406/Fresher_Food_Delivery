@@ -66,6 +66,7 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   Future<void> _handlePickImage(ImageSource source) async {
+    final localizations = AppLocalizations.of(context)!;
     try {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(source: source);
@@ -93,13 +94,13 @@ class _MainScreenState extends State<MainScreen> {
           await _loadUserInfo();
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Cập nhật avatar thành công')),
+            SnackBar(content: Text(localizations.updateAvatarSuccess)),
           );
         } else if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(result?['error'] ?? 'Lỗi upload ảnh'),
+              content: Text(result?['error'] ?? localizations.uploadImageError),
             ),
           );
         }
@@ -108,27 +109,28 @@ class _MainScreenState extends State<MainScreen> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e')),
+          SnackBar(content: Text('${localizations.error}: $e')),
         );
       }
     }
   }
 
   Future<void> _handleDeleteAvatar() async {
+    final localizations = AppLocalizations.of(context)!;
     try {
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Xác nhận'),
-          content: const Text('Bạn có chắc muốn xóa avatar?'),
+          title: Text(localizations.confirmDelete),
+          content: Text(localizations.confirmDeleteAvatar),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Hủy'),
+              child: Text(localizations.cancel),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+              child: Text(localizations.delete, style: const TextStyle(color: Colors.red)),
             ),
           ],
         ),
@@ -139,33 +141,34 @@ class _MainScreenState extends State<MainScreen> {
         if (success && mounted) {
           await _loadUserInfo();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Xóa avatar thành công')),
+            SnackBar(content: Text(localizations.deleteAvatarSuccess)),
           );
         }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Lỗi: $e')),
+          SnackBar(content: Text('${localizations.error}: $e')),
         );
       }
     }
   }
 
   Future<void> _handleLogout() async {
+    final localizations = AppLocalizations.of(context)!;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Xác nhận'),
-        content: const Text('Bạn có chắc muốn đăng xuất?'),
+        title: Text(localizations.confirmDelete),
+        content: Text(localizations.confirmLogout),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Hủy'),
+            child: Text(localizations.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Đăng xuất', style: TextStyle(color: Colors.red)),
+            child: Text(localizations.logout, style: const TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -293,7 +296,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Home',
+                label: 'Trang Chủ',
               ),
               BottomNavigationBarItem(
                 icon: Builder(
@@ -334,7 +337,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Vouchers',
+                label: 'Giảm Giá',
               ),
               BottomNavigationBarItem(
                 icon: Builder(
@@ -375,7 +378,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Cart',
+                label: 'Giỏ Hàng',
               ),
               BottomNavigationBarItem(
                 icon: Builder(
@@ -457,7 +460,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Favorite',
+                label: 'Yêu Thích',
               ),
               BottomNavigationBarItem(
                 icon: Builder(
@@ -498,7 +501,7 @@ class _MainScreenState extends State<MainScreen> {
                     );
                   },
                 ),
-                label: 'Account',
+                label: 'Tài Khoản',
               ),
             ],
           ),
@@ -514,7 +517,8 @@ class _MainScreenState extends State<MainScreen> {
       builder: (context, snapshot) {
         final data = snapshot.data ?? _userInfo ?? {};
         final avatarUrl = data['avatar'] ?? _avatarUrl;
-        final userName = data['tenTaiKhoan'] ?? 'Người dùng';
+        final localizations = AppLocalizations.of(context)!;
+        final userName = data['tenTaiKhoan'] ?? localizations.user;
 
         return AvatarWithMenuWidget.buildDrawer(
           context: context,
@@ -533,7 +537,6 @@ class _MainScreenState extends State<MainScreen> {
     final localizations = AppLocalizations.of(context)!;
 
     return AppBar(
-      // Ẩn nút menu (3 gạch) vì đã có menu khi bấm vào avatar
       automaticallyImplyLeading: false,
       title: Text(
         localizations.account,
@@ -592,7 +595,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               child: Lottie.asset(
-                'lib/assets/lottie/chatbot.json',
+                'lib/assets/lottie/live_chatbot.json',
                 fit: BoxFit.contain,
                 repeat: true,
                 animate: true,

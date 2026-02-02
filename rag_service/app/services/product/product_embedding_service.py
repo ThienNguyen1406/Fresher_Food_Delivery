@@ -1,7 +1,3 @@
-"""
-Product Embedding Service - Service tạo embedding vectors từ product (text + image)
-Hỗ trợ: Image to Image search, Text to Image search
-"""
 import logging
 from typing import Optional, List, Dict
 import numpy as np
@@ -112,7 +108,7 @@ class ProductEmbeddingService:
         image_bytes: Optional[bytes] = None
     ) -> Dict[str, Optional[np.ndarray]]:
         """
-         Tạo embeddings cho một product - TRẢ PRIMARY_EMBEDDING ĐÃ NORMALIZE + COMBINE  
+         Tạo embeddings cho một product 
         """
         # Tạo text từ product data - ENRICH với thông tin chi tiết
         product_name = product_data.get('product_name', '')

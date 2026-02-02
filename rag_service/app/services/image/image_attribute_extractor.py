@@ -1,8 +1,3 @@
-"""
-Image Attribute Extractor - Extract structured attributes from product images
-CHỈ DÙNG KHI: ingest, admin review, build metadata
-KHÔNG DÙNG TRONG: search flow (search chỉ dùng CLIP embedding)
-"""
 import logging
 import json
 from typing import Optional, Dict, Any

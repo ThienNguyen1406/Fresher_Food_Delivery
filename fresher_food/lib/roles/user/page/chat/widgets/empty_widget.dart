@@ -51,7 +51,7 @@ class EmptyWidget extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Bắt đầu cuộc trò chuyện với chúng tôi',
+            localizations.startConversation,
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey.shade600,

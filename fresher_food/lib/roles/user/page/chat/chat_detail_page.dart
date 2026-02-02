@@ -351,7 +351,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _isLoadingMoreNotifier.value = true;
 
     try {
-      final oldestMessage = _messages.first;
+      // Với reverse: true, _messages.last là tin nhắn cũ nhất (ở top)
+      final oldestMessage = _messages.last;
       
       final result = await _chatApi.getMessages(
         maChat: widget.maChat,
@@ -369,7 +370,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           final currentScrollPosition = _scrollController.position.pixels;
           final currentMaxScroll = _scrollController.position.maxScrollExtent;
           
-          final updatedMessages = [...reversedOlderMessages, ..._messages];
+          // Thêm tin nhắn cũ vào cuối list (sau tin nhắn cũ nhất hiện tại)
+          final updatedMessages = [..._messages, ...reversedOlderMessages];
           _messagesNotifier.value = updatedMessages;
           _hasMoreMessagesNotifier.value = hasMore;
           _isLoadingMoreNotifier.value = false;
@@ -390,6 +392,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       if (mounted) {
         _isLoadingMoreNotifier.value = false;
       }
+      print('Error loading more messages: $e');
     }
   }
 

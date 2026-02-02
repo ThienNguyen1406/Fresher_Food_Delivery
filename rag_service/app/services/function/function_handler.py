@@ -1,7 +1,3 @@
-"""
-Function Handler Service - Xử lý function calling từ AI
-Kết nối với SQL Server để lấy dữ liệu real-time
-"""
 import json
 import logging
 import os
@@ -20,9 +16,6 @@ class FunctionHandler:
     def __init__(self, connection_string: str):
         """
         Khởi tạo Function Handler với connection string
-        
-        Args:
-            connection_string: SQL Server connection string (có thể là .NET format hoặc ODBC format)
         """
         if not connection_string:
             raise ValueError("Connection string không được để trống")
@@ -33,14 +26,7 @@ class FunctionHandler:
     def _convert_to_odbc_connection_string(self, conn_str: str) -> str:
         """
         Convert connection string từ .NET format sang ODBC format
-        
-        Args:
-            conn_str: Connection string (có thể là .NET hoặc ODBC format)
-            
-        Returns:
-            ODBC format connection string
         """
-        # Nếu đã có DRIVER= thì giả sử đã là ODBC format
         if "DRIVER=" in conn_str.upper():
             return conn_str
         
@@ -153,13 +139,6 @@ class FunctionHandler:
     async def execute_function(self, function_name: str, arguments: Dict[str, Any]) -> str:
         """
         Thực thi function call và trả về kết quả dưới dạng JSON string
-        
-        Args:
-            function_name: Tên function cần thực thi
-            arguments: Arguments của function (dictionary)
-            
-        Returns:
-            JSON string chứa kết quả
         """
         try:
             logger.info(f"Executing function: {function_name} with arguments: {arguments}")

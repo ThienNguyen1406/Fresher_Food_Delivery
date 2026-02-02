@@ -79,7 +79,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         'icon': Iconsax.magicpen
       },
       {
-        'title': 'AI hỗ trợ',
+        'title': localizations.aiSupport,
         'screen': const RagDocumentManagerPage(),
         'icon': Iconsax.document_text
       },

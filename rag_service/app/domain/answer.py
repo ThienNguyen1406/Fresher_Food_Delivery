@@ -1,6 +1,3 @@
-"""
-Domain entities - Answer
-"""
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 

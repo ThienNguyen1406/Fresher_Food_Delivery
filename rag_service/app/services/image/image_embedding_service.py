@@ -1,7 +1,3 @@
-"""
-Image Embedding Service - Service tạo embedding vectors từ ảnh
-Chuyển đổi ảnh thành các vector số để có thể so sánh và tìm kiếm
-"""
 import os
 import logging
 from typing import Optional, List
@@ -18,14 +14,9 @@ logger = logging.getLogger(__name__)
 class ImageEmbeddingService:
     """
     Service tạo embedding vectors từ ảnh
-    
-    Image Embedding là cách chuyển đổi ảnh thành các vector số để:
-    - So sánh độ tương đồng giữa các ảnh
-    - Tìm kiếm ảnh tương tự (image similarity search)
-    - Lưu trữ và tìm kiếm trong vector database
     """
     
-    # 🔥 SINGLETON: CLIP model được load 1 lần duy nhất
+    #  SINGLETON: CLIP model được load 1 lần duy nhất
     _clip_model = None
     _clip_preprocess = None
     _clip_device = None
@@ -37,7 +28,7 @@ class ImageEmbeddingService:
         self.use_openai = Settings.USE_OPENAI_EMBEDDINGS
         self.openai_api_key = Settings.OPENAI_API_KEY
         
-        # 🔥 SINGLETON: Chỉ load CLIP model 1 lần duy nhất
+        #  SINGLETON: Chỉ load CLIP model 1 lần duy nhất
         if not ImageEmbeddingService._clip_initialized:
             logger.info("🔄 Đang khởi tạo CLIP model cho image embeddings (lần đầu tiên)")
             self._init_clip()
@@ -145,12 +136,7 @@ class ImageEmbeddingService:
     async def _create_openai_embedding(self, image_bytes: bytes) -> np.ndarray:
         """
         Tạo embedding sử dụng OpenAI vision API
-        
-        Lưu ý: OpenAI không có direct image embedding API như text embedding.
-        Có thể dùng OpenAI Vision để mô tả ảnh, rồi embed text description,
-        nhưng CLIP tốt hơn cho image similarity search.
         """
-        # Fallback về CLIP vì OpenAI không có direct image embedding
         logger.warning("OpenAI không có direct image embedding API, dùng CLIP")
         return self._create_clip_embedding(image_bytes)
     
@@ -158,12 +144,6 @@ class ImageEmbeddingService:
         """
         Tạo text embedding sử dụng CLIP text encoder (512 dim)
         Tương thích với image embedding để search products
-        
-        Args:
-            text: Text cần embed
-            
-        Returns:
-            Text embedding vector (512 dimensions - CLIP)
         """
         if not text or not text.strip():
             return None
@@ -197,16 +177,7 @@ class ImageEmbeddingService:
         caption: Optional[str] = None
     ) -> Optional[np.ndarray]:
         """
-        🔥 TỐI ƯU: Tạo query embedding từ image + caption (nếu có)
-        Service layer chịu trách nhiệm normalize + combine
-        API layer KHÔNG được normalize
-        
-        Args:
-            image_bytes: Ảnh query (tùy chọn)
-            caption: Text caption từ Vision (tùy chọn)
-            
-        Returns:
-            Query embedding đã normalize + combine (60% image + 40% caption nếu có cả 2)
+          Tạo query embedding từ image + caption (nếu có)
         """
         image_emb = None
         text_emb = None
@@ -262,12 +233,6 @@ class ImageEmbeddingService:
     async def create_embeddings(self, images: List[bytes]) -> List[Optional[np.ndarray]]:
         """
         Tạo embeddings cho nhiều ảnh (batch)
-        
-        Args:
-            images: Danh sách ảnh dưới dạng bytes
-            
-        Returns:
-            Danh sách embedding vectors
         """
         if not images:
             return []

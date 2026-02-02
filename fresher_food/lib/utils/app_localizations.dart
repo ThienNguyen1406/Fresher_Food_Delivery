@@ -149,11 +149,6 @@ class AppLocalizations {
       'you_already_reviewed': 'Bạn đã đánh giá sản phẩm này',
       'be_first_to_review': 'Hãy là người đầu tiên đánh giá sản phẩm này',
 
-      // Main Screen
-      'shop': 'Shop',
-      'vouchers': 'Vouchers',
-      'favorite': 'Favorite',
-
       // Checkout
       'delivery_info': 'Thông tin giao hàng',
       'selected_products': 'Sản phẩm đã chọn',
@@ -245,6 +240,24 @@ class AppLocalizations {
       'confirm_delete': 'Xác nhận xóa',
       'confirm_delete_address': 'Bạn có chắc chắn muốn xóa địa chỉ này?',
       'delete': 'Xóa',
+
+      // Main Screen & Navigation
+      'shop': 'Cửa Hàng',
+      'discount': 'Giảm Giá',
+      'favorite': 'Yêu Thích',
+      'user': 'Người dùng',
+
+      // Avatar & Profile
+      'update_avatar_success': 'Cập nhật avatar thành công',
+      'upload_image_error': 'Lỗi upload ảnh',
+      'confirm_delete_avatar': 'Bạn có chắc muốn xóa avatar?',
+      'delete_avatar_success': 'Xóa avatar thành công',
+      'confirm_logout': 'Bạn có chắc muốn đăng xuất?',
+      'logout': 'Đăng xuất',
+      'start_conversation': 'Bắt đầu cuộc trò chuyện với chúng tôi',
+
+      // Admin
+      'ai_support': 'AI hỗ trợ',
     },
     'en': {
       // Settings
@@ -381,11 +394,6 @@ class AppLocalizations {
       'you_already_reviewed': 'You have already reviewed this product',
       'be_first_to_review': 'Be the first to review this product',
 
-      // Main Screen
-      'shop': 'Shop',
-      'vouchers': 'Vouchers',
-      'favorite': 'Favorite',
-
       // Checkout
       'delivery_info': 'Delivery Information',
       'selected_products': 'Selected Products',
@@ -476,6 +484,24 @@ class AppLocalizations {
       'confirm_delete': 'Confirm Delete',
       'confirm_delete_address': 'Are you sure you want to delete this address?',
       'delete': 'Delete',
+
+      // Main Screen & Navigation
+      'shop': 'Shop',
+      'discount': 'Discount',
+      'favorite': 'Favorite',
+      'user': 'User',
+
+      // Avatar & Profile
+      'update_avatar_success': 'Avatar updated successfully',
+      'upload_image_error': 'Error uploading image',
+      'confirm_delete_avatar': 'Are you sure you want to delete avatar?',
+      'delete_avatar_success': 'Avatar deleted successfully',
+      'confirm_logout': 'Are you sure you want to logout?',
+      'logout': 'Logout',
+      'start_conversation': 'Start a conversation with us',
+
+      // Admin
+      'ai_support': 'AI Support',
     },
   };
 
@@ -573,7 +599,6 @@ class AppLocalizations {
   String get registerFailed => translate('register_failed');
 
   // Account
-  String get account => translate('account');
   String get loginToViewAccount => translate('login_to_view_account');
   String get personalInfo => translate('personal_info');
   String get productReview => translate('product_review');
@@ -611,10 +636,8 @@ class AppLocalizations {
   String get youAlreadyReviewed => translate('you_already_reviewed');
   String get beFirstToReview => translate('be_first_to_review');
 
-  // Main Screen
-  String get shop => translate('shop');
+  // Main Screen (moved to Main Screen & Navigation section)
   String get vouchers => translate('vouchers');
-  String get favorite => translate('favorite');
 
   // Checkout
   String get deliveryInfo => translate('delivery_info');
@@ -701,6 +724,25 @@ class AppLocalizations {
   String get confirmDelete => translate('confirm_delete');
   String get confirmDeleteAddress => translate('confirm_delete_address');
   String get delete => translate('delete');
+
+  // Main Screen & Navigation
+  String get shop => translate('shop');
+  String get discount => translate('discount');
+  String get favorite => translate('favorite');
+  String get account => translate('account');
+  String get user => translate('user');
+
+  // Avatar & Profile
+  String get updateAvatarSuccess => translate('update_avatar_success');
+  String get uploadImageError => translate('upload_image_error');
+  String get confirmDeleteAvatar => translate('confirm_delete_avatar');
+  String get deleteAvatarSuccess => translate('delete_avatar_success');
+  String get confirmLogout => translate('confirm_logout');
+  String get logout => translate('logout');
+  String get startConversation => translate('start_conversation');
+
+  // Admin
+  String get aiSupport => translate('ai_support');
 }
 
 class _AppLocalizationsDelegate

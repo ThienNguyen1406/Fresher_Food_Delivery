@@ -181,13 +181,9 @@ class MyApp extends StatelessWidget {
                 Locale('vi', 'VN'), // Tiếng Việt
                 Locale('en', 'US'), // Tiếng Anh
               ],
-              // Route khởi đầu - màn hình splash
               initialRoute: AppRoute.splash,
-              // Hàm tạo route động dựa trên tên route
               onGenerateRoute: AppRoute.generateRoute,
-              // Ẩn banner debug ở góc trên bên phải
               debugShowCheckedModeBanner: false,
-              // Error builder để hiển thị lỗi thay vì crash
               builder: (context, child) {
                 return MediaQuery(
                   data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
