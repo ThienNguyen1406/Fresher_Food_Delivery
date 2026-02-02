@@ -22,7 +22,6 @@ import 'package:fresher_food/services/api/stripe_api.dart';
 import 'package:fresher_food/services/firebase_service.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-
 class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
@@ -48,14 +47,14 @@ void main() async {
   };
 
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   HttpOverrides.global = MyHttpOverrides();
 
   // Khởi tạo Firebase
   try {
     print('Initializing Firebase...');
     await FirebaseService.initialize();
-    
+
     // Set background message handler
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
   } catch (e) {
@@ -72,10 +71,10 @@ void main() async {
     if (publishableKey.isEmpty) {
       print('Warning: Publishable key is empty');
     } else {
-
       Stripe.publishableKey = publishableKey;
-      print('Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
-         
+      print(
+          'Stripe initialized successfully with key: ${publishableKey.substring(0, 20)}...');
+
       try {
         await Stripe.instance.applySettings();
         print('Stripe native SDK initialized via applySettings');
@@ -87,7 +86,7 @@ void main() async {
     }
   } catch (e) {
     // Nếu không thể khởi tạo Stripe, app vẫn chạy nhưng tính năng thanh toán sẽ không hoạt động
-      print('Warning: Could not initialize Stripe: $e');
+    print('Warning: Could not initialize Stripe: $e');
     print('Stripe payment will not be available');
   }
 
@@ -138,60 +137,64 @@ class MyApp extends StatelessWidget {
         builder: (context, themeProvider, languageProvider, child) {
           try {
             return MaterialApp(
-            title: 'FreshFood App',
-            // Theme cho chế độ sáng (Light mode)
-            theme: ThemeData(
-              primarySwatch: Colors.green,
-              primaryColor: const Color(0xFF4CAF50), // Xanh lá Material Green 500
-              useMaterial3: true,
-              brightness: Brightness.light,
-              scaffoldBackgroundColor: const Color(0xFFF8FAFD),
-              colorScheme: const ColorScheme.light(
-                primary: Color(0xFF4CAF50), // Xanh lá
-                secondary: Color(0xFF66BB6A), // Xanh lá nhạt hơn
-                tertiary: Color(0xFF2E7D32), // Xanh lá đậm
+              title: 'FreshFood App',
+              // Theme cho chế độ sáng (Light mode)
+              theme: ThemeData(
+                primarySwatch: Colors.green,
+                primaryColor:
+                    const Color(0xFF4CAF50), // Xanh lá Material Green 500
+                useMaterial3: true,
+                brightness: Brightness.light,
+                scaffoldBackgroundColor: const Color(0xFFF8FAFD),
+                colorScheme: const ColorScheme.light(
+                  primary: Color(0xFF4CAF50), // Xanh lá
+                  secondary: Color(0xFF66BB6A), // Xanh lá nhạt hơn
+                  tertiary: Color(0xFF2E7D32), // Xanh lá đậm
+                ),
               ),
-            ),
-            // Theme cho chế độ tối (Dark mode)
-            darkTheme: ThemeData(
-              primarySwatch: Colors.green,
-              primaryColor: const Color(0xFF4CAF50), // Xanh lá Material Green 500
-              useMaterial3: true,
-              brightness: Brightness.dark,
-              scaffoldBackgroundColor: const Color(0xFF121212),
-              colorScheme: const ColorScheme.dark(
-                primary: Color(0xFF66BB6A), // Xanh lá sáng hơn cho dark mode
-                secondary: Color(0xFF4CAF50),
-                tertiary: Color(0xFF2E7D32),
+              // Theme cho chế độ tối (Dark mode)
+              darkTheme: ThemeData(
+                primarySwatch: Colors.green,
+                primaryColor:
+                    const Color(0xFF4CAF50), // Xanh lá Material Green 500
+                useMaterial3: true,
+                brightness: Brightness.dark,
+                scaffoldBackgroundColor: const Color(0xFF121212),
+                colorScheme: const ColorScheme.dark(
+                  primary: Color(0xFF66BB6A), // Xanh lá sáng hơn cho dark mode
+                  secondary: Color(0xFF4CAF50),
+                  tertiary: Color(0xFF2E7D32),
+                ),
               ),
-            ),
-            themeMode: themeProvider.themeMode,
-            locale: languageProvider.locale,
-            localizationsDelegates: const [
-              AppLocalizations.delegate, // Custom localization cho app
-              GlobalMaterialLocalizations.delegate, // Material Design localization
-              GlobalWidgetsLocalizations.delegate, // Widget localization
-              GlobalCupertinoLocalizations.delegate, // Cupertino (iOS) localization
-            ],
-            // Các ngôn ngữ được hỗ trợ
-            supportedLocales: const [
-              Locale('vi', 'VN'), // Tiếng Việt
-              Locale('en', 'US'), // Tiếng Anh
-            ],
-            // Route khởi đầu - màn hình splash
-            initialRoute: AppRoute.splash,
-            // Hàm tạo route động dựa trên tên route
-            onGenerateRoute: AppRoute.generateRoute,
-            // Ẩn banner debug ở góc trên bên phải
-            debugShowCheckedModeBanner: false,
-            // Error builder để hiển thị lỗi thay vì crash
-            builder: (context, child) {
-              return MediaQuery(
-                data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
-                child: child ?? const SizedBox(),
-              );
-            },
-          );
+              themeMode: themeProvider.themeMode,
+              locale: languageProvider.locale,
+              localizationsDelegates: const [
+                AppLocalizations.delegate, // Custom localization cho app
+                GlobalMaterialLocalizations
+                    .delegate, // Material Design localization
+                GlobalWidgetsLocalizations.delegate, // Widget localization
+                GlobalCupertinoLocalizations
+                    .delegate, // Cupertino (iOS) localization
+              ],
+              // Các ngôn ngữ được hỗ trợ
+              supportedLocales: const [
+                Locale('vi', 'VN'), // Tiếng Việt
+                Locale('en', 'US'), // Tiếng Anh
+              ],
+              // Route khởi đầu - màn hình splash
+              initialRoute: AppRoute.splash,
+              // Hàm tạo route động dựa trên tên route
+              onGenerateRoute: AppRoute.generateRoute,
+              // Ẩn banner debug ở góc trên bên phải
+              debugShowCheckedModeBanner: false,
+              // Error builder để hiển thị lỗi thay vì crash
+              builder: (context, child) {
+                return MediaQuery(
+                  data: MediaQuery.of(context).copyWith(textScaleFactor: 1.0),
+                  child: child ?? const SizedBox(),
+                );
+              },
+            );
           } catch (e, stackTrace) {
             print('Error building MaterialApp: $e');
             print('Stack trace: $stackTrace');
@@ -202,7 +205,8 @@ class MyApp extends StatelessWidget {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
+                      const Icon(Icons.error_outline,
+                          size: 64, color: Colors.red),
                       const SizedBox(height: 16),
                       Text('Error: $e'),
                       const SizedBox(height: 8),

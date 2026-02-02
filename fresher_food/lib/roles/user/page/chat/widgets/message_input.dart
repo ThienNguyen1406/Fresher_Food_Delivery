@@ -43,7 +43,6 @@ class MessageInput extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            // Nút image search và attach file
             ValueListenableBuilder<bool>(
               valueListenable: isUploadingFileNotifier,
               builder: (context, isUploading, _) {
@@ -89,7 +88,6 @@ class MessageInput extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Hiển thị preview ảnh nếu có
                   if (selectedImage != null)
                     Container(
                       margin: const EdgeInsets.only(bottom: 8),

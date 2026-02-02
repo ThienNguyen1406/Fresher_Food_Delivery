@@ -93,6 +93,8 @@ class ChatApi {
     }
   }
 
+  Map<String, String>? _cachedHeaders;
+  
   /// Lấy tin nhắn của một chat với pagination
   /// [limit] - Số tin nhắn cần lấy (mặc định 10)
   /// [beforeMessageId] - ID tin nhắn để lấy tin nhắn cũ hơn (null = lấy mới nhất)
@@ -108,12 +110,16 @@ class ChatApi {
         if (beforeMessageId != null) 'beforeMessageId': beforeMessageId,
       });
 
+      if (_cachedHeaders == null) {
+        _cachedHeaders = await ApiService().getHeaders();
+      }
+
       final res = await http
           .get(
             uri,
-            headers: await ApiService().getHeaders(),
+            headers: _cachedHeaders!,
           )
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 10)); // Tăng lại timeout lên 10s để tránh timeout quá sớm
 
       if (res.statusCode != 200) {
         print('Failed to get messages: ${res.statusCode}');

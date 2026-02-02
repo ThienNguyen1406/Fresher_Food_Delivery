@@ -71,13 +71,6 @@ class OpenAILLM(LLMProvider):
     async def generate(self, prompt: str, context: Optional[str] = None) -> str:
         """
         Tạo phản hồi sử dụng OpenAI, fallback sang Ollama nếu lỗi
-        
-        Args:
-            prompt: Câu hỏi hoặc yêu cầu
-            context: Ngữ cảnh bổ sung (tùy chọn)
-            
-        Returns:
-            Phản hồi từ LLM
         """
         # Nếu không có OpenAI client, thử dùng fallback
         if not self.client:

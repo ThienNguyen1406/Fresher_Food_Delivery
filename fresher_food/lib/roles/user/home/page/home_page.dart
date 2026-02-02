@@ -28,7 +28,7 @@ class _HomePageState extends State<HomePage> {
     "lib/assets/img/anh3.png",
   ];
 
-  /// Khối khởi tạo: Khởi tạo PageController, auto-scroll banner và load dữ liệu
+  /// Khởi tạo PageController, auto-scroll banner và load dữ liệu
   @override
   void initState() {
     super.initState();

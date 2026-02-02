@@ -64,6 +64,15 @@ class TypingIndicatorWidget extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  const Text(
+                    'Vui lòng chờ...',
+                    style: TextStyle(
+                      color: Color(0xFF16A085),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   TypingDot(delay: 0),
                   const SizedBox(width: 4),
                   TypingDot(delay: 200),

@@ -37,7 +37,6 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
   void initState() {
     super.initState();
     _loadMessages();
-    // Auto refresh every 5 seconds để giảm tải (tăng từ 3 lên 5 giây)
     _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         _loadMessages(silent: true);
@@ -61,24 +60,21 @@ class _AdminChatDetailPageState extends State<AdminChatDetailPage> {
     }
 
     try {
-      // 🔥 TỐI ƯU: Giảm limit từ 50 xuống 5 để load nhanh hơn
       final result =
           await _chatApi.getMessages(maChat: widget.maChat, limit: 5);
       final messages = result['messages'] as List<Message>;
-
+      
       if (mounted) {
         setState(() {
           _messages = messages;
           _isLoading = false;
         });
 
-        // Mark as read
         await _chatApi.markAsRead(
           maChat: widget.maChat,
           maNguoiDoc: widget.currentAdminId,
         );
 
-        // Scroll to bottom
         if (_messages.isNotEmpty && _scrollController.hasClients) {
           _scrollController.animateTo(
             _scrollController.position.maxScrollExtent,

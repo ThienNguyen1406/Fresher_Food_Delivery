@@ -14,11 +14,6 @@ logger = logging.getLogger(__name__)
 class RerankerService:
     """
     Service sắp xếp lại kết quả tìm kiếm
-    
-    Reranker giúp cải thiện độ chính xác của kết quả bằng cách:
-    - Đánh giá lại độ liên quan giữa query và từng chunk
-    - Sắp xếp lại theo điểm số relevance
-    - Trả về các chunks có độ liên quan cao nhất
     """
     
     def __init__(self):
@@ -59,13 +54,7 @@ class RerankerService:
         top_k: int = None
     ) -> List[Dict]:
         """
-        Sắp xếp lại các chunks dựa trên độ liên quan với query
-        
-        Args:
-            query: Câu hỏi của người dùng
-            chunks: Danh sách các chunk dictionaries (phải có key 'text')
-            top_k: Số lượng chunks top để trả về (None = trả về tất cả)
-            
+        Sắp xếp lại các chunks dựa trên độ liên quan với query   
         Returns:
             Danh sách chunks đã được sắp xếp lại theo độ liên quan
         """

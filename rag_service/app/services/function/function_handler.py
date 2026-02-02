@@ -726,13 +726,22 @@ class FunctionHandler:
                 cursor = conn.cursor()
                 
                 if customer_id:
-                    query = f"""
-                        SELECT TOP {limit}
-                            dh.MaDonHang, dh.NgayDat, dh.TrangThai, dh.TongTien
-                        FROM DonHang dh
-                        WHERE dh.MaTaiKhoan = ?
-                        ORDER BY dh.NgayDat DESC
-                    """
+                    # Nếu limit >= 100, lấy tất cả đơn hàng (không dùng TOP)
+                    if limit >= 100:
+                        query = """
+                            SELECT dh.MaDonHang, dh.NgayDat, dh.TrangThai, dh.TongTien
+                            FROM DonHang dh
+                            WHERE dh.MaTaiKhoan = ?
+                            ORDER BY dh.NgayDat DESC
+                        """
+                    else:
+                        query = f"""
+                            SELECT TOP {limit}
+                                dh.MaDonHang, dh.NgayDat, dh.TrangThai, dh.TongTien
+                            FROM DonHang dh
+                            WHERE dh.MaTaiKhoan = ?
+                            ORDER BY dh.NgayDat DESC
+                        """
                     cursor.execute(query, customer_id)
                 else:
                     query = f"""

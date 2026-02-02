@@ -32,7 +32,6 @@ class MessagesList extends StatelessWidget {
       color: Colors.green.shade600,
       child: Column(
         children: [
-          // Loading indicator khi load more
           ValueListenableBuilder<bool>(
             valueListenable: isLoadingMoreNotifier,
             builder: (context, isLoadingMore, _) {
@@ -53,16 +52,20 @@ class MessagesList extends StatelessWidget {
                     return ListView.builder(
                       controller: scrollController,
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      reverse: false,
+                      reverse: true,
                       itemCount: messages.length + (isWaiting ? 1 : 0),
                       cacheExtent: 2000,
                       addAutomaticKeepAlives: false,
                       addRepaintBoundaries: true,
                       itemBuilder: (context, index) {
-                        if (isWaiting && index == messages.length) {
+                        if (isWaiting && index == 0) {
                           return TypingIndicatorWidget(screenWidth: screenWidth);
                         }
-                        final message = messages[index];
+                        final messageIndex = isWaiting ? index - 1 : index;
+                        if (messageIndex < 0 || messageIndex >= messages.length) {
+                          return const SizedBox.shrink();
+                        }
+                        final message = messages[messageIndex];
                         return MessageBubble(
                           key: ValueKey(message.maTinNhan),
                           message: message,

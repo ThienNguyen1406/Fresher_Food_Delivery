@@ -25,17 +25,30 @@ class ImageEmbeddingService:
     - Lưu trữ và tìm kiếm trong vector database
     """
     
+    # 🔥 SINGLETON: CLIP model được load 1 lần duy nhất
+    _clip_model = None
+    _clip_preprocess = None
+    _clip_device = None
+    _clip_initialized = False
+    
     def __init__(self):
         """Khởi tạo Image Embedding Service"""
         self.embedding_model = None
         self.use_openai = Settings.USE_OPENAI_EMBEDDINGS
         self.openai_api_key = Settings.OPENAI_API_KEY
         
-        # Lưu ý: OpenAI không có direct image embedding API như text embedding
-        # Hiện tại chỉ hỗ trợ CLIP model cho image embeddings
-        # Luôn khởi tạo CLIP (ngay cả khi có OpenAI key)
-        logger.info("🔄 Đang khởi tạo CLIP model cho image embeddings")
-        self._init_clip()
+        # 🔥 SINGLETON: Chỉ load CLIP model 1 lần duy nhất
+        if not ImageEmbeddingService._clip_initialized:
+            logger.info("🔄 Đang khởi tạo CLIP model cho image embeddings (lần đầu tiên)")
+            self._init_clip()
+            ImageEmbeddingService._clip_initialized = True
+        else:
+            logger.debug("✅ CLIP model đã được load trước đó, sử dụng lại")
+            # Gán lại từ class variables
+            self.clip_model = ImageEmbeddingService._clip_model
+            self.clip_preprocess = ImageEmbeddingService._clip_preprocess
+            self.clip_device = ImageEmbeddingService._clip_device
+            self.embedding_model = "ViT-B/32"
         
         # Khởi tạo OpenAI client nếu có key (để dùng cho các tính năng khác trong tương lai)
         if self.use_openai and self.openai_api_key:
@@ -65,7 +78,7 @@ class ImageEmbeddingService:
             self._init_clip()
     
     def _init_clip(self):
-        """Khởi tạo CLIP model (fallback khi không có OpenAI)"""
+        """Khởi tạo CLIP model (SINGLETON - chỉ load 1 lần)"""
         try:
             import clip
             import torch
@@ -75,13 +88,20 @@ class ImageEmbeddingService:
             model_name = "ViT-B/32"  # CLIP ViT-B/32 model
             
             logger.info(f"Đang tải CLIP model: {model_name} (device: {device})")
-            self.clip_model, self.clip_preprocess = clip.load(model_name, device=device)
-            # CLIP model đã có tokenizer built-in, không cần load riêng
-            # Tokenizer được truy cập qua clip.tokenize()
+            clip_model, clip_preprocess = clip.load(model_name, device=device)
+            
+            # 🔥 Lưu vào class variables (singleton)
+            ImageEmbeddingService._clip_model = clip_model
+            ImageEmbeddingService._clip_preprocess = clip_preprocess
+            ImageEmbeddingService._clip_device = device
+            
+            # Gán vào instance variables
+            self.clip_model = clip_model
+            self.clip_preprocess = clip_preprocess
             self.clip_device = device
             self.embedding_model = model_name
             
-            logger.info(f"✅ Đã tải CLIP model: {model_name}")
+            logger.info(f"✅ Đã tải CLIP model: {model_name} (SINGLETON - sẽ tái sử dụng)")
         except ImportError:
             logger.error("CLIP library chưa được cài đặt. Vui lòng cài: pip install git+https://github.com/openai/CLIP.git")
             raise

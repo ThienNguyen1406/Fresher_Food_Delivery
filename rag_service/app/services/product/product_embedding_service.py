@@ -14,12 +14,7 @@ logger = logging.getLogger(__name__)
 
 class ProductEmbeddingService:
     """
-    Service tạo embedding vectors cho products
-    
-    Hỗ trợ:
-    - Image embeddings: Từ ảnh sản phẩm (CLIP)
-    - Text embeddings: Từ tên, mô tả sản phẩm (OpenAI/Sentence Transformer)
-    - Combined embeddings: Kết hợp text + image
+        Tạo embedding vectors cho products
     """
     
     def __init__(
@@ -29,10 +24,6 @@ class ProductEmbeddingService:
     ):
         """
         Khởi tạo Product Embedding Service
-        
-        Args:
-            image_embedding_service: Service tạo embedding từ ảnh
-            text_embedding_service: Service tạo embedding từ text
         """
         self.image_embedding_service = image_embedding_service
         self.text_embedding_service = text_embedding_service
@@ -40,22 +31,13 @@ class ProductEmbeddingService:
     async def create_image_embedding(self, image_bytes: bytes) -> Optional[np.ndarray]:
         """
         Tạo image embedding từ ảnh sản phẩm
-        
-        Args:
-            image_bytes: Ảnh sản phẩm dưới dạng bytes
-            
-        Returns:
-            Image embedding vector (512 dimensions - CLIP)
+        Image embedding vector (512 dimensions - CLIP)
         """
         return await self.image_embedding_service.create_embedding(image_bytes)
     
     async def create_text_embedding(self, text: str) -> Optional[np.ndarray]:
         """
-        Tạo text embedding từ text sản phẩm (tên, mô tả)
-        
-        Args:
-            text: Text sản phẩm (tên + mô tả)
-            
+        Tạo text embedding từ text sản phẩm (tên, mô tả)    
         Returns:
             Text embedding vector (3072 dimensions - OpenAI hoặc 384 - Sentence Transformer)
         """
@@ -69,14 +51,7 @@ class ProductEmbeddingService:
         image_bytes: Optional[bytes] = None
     ) -> Optional[np.ndarray]:
         """
-        Tạo combined embedding từ text + image
-        
-        Strategy: Normalize và concatenate hoặc weighted average
-        
-        Args:
-            text: Text sản phẩm
-            image_bytes: Ảnh sản phẩm (tùy chọn)
-            
+        Tạo combined embedding từ text + image      
         Returns:
             Combined embedding vector
         """
@@ -122,11 +97,7 @@ class ProductEmbeddingService:
     
     def _normalize(self, v: np.ndarray) -> np.ndarray:
         """
-        Normalize vector (helper function)
-        
-        Args:
-            v: Vector cần normalize
-            
+        Normalize vector (helper function)  
         Returns:
             Normalized vector
         """
@@ -141,22 +112,7 @@ class ProductEmbeddingService:
         image_bytes: Optional[bytes] = None
     ) -> Dict[str, Optional[np.ndarray]]:
         """
-        🔥 TỐI ƯU: Tạo embeddings cho một product - TRẢ PRIMARY_EMBEDDING ĐÃ NORMALIZE + COMBINE
-        
-        Args:
-            product_data: Dict chứa thông tin product
-                - product_name: Tên sản phẩm
-                - description: Mô tả
-                - category_name: Tên category
-                - origin: Xuất xứ
-                - unit: Đơn vị tính
-            image_bytes: Ảnh sản phẩm (tùy chọn)
-            
-        Returns:
-            Dict chứa các embeddings:
-                - image_embedding: Image embedding (512 dim) - raw, chưa normalize
-                - text_embedding: Text embedding (512 dim CLIP) - raw, chưa normalize
-                - primary_embedding: PRIMARY embedding đã normalize + combine (70% text CLIP + 30% image)
+         Tạo embeddings cho một product - TRẢ PRIMARY_EMBEDDING ĐÃ NORMALIZE + COMBINE  
         """
         # Tạo text từ product data - ENRICH với thông tin chi tiết
         product_name = product_data.get('product_name', '')
@@ -180,7 +136,7 @@ class ProductEmbeddingService:
         
         text = " ".join(text_parts)
         
-        # 🔥 TỐI ƯU: Tạo embeddings song song (nếu có cả text và image)
+        # Tạo embeddings song song (nếu có cả text và image)
         results = {}
         
         # Image embedding (CLIP - 512 dim)
@@ -189,15 +145,12 @@ class ProductEmbeddingService:
             image_emb = await self.create_image_embedding(image_bytes)
             results['image_embedding'] = image_emb
         
-        # Text embedding (CLIP text encoder - 512 dim) - QUAN TRỌNG: Dùng CLIP text để tương thích với image
         text_clip_emb = None
         if text:
             # 🔥 Dùng CLIP text encoder (từ image_embedding_service) để tương thích với image embedding
             text_clip_emb = self.image_embedding_service.create_text_embedding(text)
             results['text_embedding'] = text_clip_emb
         
-        # 🔥 TỐI ƯU: Tạo PRIMARY_EMBEDDING đã normalize + combine (70% text CLIP + 30% image)
-        # Strategy: 70% text CLIP (để text search tốt) + 30% image (để image search tốt)
         primary_embedding = None
         
         if text_clip_emb is not None and image_emb is not None:
@@ -227,22 +180,12 @@ class ProductEmbeddingService:
         images: Optional[List[bytes]] = None
     ) -> List[Dict[str, Optional[np.ndarray]]]:
         """
-        🔥 TỐI ƯU: Tạo embeddings cho nhiều products cùng lúc (BATCH THẬT)
-        
-        Args:
-            products: Danh sách product data
-            images: Danh sách ảnh tương ứng (tùy chọn)
-            
-        Returns:
-            Danh sách Dict embeddings cho từng product:
-                - image_embedding: Image embedding (512 dim)
-                - text_embedding: Text embedding (512 dim CLIP)
-                - primary_embedding: PRIMARY embedding đã normalize + combine
+         Tạo embeddings cho nhiều products cùng lúc 
         """
         if not products:
             return []
         
-        # 🔥 Bước 1: Chuẩn bị texts và images cho batch
+        # Chuẩn bị texts và images cho batch
         texts = []
         image_list = []
         
@@ -275,7 +218,7 @@ class ProductEmbeddingService:
             else:
                 image_list.append(None)
         
-        # 🔥 Bước 2: Batch embed texts (CLIP text encoder)
+        # Batch embed texts (CLIP text encoder)
         text_embeddings = []
         valid_texts = [(i, t) for i, t in enumerate(texts) if t]
         if valid_texts:
@@ -286,7 +229,7 @@ class ProductEmbeddingService:
                 text_emb = self.image_embedding_service.create_text_embedding(text)
                 text_embeddings.append((idx, text_emb))
         
-        # 🔥 Bước 3: Batch embed images (CLIP)
+        # Batch embed images (CLIP)
         image_embeddings = []
         valid_images = [(i, img) for i, img in enumerate(image_list) if img]
         if valid_images:
@@ -297,7 +240,7 @@ class ProductEmbeddingService:
                 if idx < len(batch_image_embs) and batch_image_embs[idx] is not None:
                     image_embeddings.append((orig_idx, batch_image_embs[idx]))
         
-        # 🔥 Bước 4: Combine embeddings cho từng product
+        # Combine embeddings cho từng product
         results = []
         text_emb_dict = {idx: emb for idx, emb in text_embeddings}
         image_emb_dict = {idx: emb for idx, emb in image_embeddings}

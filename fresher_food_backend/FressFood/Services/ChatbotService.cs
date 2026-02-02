@@ -434,7 +434,7 @@ namespace FressFood.Services
             return patterns.Any(p => Regex.IsMatch(message, p, RegexOptions.IgnoreCase));
         }
 
-        private bool IsOrderQuestion(string message)
+        public bool IsOrderQuestion(string message)
         {
             var patterns = new[] { 
                 @"\b(đơn hàng|order|đặt hàng)\b",

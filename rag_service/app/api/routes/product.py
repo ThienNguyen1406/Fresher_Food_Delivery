@@ -160,15 +160,17 @@ async def search_products_by_image(
     image: UploadFile = File(...),
     category_id: Optional[str] = Query(None, description="Filter by category ID"),
     top_k: int = Query(10, ge=1, le=50),
-    user_description: Optional[str] = Query(None, description="Mô tả của người dùng về ảnh"),
+    user_description: Optional[str] = Query(None, description="Mô tả của người dùng về ảnh (không dùng trong search)"),
     image_embedding_service: ImageEmbeddingService = Depends(get_image_embedding_service),
     vector_store: ImageVectorStore = Depends(get_image_vector_store),
-    llm_provider: LLMProvider = Depends(get_llm_provider),
-    prompt_builder: PromptBuilder = Depends(get_prompt_builder)
+    llm_provider: Optional[LLMProvider] = Depends(get_llm_provider),  # Optional: không dùng trong search flow
+    prompt_builder: Optional[PromptBuilder] = Depends(get_prompt_builder)  # Optional: không dùng trong search flow
 ):
     """
     Image to Image Search - Tìm kiếm sản phẩm bằng ảnh
     
+    Flow: image → CLIP embedding → vector search → return results
+    KHÔNG gọi Vision LLM trong search flow (chỉ dùng khi ingest)
     """
     import time
     import numpy as np
@@ -196,9 +198,9 @@ async def search_products_by_image(
         if category_id:
             where_clause["category_id"] = category_id
         
-        # Search (Chroma query is synchronous, need to run in thread)
+        # Lấy nhiều candidates hơn để filter/rerank
         import asyncio
-        search_top_k = top_k + 2  # 🔥 TỐI ƯU: Chỉ lấy thêm 2
+        search_top_k = max(top_k * 3, 30)  # Lấy 30-50 candidates để filter/rerank
         results = await asyncio.to_thread(
             vector_store.collection.query,
             query_embeddings=[query_embedding.tolist()],
@@ -207,7 +209,7 @@ async def search_products_by_image(
         )
         
         # Parse results và lấy best similarity
-        products = []
+        all_candidates = []
         best_similarity = 0.0
         
         if results.get('ids') and len(results['ids'][0]) > 0:
@@ -231,159 +233,37 @@ async def search_products_by_image(
                     similarity=float(similarity),
                     price=float(metadata.get('price', 0)) if metadata.get('price') else None
                 )
-                products.append(product)
-                
-                if len(products) >= top_k:
-                    break
+                all_candidates.append(product)
         
-        # Nếu best_similarity < 0.6 → MỚI GỌI Vision
-        vision_caption = None
-        if best_similarity < 0.6 and Settings.USE_VISION_CAPTION and llm_provider and hasattr(llm_provider, 'client') and llm_provider.client:
-            logger.info(f"👁️  Similarity thấp ({best_similarity:.2f} < 0.6), gọi Vision để cải thiện...")
-            try:
-                import base64
-                image_base64 = base64.b64encode(contents).decode('utf-8')
-                
-                # Prompt này tạo mô tả chính xác hơn cho e-commerce search
-                system_message = """You are a visual attribute extraction assistant for an e-commerce search system.
-                                    You must describe ONLY what is directly visible in the image.
-                                    Do NOT guess brand names, product names, ingredients, or usage."""
-
-                vision_prompt = """Observe the product image carefully and extract visible attributes.
-
-                                    Follow these rules strictly:
-                                    - Describe only what you can see in the image.
-                                    - If a detail is unclear, write "unknown".
-                                    - Do not infer brand or product identity.
-
-                                    Describe the product using the following structure:
-
-                                    Packaging:
-                                    - Type: (box / bottle / bag / pouch / can / carton / unknown)
-                                    - Material appearance: (plastic / paper / glass / metal / unknown)
-
-                                    Appearance:
-                                    - Main colors:
-                                    - Shape:
-                                    - Size impression: (small / medium / large / unknown)
-
-                                    Text & Graphics:
-                                    - Presence of text: (yes / no)
-                                    - Text appearance: (color, orientation, font style if visible)
-                                    - Graphic elements: (icons, images, patterns, none)
-
-                                    Category (generic, based only on appearance):
-                                    - (drink / food / household item / personal care / unknown)
-
-                                    Output:
-                                    Return two short descriptions with the same information:
-                                    1. English
-                                    2. Vietnamese"""
-                
-                vision_response = llm_provider.client.chat.completions.create(
-                    model="gpt-4o",
-                    messages=[
-                        {"role": "system", "content": system_message},
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": vision_prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"}
-                                }
-                            ]
-                        }
-                    ],
-                    max_tokens=300,  # 🔥 Tăng vì prompt mới cần output cấu trúc hơn (English + Vietnamese)
-                    temperature=0.1  # 🔥 Giảm temperature để output nhất quán hơn
-                )
-                vision_caption = vision_response.choices[0].message.content.strip()
-                
-                # Check rejection
-                caption_lower = vision_caption.lower()
-                rejection_keywords = [
-                    "i'm sorry", "i can't help", "i cannot", "i can't assist",
-                    "i'm not able", "i'm unable", "cannot identify", "can't identify"
-                ]
-                if any(kw in caption_lower for kw in rejection_keywords):
-                    logger.warning("⚠️  Vision model đã từ chối mô tả ảnh")
-                    vision_caption = user_description if user_description else None
-                else:
-                    logger.info(f"✅ Đã tạo Vision caption: {vision_caption[:100]}...")
-                    
-                    # 🔥 TỐI ƯU: Re-search với combined embedding (60% image + 40% caption)
-                    # Sử dụng EmbeddingService method (không normalize trong API)
-                    query_embedding = image_embedding_service.create_query_embedding(
-                        image_bytes=contents,
-                        caption=vision_caption
-                    )
-                    
-                    if query_embedding is not None:
-                        # Re-search với combined embedding
-                        logger.info("🔍 Re-search với combined embedding (image + caption)...")
-                        results = await asyncio.to_thread(
-                            vector_store.collection.query,
-                            query_embeddings=[query_embedding.tolist()],
-                            n_results=search_top_k,
-                            where=where_clause
-                        )
-                        
-                        # Re-parse results
-                        products = []
-                        for i in range(len(results['ids'][0]) if results.get('ids') and results['ids'][0] else 0):
-                            metadata = results['metadatas'][0][i]
-                            distance = results['distances'][0][i] if 'distances' in results and results['distances'] else 1.0
-                            similarity = 1 - distance
-                            
-                            product_id = metadata.get('file_id', '') or metadata.get('product_id', '')
-                            product = ProductSearchResult(
-                                product_id=product_id,
-                                product_name="",
-                                category_id=metadata.get('category_id', ''),
-                                category_name="",
-                                similarity=float(similarity),
-                                price=float(metadata.get('price', 0)) if metadata.get('price') else None
-                            )
-                            products.append(product)
-                            
-                            if len(products) >= top_k:
-                                break
-            except Exception as e:
-                logger.warning(f"⚠️  Lỗi khi gọi Vision: {str(e)}")
-                vision_caption = user_description if user_description else None
+        # Similarity threshold đúng cho image search
+        min_similarity_threshold = 0.3  # Threshold mặc định cho image search
+        
+        # Filter candidates theo similarity threshold
+        filtered_candidates = [
+            p for p in all_candidates 
+            if p.similarity >= min_similarity_threshold
+        ]
+        
+        # 🔥 RERANK: Ưu tiên products có image và similarity cao
+        filtered_candidates.sort(key=lambda p: p.similarity, reverse=True)
+        
+        # Lấy top_k sau khi filter và rerank
+        products = filtered_candidates[:top_k]
+        
+        # Log thông tin
+        if len(all_candidates) > len(filtered_candidates):
+            logger.info(f"  📊 Filtered: {len(all_candidates)} → {len(filtered_candidates)} candidates (threshold: {min_similarity_threshold:.2f})")
         
         elapsed_time = time.time() - start_time
-        logger.info(f"✅ Tìm thấy {len(products)} products trong {elapsed_time:.2f} giây")
+        logger.info(f"✅ Tìm thấy {len(products)} products trong {elapsed_time:.2f} giây (best similarity: {best_similarity:.2f})")
         
-        # 🔥 BOTTLENECK #1 FIX: LLM description chỉ gọi khi similarity < 0.85
+        # Nếu không có kết quả sau filter, vẫn trả về top candidates (user sẽ chọn)
+        if len(products) == 0 and len(all_candidates) > 0:
+            logger.warning(f"⚠️  Không có products sau filter (threshold: {min_similarity_threshold:.2f}), trả về top {top_k} candidates")
+            products = all_candidates[:top_k]
+        
+        # Description chỉ trả về khi frontend yêu cầu (không tự động generate)
         description = None
-        if products:
-            best_similarity = products[0].similarity if products else 0.0
-            if best_similarity < 0.85:
-                try:
-                    logger.info(f"🤖 Similarity thấp ({best_similarity:.2f} < 0.85), tạo mô tả từ LLM...")
-                    products_data = []
-                    for p in products:
-                        products_data.append({
-                            'product_name': p.product_name or "Unknown",
-                            'category_name': p.category_name or "Unknown",
-                            'price': p.price,
-                            'similarity': p.similarity
-                        })
-                    
-                    prompt = prompt_builder.build_image_search_description_prompt(
-                        products=products_data,
-                        user_description=user_description
-                    )
-                    
-                    description = await llm_provider.generate(prompt)
-                    logger.info(f"✅ Đã tạo mô tả từ LLM: {len(description)} ký tự")
-                except Exception as e:
-                    logger.warning(f"⚠️  Không thể tạo mô tả từ LLM: {str(e)}")
-                    description = None
-            else:
-                logger.info(f"⏭️  Bỏ qua LLM description (similarity: {best_similarity:.2f} >= 0.85, đã đủ tốt)")
         
         return ProductSearchResponse(
             results=products,
@@ -581,6 +461,7 @@ async def search_products_for_chat(
                         s.MoTa,
                         s.Anh,
                         s.GiaBan,
+                        s.DonViTinh,
                         s.MaDanhMuc,
                         dm.TenDanhMuc
                     FROM SanPham s
@@ -603,7 +484,7 @@ async def search_products_for_chat(
                     logger.info(f"  🎯 SQL exact-ish match found: {len(rows)} products for '{keyword}'")
                     async with httpx.AsyncClient(verify=False, timeout=5.0) as client:
                         for row in rows:
-                            product_id, product_name, description, image_filename, price, cat_id, cat_name = row
+                            product_id, product_name, description, image_filename, price, don_vi_tinh, cat_id, cat_name = row
                             image_data = None
                             image_mime_type = None
 
@@ -628,6 +509,7 @@ async def search_products_for_chat(
                                 "category_id": str(cat_id) if cat_id else "",
                                 "category_name": str(cat_name) if cat_name else "",
                                 "price": float(price) if price is not None else None,
+                                "unit": str(don_vi_tinh) if don_vi_tinh else "",
                                 "description": str(description) if description else "",
                                 "image_data": image_data,
                                 "image_mime_type": image_mime_type,
@@ -637,12 +519,31 @@ async def search_products_for_chat(
                     if sql_products:
                         if len(sql_products) == 1:
                             product = sql_products[0]
+                            product_name = product.get('product_name', '')
+                            price = product.get('price')
+                            unit = product.get('unit', '')
                             description = product.get('description', '')
+                            
+                            # Format giá đúng: chỉ dùng price và unit, không dùng số lượng tồn kho
+                            price_text = ""
+                            if price is not None:
+                                price_formatted = f"{price:,.0f}".replace(',', '.')
+                                if unit:
+                                    price_text = f"Giá bán: {price_formatted}₫ / {unit}"
+                                else:
+                                    price_text = f"Giá bán: {price_formatted}₫"
+                            
                             if description:
                                 description_short = description[:150] + ('...' if len(description) > 150 else '')
-                                message = f"Tôi tìm thấy 1 sản phẩm: {product['product_name']}.\n\n{description_short}"
+                                if price_text:
+                                    message = f"Tôi tìm thấy 1 sản phẩm: {product_name}.\n\n{price_text}\n\n{description_short}"
+                                else:
+                                    message = f"Tôi tìm thấy 1 sản phẩm: {product_name}.\n\n{description_short}"
                             else:
-                                message = f"Tôi tìm thấy 1 sản phẩm: {product['product_name']}."
+                                if price_text:
+                                    message = f"Tôi tìm thấy 1 sản phẩm: {product_name}.\n\n{price_text}"
+                                else:
+                                    message = f"Tôi tìm thấy 1 sản phẩm: {product_name}."
                         else:
                             message = f"Tôi tìm thấy {len(sql_products)} sản phẩm phù hợp với '{query}'."
                             # Thêm description cho sản phẩm đầu tiên
@@ -810,18 +711,22 @@ async def search_products_for_chat(
                             
                             if conn:
                                 cursor = conn.cursor()
-                                sql_query = "SELECT Anh FROM SanPham WHERE MaSanPham = ? AND (IsDeleted = 0 OR IsDeleted IS NULL)"
+                                sql_query = "SELECT Anh, DonViTinh FROM SanPham WHERE MaSanPham = ? AND (IsDeleted = 0 OR IsDeleted IS NULL)"
                                 cursor.execute(sql_query, product_id)
                                 row = cursor.fetchone()
                                 cursor.close()
                                 conn.close()
                                 
-                                if row and row[0]:
-                                    image_filename = row[0]
-                                    import urllib.parse
-                                    encoded_filename = urllib.parse.quote(image_filename, safe='')
-                                    image_url_for_download = f"{base_url}/images/products/{encoded_filename}"
-                                    logger.info(f"  📷 Image URL từ database: {image_url_for_download}")
+                                if row:
+                                    if row[0]:  # Anh
+                                        image_filename = row[0]
+                                        import urllib.parse
+                                        encoded_filename = urllib.parse.quote(image_filename, safe='')
+                                        image_url_for_download = f"{base_url}/images/products/{encoded_filename}"
+                                        logger.info(f"  📷 Image URL từ database: {image_url_for_download}")
+                                    # Lấy DonViTinh từ row[1] nếu có
+                                    if len(row) > 1 and row[1]:
+                                        metadata['don_vi_tinh'] = str(row[1])
                                 else:
                                     logger.warning(f"  ⚠️  Product {product_id} không có ảnh trong database")
                             else:
@@ -861,6 +766,7 @@ async def search_products_for_chat(
                         'category_id': metadata.get('category_id', ''),
                         'category_name': metadata.get('category_name', ''),
                         'price': float(metadata.get('price', 0)) if metadata.get('price') else None,
+                        'unit': metadata.get('don_vi_tinh', '') or metadata.get('unit', ''),
                         'description': metadata.get('description', ''),
                         'image_data': image_data,  # Base64 encoded image
                         'image_mime_type': image_mime_type,  # MIME type
@@ -906,6 +812,7 @@ async def search_products_for_chat(
                         products = filtered_products
                     else:
                         logger.info("  🚫 Lexical filter loại bỏ toàn bộ vector results (không còn sản phẩm thực sự khớp từ khóa)")
+                        products = []  # 🔥 QUAN TRỌNG: Set empty list khi lexical filter loại bỏ toàn bộ
             except Exception as lexical_err:
                 logger.warning(f"  ⚠️ Lexical filter failed, dùng nguyên vector results: {lexical_err}")
         

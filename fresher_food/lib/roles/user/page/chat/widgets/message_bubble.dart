@@ -2,6 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Chat.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+
+Uint8List? _decodeBase64InIsolate(String? base64String) {
+  if (base64String == null || base64String.isEmpty) return null;
+  try {
+    return base64Decode(base64String);
+  } catch (e) {
+    return null;
+  }
+}
 
 /// Widget hiển thị message bubble trong chat
 class MessageBubble extends StatelessWidget {
@@ -16,34 +28,36 @@ class MessageBubble extends StatelessWidget {
     required this.timeFormat,
   });
 
+  static final _imageDataRegex = RegExp(r'\[IMAGE_DATA\](.*?)\[/IMAGE_DATA\]', dotAll: true);
+  static final _productsDataRegex = RegExp(r'\[PRODUCTS_DATA\](.*?)\[/PRODUCTS_DATA\]', dotAll: true);
+  static final _imageDataRemoveRegex = RegExp(r'\[IMAGE_DATA\].*?\[/IMAGE_DATA\]', dotAll: true);
+
   /// Parse message và hiển thị với products images nếu có
   Widget _buildMessageContent(String messageText, bool isFromUser) {
-    // Kiểm tra xem có [IMAGE_DATA] không (hình ảnh từ user)
-    final imageDataMatch = RegExp(r'\[IMAGE_DATA\](.*?)\[/IMAGE_DATA\]', dotAll: true).firstMatch(messageText);
+    final imageDataMatch = _imageDataRegex.firstMatch(messageText);
+    final productsDataMatch = _productsDataRegex.firstMatch(messageText);
     
-    // Kiểm tra xem có [PRODUCTS_DATA] không
-    final productsDataMatch = RegExp(r'\[PRODUCTS_DATA\](.*?)\[/PRODUCTS_DATA\]', dotAll: true).firstMatch(messageText);
-    
-    // Extract text message (loại bỏ các tags)
     String textMessage = messageText;
     if (imageDataMatch != null) {
-      textMessage = textMessage.replaceAll(RegExp(r'\[IMAGE_DATA\].*?\[/IMAGE_DATA\]', dotAll: true), '').trim();
+      textMessage = textMessage.replaceAll(_imageDataRemoveRegex, '').trim();
     }
     if (productsDataMatch != null) {
       textMessage = textMessage.substring(0, productsDataMatch.start).trim();
     }
     
-    // Parse và hiển thị image từ user nếu có
     String? userImageData;
+    bool isImageFilePath = false;
     if (imageDataMatch != null && isFromUser) {
       try {
         userImageData = imageDataMatch.group(1)?.trim();
+        if (userImageData != null && userImageData.length < 100 && userImageData.contains('/')) {
+          isImageFilePath = true;
+        }
       } catch (e) {
         print('Error parsing image data: $e');
       }
     }
     
-    // Parse products data nếu có
     List<dynamic> productsWithImages = [];
     if (productsDataMatch != null) {
       try {
@@ -51,13 +65,12 @@ class MessageBubble extends StatelessWidget {
         final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
         final products = productsData['products'] as List<dynamic>? ?? [];
         
-        // Filter products có imageData
         productsWithImages = products.where((p) {
           final imageData = p['imageData'] as String?;
           return imageData != null && imageData.isNotEmpty;
         }).toList();
       } catch (e) {
-        print('❌ Error parsing products data: $e');
+        print('Error parsing products data: $e');
       }
     }
     
@@ -65,36 +78,90 @@ class MessageBubble extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Hiển thị hình ảnh từ user nếu có
         if (userImageData != null && userImageData.isNotEmpty) ...[
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            constraints: const BoxConstraints(maxWidth: 200, maxHeight: 200),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isFromUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
-                width: 1,
+          RepaintBoundary(
+            child: Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              constraints: const BoxConstraints(maxWidth: 200, maxHeight: 200),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isFromUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
+                  width: 1,
+                ),
               ),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                base64Decode(userImageData),
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Container(
-                    width: 200,
-                    height: 200,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  );
-                },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: isImageFilePath
+                    ? // 🔥 TỐI ƯU: Hiển thị từ file path ngay lập tức (không cần decode)
+                      Builder(
+                        builder: (context) {
+                          try {
+                            return Image.file(
+                              File(userImageData!),
+                              fit: BoxFit.cover,
+                              cacheWidth: 200,
+                              cacheHeight: 200,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 200,
+                                  height: 200,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.image, color: Colors.grey),
+                                );
+                              },
+                            );
+                          } catch (e) {
+                            return Container(
+                              width: 200,
+                              height: 200,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image, color: Colors.grey),
+                            );
+                          }
+                        },
+                      )
+                    : FutureBuilder<Uint8List?>(
+                        future: compute(_decodeBase64InIsolate, userImageData),
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState == ConnectionState.waiting) {
+                            return Container(
+                              width: 200,
+                              height: 200,
+                              color: Colors.grey.shade200,
+                              child: const Center(
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            );
+                          }
+                          if (snapshot.hasData && snapshot.data != null) {
+                            return Image.memory(
+                              snapshot.data!,
+                              fit: BoxFit.cover,
+                              cacheWidth: 200,
+                              cacheHeight: 200,
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  width: 200,
+                                  height: 200,
+                                  color: Colors.grey.shade200,
+                                  child: const Icon(Icons.image, color: Colors.grey),
+                                );
+                              },
+                            );
+                          }
+                          return Container(
+                            width: 200,
+                            height: 200,
+                            color: Colors.grey.shade200,
+                            child: const Icon(Icons.image, color: Colors.grey),
+                          );
+                        },
+                      ),
               ),
             ),
           ),
         ],
-        // Text message
         if (textMessage.isNotEmpty)
           Text(
             textMessage,
@@ -105,7 +172,6 @@ class MessageBubble extends StatelessWidget {
               fontWeight: FontWeight.w400,
             ),
           ),
-        // Products images - Hiển thị ảnh nếu có ít nhất 1 product có imageData
         if (productsWithImages.isNotEmpty) ...[
           if (textMessage.isNotEmpty) const SizedBox(height: 12),
           Wrap(
@@ -116,25 +182,56 @@ class MessageBubble extends StatelessWidget {
               
               if (imageData != null && imageData.isNotEmpty) {
                 try {
-                  return Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        base64Decode(imageData),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          print('Error decoding image: $error');
-                          return Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image, color: Colors.grey),
-                          );
-                        },
+                  return RepaintBoundary(
+                    child: Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.shade300),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: FutureBuilder<Uint8List?>(
+                          // 🔥 TỐI ƯU: Decode base64 trong isolate để không block UI thread
+                          future: compute(_decodeBase64InIsolate, imageData),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState == ConnectionState.waiting) {
+                              return Container(
+                                width: 120,
+                                height: 120,
+                                color: Colors.grey.shade200,
+                                child: const Center(
+                                  child: SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (snapshot.hasData && snapshot.data != null) {
+                              return Image.memory(
+                                snapshot.data!,
+                                fit: BoxFit.cover,
+                                // 🔥 TỐI ƯU: Cache image để tránh decode lại
+                                cacheWidth: 120,
+                                cacheHeight: 120,
+                                errorBuilder: (context, error, stackTrace) {
+                                  print('Error decoding image: $error');
+                                  return Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.image, color: Colors.grey),
+                                  );
+                                },
+                              );
+                            }
+                            return Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image, color: Colors.grey),
+                            );
+                          },
+                        ),
                       ),
                     ),
                   );

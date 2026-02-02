@@ -32,13 +32,7 @@ class DocumentProcessor:
         file_id: str = None
     ) -> List[DocumentChunk]:
         """
-        Process file and return list of chunks
-        
-        Args:
-            file_content: File content as bytes
-            file_name: File name
-            file_id: Optional file ID (will generate if not provided)
-            
+        Process file and return list of chunks    
         Returns:
             List of DocumentChunk objects
         """

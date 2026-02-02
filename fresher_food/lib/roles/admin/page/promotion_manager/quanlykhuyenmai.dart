@@ -55,9 +55,7 @@ class _QuanLyKhuyenMaiScreenState extends State<QuanLyKhuyenMaiScreen> {
       final sales = await _saleApi.getAllSales();
       final products = await _productApi.getProducts();
       
-      // Map product names to sales
       final salesWithProductNames = sales.map((sale) {
-        // Nếu là khuyến mãi toàn bộ (ALL), hiển thị tên đặc biệt
         if (sale.maSanPham == 'ALL') {
           return Sale(
             idSale: sale.idSale,

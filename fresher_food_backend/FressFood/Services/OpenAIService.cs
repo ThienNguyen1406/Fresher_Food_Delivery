@@ -100,6 +100,17 @@ namespace FressFood.Services
                                         - Nếu user đề cập đến 'số đó', 'nó', 'cái đó', 'kết quả đó', 'số vừa rồi', 'sản phẩm đó' hoặc các từ thay thế tương tự, 
                                           hãy tham chiếu đến thông tin từ lịch sử hội thoại trước đó để hiểu user đang nói về cái gì.
                                         - Nếu không có thông tin trong cả lịch sử hội thoại VÀ tài liệu và không biết câu trả lời, hãy đề nghị khách hàng liên hệ admin
+                                        
+                                        🔥 QUAN TRỌNG - FORMAT GIÁ BÁN:
+                                        - Khi trả lời về GIÁ BÁN của sản phẩm, bạn PHẢI format đúng như sau:
+                                          + Format: ""Giá bán: [số tiền]₫ / [đơn vị tính]"" (ví dụ: ""Giá bán: 15.000₫ / Kg"")
+                                          + Đơn vị tính (DonViTinh) có thể là: Kg, g, lít, ml, cái, hộp, chai, v.v.
+                                          + KHÔNG BAO GIỜ dùng số lượng tồn kho (SoLuongTon) trong format giá
+                                          + KHÔNG format kiểu ""cho X Kg"" hoặc ""cho X g"" - đó là số lượng tồn kho, KHÔNG phải đơn vị tính giá
+                                          + Ví dụ SAI: ""Giá bán là 15,000 VND cho 70 Kg"" ❌
+                                          + Ví dụ ĐÚNG: ""Giá bán: 15.000₫ / Kg"" ✅
+                                        - Nếu trong tài liệu có thông tin về số lượng tồn kho (ví dụ: ""70 Kg còn lại""), bạn KHÔNG được dùng số đó trong format giá.
+                                          Chỉ dùng đơn vị tính (DonViTinh) từ thông tin sản phẩm.
 
                                         Trả lời bằng tiếng Việt, ngắn gọn và dễ hiểu (tối đa 300 từ).";
 

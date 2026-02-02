@@ -731,6 +731,182 @@ namespace FressFood.Controllers
                                         _logger.LogWarning(historyEx, "Failed to retrieve conversation history");
                                     }
                                     
+                                    // 🔥 PHÂN QUYỀN: Kiểm tra quyền user trước khi xử lý câu hỏi
+                                    string? userRole = null;
+                                    string? userId = null;
+                                    try
+                                    {
+                                        using (var roleConnection = new SqlConnection(capturedConnectionString))
+                                        {
+                                            await roleConnection.OpenAsync();
+                                            string getUserInfoQuery = @"
+                                                SELECT c.MaNguoiDung, u.VaiTro
+                                                FROM Chat c
+                                                LEFT JOIN NguoiDung u ON c.MaNguoiDung = u.MaTaiKhoan
+                                                WHERE c.MaChat = @MaChat";
+                                            
+                                            using (var roleCommand = new SqlCommand(getUserInfoQuery, roleConnection))
+                                            {
+                                                roleCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                using (var roleReader = await roleCommand.ExecuteReaderAsync())
+                                                {
+                                                    if (await roleReader.ReadAsync())
+                                                    {
+                                                        userId = roleReader["MaNguoiDung"]?.ToString();
+                                                        userRole = roleReader["VaiTro"]?.ToString();
+                                                        _logger.LogInformation($"[Task.Run] User info: UserId={userId}, Role={userRole}");
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    catch (Exception roleEx)
+                                    {
+                                        _logger.LogWarning(roleEx, "Failed to retrieve user role, defaulting to User");
+                                        userRole = "User"; // Mặc định là User nếu không lấy được
+                                    }
+                                    
+                                    // Kiểm tra phân quyền câu hỏi
+                                    var question = capturedNoiDung.ToLower();
+                                    bool isAdminQuery = userRole != null && (userRole.Equals("Admin", StringComparison.OrdinalIgnoreCase));
+                                    bool isUserQuery = !isAdminQuery;
+                                    
+                                    // Danh sách từ khóa chỉ dành cho admin (thống kê, doanh thu, báo cáo)
+                                    var adminOnlyKeywords = new[] { 
+                                        "doanh thu", "revenue", "thống kê", "statistics", "báo cáo", "report",
+                                        "tổng doanh thu", "doanh số", "sales", "tài chính", "finance",
+                                        "người dùng", "users", "số lượng người dùng", "tổng số", "tổng đơn hàng",
+                                        "đơn hàng đã hoàn thành", "completed orders", "số lượng sản phẩm", "total products"
+                                    };
+                                    
+                                    bool containsAdminKeyword = adminOnlyKeywords.Any(keyword => question.Contains(keyword));
+                                    
+                                    // Nếu user hỏi về thông tin chỉ dành cho admin
+                                    if (isUserQuery && containsAdminKeyword)
+                                    {
+                                        _logger.LogWarning($"[Task.Run] User {userId ?? "Unknown"} attempted to ask admin-only question: {capturedNoiDung}");
+                                        
+                                        // Tạo tin nhắn từ chối
+                                        var deniedMessage = "Xin lỗi, bạn không có quyền truy cập thông tin thống kê và doanh thu. Vui lòng hỏi về sản phẩm, đơn hàng của bạn, hoặc các thông tin khác mà chúng tôi có thể hỗ trợ.";
+                                        
+                                        // Lưu tin nhắn bot từ chối vào database
+                                        using (var botConnection = new SqlConnection(capturedConnectionString))
+                                        {
+                                            await botConnection.OpenAsync();
+                                            string insertBotMessageQuery = @"
+                                                INSERT INTO Message (MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, NgayGui, DaDoc)
+                                                VALUES (@MaChat, 'BOT', 'Admin', @NoiDung, @NgayGui, 0)";
+                                            
+                                            using (var botCommand = new SqlCommand(insertBotMessageQuery, botConnection))
+                                            {
+                                                botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                botCommand.Parameters.AddWithValue("@NoiDung", deniedMessage);
+                                                botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+                                                await botCommand.ExecuteNonQueryAsync();
+                                                _logger.LogInformation($"[Task.Run] Bot denied message saved for chat {capturedMaChat}");
+                                            }
+                                        }
+                                        return; // Dừng xử lý, không tiếp tục với RAG
+                                    }
+                                    
+                                    _logger.LogInformation($"[Task.Run] Question authorized. UserId={userId ?? "Unknown"}, Role={userRole}, IsAdmin={isAdminQuery}, ContainsAdminKeyword={containsAdminKeyword}");
+                                    
+                                    // ✅ ƯU TIÊN: Kiểm tra nếu user hỏi về đơn hàng của mình
+                                    if (_chatbotService.IsOrderQuestion(capturedNoiDung) && userId != null)
+                                    {
+                                        _logger.LogInformation($"[Task.Run] User requested their orders: userId={userId}, question='{capturedNoiDung}'");
+                                        
+                                        try
+                                        {
+                                            var functionResultRaw = await _functionHandler.ExecuteFunctionAsync(
+                                                "getCustomerOrders",
+                                                new Dictionary<string, object> { 
+                                                    { "customerId", userId },
+                                                    { "limit", 100 }  // Lấy toàn bộ đơn hàng (giới hạn 100 để tránh quá tải)
+                                                }
+                                            );
+                                            
+                                            if (!string.IsNullOrWhiteSpace(functionResultRaw))
+                                            {
+                                                using var doc = JsonDocument.Parse(functionResultRaw);
+                                                var root = doc.RootElement;
+                                                
+                                                if (root.TryGetProperty("error", out var errorProp))
+                                                {
+                                                    var errorMsg = errorProp.GetString();
+                                                    _logger.LogWarning($"[Task.Run] Error getting customer orders: {errorMsg}");
+                                                    // Fall through to normal processing
+                                                }
+                                                else if (root.TryGetProperty("orders", out var ordersProp) && ordersProp.ValueKind == JsonValueKind.Array)
+                                                {
+                                                    var ordersList = new List<(string orderId, string orderDate, string status, double totalAmount)>();
+                                                    foreach (var order in ordersProp.EnumerateArray())
+                                                    {
+                                                        var orderId = order.TryGetProperty("maDonHang", out var orderIdProp) ? orderIdProp.GetString() ?? "" : "";
+                                                        var orderDate = order.TryGetProperty("ngayDat", out var dateProp) ? dateProp.GetString() ?? "" : "";
+                                                        var status = order.TryGetProperty("trangThai", out var statusProp) ? statusProp.GetString() ?? "" : "";
+                                                        var totalAmount = order.TryGetProperty("tongTien", out var totalProp) ? (totalProp.ValueKind == JsonValueKind.Number ? totalProp.GetDouble() : 0.0) : 0.0;
+                                                        
+                                                        ordersList.Add((orderId, orderDate, status, totalAmount));
+                                                    }
+                                                    
+                                                    string answer;
+                                                    if (ordersList.Count == 0)
+                                                    {
+                                                        answer = "Bạn chưa có đơn hàng nào. Bạn có thể đặt hàng trong ứng dụng.";
+                                                    }
+                                                    else
+                                                    {
+                                                        answer = $"Bạn có tổng cộng {ordersList.Count} đơn hàng:\n\n";
+                                                        
+                                                        // Hiển thị tất cả đơn hàng, nhưng giới hạn format để không quá dài
+                                                        int displayLimit = Math.Min(ordersList.Count, 10); // Hiển thị tối đa 10 đơn hàng trong message
+                                                        
+                                                        for (int i = 0; i < displayLimit; i++)
+                                                        {
+                                                            var order = ordersList[i];
+                                                            answer += $"{i + 1}. Mã đơn: {order.orderId}\n";
+                                                            answer += $"   Ngày đặt: {order.orderDate}\n";
+                                                            answer += $"   Trạng thái: {order.status}\n";
+                                                            answer += $"   Tổng tiền: {order.totalAmount:,.0f}₫\n\n";
+                                                        }
+                                                        
+                                                        if (ordersList.Count > displayLimit)
+                                                        {
+                                                            answer += $"... và {ordersList.Count - displayLimit} đơn hàng khác.\n\n";
+                                                        }
+                                                        
+                                                        answer += "Bạn có thể xem chi tiết tất cả đơn hàng trong phần 'Đơn hàng của tôi' trong ứng dụng.";
+                                                    }
+                                                    
+                                                    // Lưu tin nhắn bot vào database
+                                                    using (var botConnection = new SqlConnection(capturedConnectionString))
+                                                    {
+                                                        await botConnection.OpenAsync();
+                                                        string insertBotMessageQuery = @"
+                                                            INSERT INTO Message (MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, NgayGui, DaDoc)
+                                                            VALUES (@MaChat, 'BOT', 'Admin', @NoiDung, @NgayGui, 0)";
+                                                        
+                                                        using (var botCommand = new SqlCommand(insertBotMessageQuery, botConnection))
+                                                        {
+                                                            botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                            botCommand.Parameters.AddWithValue("@NoiDung", answer);
+                                                            botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+                                                            await botCommand.ExecuteNonQueryAsync();
+                                                            _logger.LogInformation($"[Task.Run] Bot order response saved for chat {capturedMaChat}");
+                                                        }
+                                                    }
+                                                    return; // Dừng xử lý, không tiếp tục với RAG
+                                                }
+                                            }
+                                        }
+                                        catch (Exception orderEx)
+                                        {
+                                            _logger.LogError(orderEx, $"[Task.Run] Error getting customer orders for user {userId}");
+                                            // Tiếp tục với logic xử lý thông thường nếu có lỗi
+                                        }
+                                    }
+                                    
                                     // ✅ ƯU TIÊN: Kiểm tra nếu user yêu cầu "top sản phẩm bán chạy" (kể cả có từ 'hình ảnh')
                                     if (_chatbotService.IsTopProductsRequest(capturedNoiDung))
                                     {
@@ -969,6 +1145,14 @@ namespace FressFood.Controllers
                                                     _logger.LogInformation($"Building context from {ragResponse.Chunks.Count} chunks");
                                                     var contextBuilder = new System.Text.StringBuilder();
                                                     contextBuilder.AppendLine("Thông tin liên quan từ tài liệu:");
+                                                    contextBuilder.AppendLine("🔥 QUAN TRỌNG - FORMAT GIÁ BÁN:");
+                                                    contextBuilder.AppendLine("- Khi có thông tin về GIÁ BÁN, format đúng: \"Giá bán: [số tiền]₫ / [đơn vị tính]\"");
+                                                    contextBuilder.AppendLine("- Đơn vị tính (DonViTinh) có thể là: Kg, g, lít, ml, cái, hộp, chai, v.v.");
+                                                    contextBuilder.AppendLine("- KHÔNG BAO GIỜ dùng số lượng tồn kho (SoLuongTon) trong format giá");
+                                                    contextBuilder.AppendLine("- KHÔNG format kiểu \"cho X Kg\" hoặc \"cho X g\" - đó là số lượng tồn kho, KHÔNG phải đơn vị tính giá");
+                                                    contextBuilder.AppendLine("- Ví dụ SAI: \"Giá bán là 15,000 VND cho 70 Kg\" ❌");
+                                                    contextBuilder.AppendLine("- Ví dụ ĐÚNG: \"Giá bán: 15.000₫ / Kg\" ✅");
+                                                    contextBuilder.AppendLine("");
                                                     
                                                     // Sắp xếp chunks theo similarity (cao nhất trước)
                                                     var sortedChunks = ragResponse.Chunks.OrderByDescending(c => c.Similarity).ToList();
@@ -985,7 +1169,17 @@ namespace FressFood.Controllers
                                                 else if (hasContextString)
                                                 {
                                                     // Nếu không có chunks nhưng có context string, dùng context string
-                                                    ragContext = ragResponse.Context;
+                                                    var contextBuilder = new System.Text.StringBuilder();
+                                                    contextBuilder.AppendLine("🔥 QUAN TRỌNG - FORMAT GIÁ BÁN:");
+                                                    contextBuilder.AppendLine("- Khi có thông tin về GIÁ BÁN, format đúng: \"Giá bán: [số tiền]₫ / [đơn vị tính]\"");
+                                                    contextBuilder.AppendLine("- Đơn vị tính (DonViTinh) có thể là: Kg, g, lít, ml, cái, hộp, chai, v.v.");
+                                                    contextBuilder.AppendLine("- KHÔNG BAO GIỜ dùng số lượng tồn kho (SoLuongTon) trong format giá");
+                                                    contextBuilder.AppendLine("- KHÔNG format kiểu \"cho X Kg\" hoặc \"cho X g\" - đó là số lượng tồn kho, KHÔNG phải đơn vị tính giá");
+                                                    contextBuilder.AppendLine("- Ví dụ SAI: \"Giá bán là 15,000 VND cho 70 Kg\" ❌");
+                                                    contextBuilder.AppendLine("- Ví dụ ĐÚNG: \"Giá bán: 15.000₫ / Kg\" ✅");
+                                                    contextBuilder.AppendLine("");
+                                                    contextBuilder.AppendLine(ragResponse.Context);
+                                                    ragContext = contextBuilder.ToString();
                                                     _logger.LogInformation($"Using context string from RAG: {ragContext.Length} chars");
                                                 }
                                                 

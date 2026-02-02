@@ -29,7 +29,6 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
   int tongSanPham = 0;
   List<OrderDetail> allOrderDetails = [];
 
-  // Thống kê doanh thu theo khoảng thời gian
   DateTime? _startDate;
   DateTime? _endDate;
   bool _loadingRevenue = false;
@@ -39,18 +38,15 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
   int _donThanhCong = 0;
   int _donBiHuy = 0;
 
-  // Thống kê doanh thu theo tháng
   List<Map<String, dynamic>> _monthlyRevenue = [];
   bool _loadingMonthlyRevenue = false;
   int _selectedYear = DateTime.now().year;
 
-  // Dữ liệu cho biểu đồ
   List<Map<String, dynamic>> _statusDistribution = [];
   bool _loadingStatusDistribution = false;
   List<Map<String, dynamic>> _monthlyOrderGrowth = [];
   bool _loadingMonthlyOrderGrowth = false;
 
-  /// Khối khởi tạo: Load tất cả dữ liệu thống kê
   @override
   void initState() {
     super.initState();
@@ -59,15 +55,13 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
     loadMonthlyOrderGrowth();
   }
 
-  /// Khối chức năng: Load thống kê tổng quan (tổng đơn hàng, doanh thu, người dùng, sản phẩm)
+  /// Load thống kê tổng quan
   Future<void> loadStats() async {
     setState(() => _loading = true);
     try {
-      // 1. Tổng đơn hàng và doanh thu
       final donHangs = await OrderApi().getOrders();
       tongDonHang = donHangs.length;
 
-      // Lọc chỉ lấy đơn hàng đã hoàn thành (complete)
       final completedOrders = donHangs.where((order) {
         final status = order.trangThai.toLowerCase();
         return status.contains('hoàn thành') ||
@@ -75,7 +69,6 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
             status.contains('complete');
       }).toList();
 
-      // Lấy tất cả order details và tính doanh thu CHỈ từ đơn hàng đã hoàn thành
       allOrderDetails = [];
       for (var donHang in completedOrders) {
         try {
@@ -94,7 +87,6 @@ class _ThongKeScreenState extends State<ThongKeScreen> {
         }
       }
 
-      // Tính tổng doanh thu từ order details (chỉ đơn hàng đã hoàn thành)
       doanhThu = allOrderDetails.fold(
           0.0, (sum, detail) => sum + (detail.giaBan * detail.soLuong));
 

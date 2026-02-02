@@ -17,35 +17,41 @@ class ChatListPage extends StatefulWidget {
 class _ChatListPageState extends State<ChatListPage> {
   final ChatApi _chatApi = ChatApi();
   final UserApi _userApi = UserApi();
-  List<Chat> _chats = [];
-  bool _isLoading = true;
+  
+  final ValueNotifier<List<Chat>> _chatsNotifier = ValueNotifier<List<Chat>>([]);
+  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<String?> _errorNotifier = ValueNotifier<String?>(null);
+  
   User? _currentUser;
-  String? _error;
+  bool _loaded = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadDataOnce();
   }
 
   @override
   void dispose() {
+    _chatsNotifier.dispose();
+    _isLoadingNotifier.dispose();
+    _errorNotifier.dispose();
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+  Future<void> _loadDataOnce() async {
+    if (_loaded || _isLoading) return;
+    _isLoading = true;
+    _isLoadingNotifier.value = true;
+    _errorNotifier.value = null;
 
     try {
       final user = await _userApi.getCurrentUser();
       if (user == null) {
-        setState(() {
-          _error = 'Please login to view chats';
-          _isLoading = false;
-        });
+        _errorNotifier.value = 'Please login to view chats';
+        _isLoadingNotifier.value = false;
+        _isLoading = false;
         return;
       }
 
@@ -54,15 +60,43 @@ class _ChatListPageState extends State<ChatListPage> {
       final chats = await _chatApi.getUserChats(user.maTaiKhoan);
       print('Loaded ${chats.length} chats');
 
-      setState(() {
-        _chats = chats;
-        _isLoading = false;
-      });
+      _chatsNotifier.value = chats;
+      _isLoadingNotifier.value = false;
+      _loaded = true;
+      _isLoading = false;
     } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
+      _errorNotifier.value = e.toString();
+      _isLoadingNotifier.value = false;
+      _isLoading = false;
+    }
+  }
+
+  Future<void> _loadData() async {
+    if (_isLoading) return;
+    _isLoading = true;
+    _isLoadingNotifier.value = true;
+    _errorNotifier.value = null;
+
+    try {
+      if (_currentUser == null) {
+        final user = await _userApi.getCurrentUser();
+        if (user == null) {
+          _errorNotifier.value = 'Please login to view chats';
+          _isLoadingNotifier.value = false;
+          _isLoading = false;
+          return;
+        }
+        _currentUser = user;
+      }
+
+      final chats = await _chatApi.getUserChats(_currentUser!.maTaiKhoan);
+      _chatsNotifier.value = chats;
+      _isLoadingNotifier.value = false;
+      _isLoading = false;
+    } catch (e) {
+      _errorNotifier.value = e.toString();
+      _isLoadingNotifier.value = false;
+      _isLoading = false;
     }
   }
 
@@ -80,9 +114,9 @@ class _ChatListPageState extends State<ChatListPage> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    if (_isLoading) return;
+    _isLoading = true;
+    _isLoadingNotifier.value = true;
 
     try {
       final result = await _chatApi.createChat(
@@ -93,44 +127,49 @@ class _ChatListPageState extends State<ChatListPage> {
 
       if (result != null && result['maChat'] != null) {
         if (mounted) {
-          // Reload danh sách chat trước
+          _isLoadingNotifier.value = false;
+          _isLoading = false;
+          
           await _loadData();
           
-          // Chuyển đến trang chat detail
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => ChatDetailPage(
-                maChat: result['maChat'],
-                currentUserId: _currentUser!.maTaiKhoan,
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ChatDetailPage(
+                  maChat: result['maChat'],
+                  currentUserId: _currentUser!.maTaiKhoan,
+                ),
               ),
-            ),
-          ).then((_) => _loadData());
+            ).then((_) {
+              if (mounted) {
+                _loadData();
+              }
+            });
+          }
         }
       } else {
         if (mounted) {
+          _isLoadingNotifier.value = false;
+          _isLoading = false;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Không thể tạo cuộc trò chuyện. Vui lòng thử lại.'),
               backgroundColor: Colors.red,
             ),
           );
-          setState(() {
-            _isLoading = false;
-          });
         }
       }
     } catch (e) {
       if (mounted) {
+        _isLoadingNotifier.value = false;
+        _isLoading = false;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Lỗi khi tạo cuộc trò chuyện: $e'),
             backgroundColor: Colors.red,
           ),
         );
-        setState(() {
-          _isLoading = false;
-        });
       }
     }
   }
@@ -147,70 +186,89 @@ class _ChatListPageState extends State<ChatListPage> {
         backgroundColor: theme.appBarTheme.backgroundColor,
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_comment),
-            onPressed: _isLoading ? null : _createNewChat,
-            tooltip: 'Tạo cuộc trò chuyện mới',
+          ValueListenableBuilder<bool>(
+            valueListenable: _isLoadingNotifier,
+            builder: (context, isLoading, _) {
+              return IconButton(
+                icon: const Icon(Icons.add_comment),
+                onPressed: isLoading ? null : _createNewChat,
+                tooltip: 'Tạo cuộc trò chuyện mới',
+              );
+            },
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _isLoading ? null : _createNewChat,
-        backgroundColor: theme.primaryColor,
-        child: const Icon(Icons.add, color: Colors.white),
-        tooltip: 'Tạo cuộc trò chuyện mới',
+      floatingActionButton: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return FloatingActionButton(
+            onPressed: isLoading ? null : _createNewChat,
+            backgroundColor: theme.primaryColor,
+            child: const Icon(Icons.add, color: Colors.white),
+            tooltip: 'Tạo cuộc trò chuyện mới',
+          );
+        },
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.error_outline,
-                                size: 48, color: Colors.red),
-                            const SizedBox(height: 16),
-                            Text(_error!),
-                            const SizedBox(height: 16),
-                            ElevatedButton(
-                              onPressed: _loadData,
-                              child: Text(localizations.retry),
-                            ),
-                          ],
-                        ),
-                      )
-                    : _chats.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.chat_bubble_outline,
-                                    size: 64, color: Colors.grey),
-                                const SizedBox(height: 16),
-                                Text(
-                                  localizations.noChatsYet,
-                                  style: TextStyle(
-                                      fontSize: 18, color: Colors.grey),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  localizations.startNewChat,
-                                  style: TextStyle(
-                                      fontSize: 14, color: Colors.grey),
-                                ),
-                              ],
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadData,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              itemCount: _chats.length,
-                              itemBuilder: (context, index) {
-                                final chat = _chats[index];
+      body: ValueListenableBuilder<bool>(
+        valueListenable: _isLoadingNotifier,
+        builder: (context, isLoading, _) {
+          return ValueListenableBuilder<String?>(
+            valueListenable: _errorNotifier,
+            builder: (context, error, __) {
+              return ValueListenableBuilder<List<Chat>>(
+                valueListenable: _chatsNotifier,
+                builder: (context, chats, ___) {
+                  return Column(
+                    children: [
+                      Expanded(
+                        child: isLoading
+                            ? const Center(child: CircularProgressIndicator())
+                            : error != null
+                                ? Center(
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(Icons.error_outline,
+                                            size: 48, color: Colors.red),
+                                        const SizedBox(height: 16),
+                                        Text(error),
+                                        const SizedBox(height: 16),
+                                        ElevatedButton(
+                                          onPressed: _loadData,
+                                          child: Text(localizations.retry),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                : chats.isEmpty
+                                    ? Center(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.chat_bubble_outline,
+                                                size: 64, color: Colors.grey),
+                                            const SizedBox(height: 16),
+                                            Text(
+                                              localizations.noChatsYet,
+                                              style: TextStyle(
+                                                  fontSize: 18, color: Colors.grey),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              localizations.startNewChat,
+                                              style: TextStyle(
+                                                  fontSize: 14, color: Colors.grey),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : RefreshIndicator(
+                                        onRefresh: _loadData,
+                                        child: ListView.builder(
+                                          padding: const EdgeInsets.only(bottom: 8),
+                                          itemCount: chats.length,
+                                          itemBuilder: (context, index) {
+                                            final chat = chats[index];
                                 return Dismissible(
                                   key: Key(chat.maChat),
                                   direction: DismissDirection.endToStart,
@@ -276,11 +334,17 @@ class _ChatListPageState extends State<ChatListPage> {
                                   },
                                   child: _buildChatItem(chat, localizations),
                                 );
-                              },
-                            ),
-                          ),
-          ),
-        ],
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
     );
   }

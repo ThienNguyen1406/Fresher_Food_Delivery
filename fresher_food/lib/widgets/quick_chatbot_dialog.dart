@@ -131,7 +131,6 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Dialog(
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
