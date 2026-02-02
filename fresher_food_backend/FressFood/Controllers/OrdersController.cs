@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Data;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using OfficeOpenXml;
 using OfficeOpenXml.Style;
 
@@ -699,6 +700,20 @@ namespace FressFood.Controllers
                                 detail.MaDonHang = maDonHang;
                             }
 
+                            // Tạo thông báo cho admin về đơn hàng mới (chạy trong background, không block response)
+                            _ = Task.Run(() =>
+                            {
+                                try
+                                {
+                                    NotifyAdminsNewOrder(maDonHang, request.Order, connectionString);
+                                }
+                                catch (Exception ex)
+                                {
+                                    // Log error nhưng không throw để không ảnh hưởng response
+                                    System.Diagnostics.Debug.WriteLine($"Error notifying admins about new order {maDonHang}: {ex.Message}");
+                                }
+                            });
+
                             return Ok(new
                             {
                                 message = "Tạo đơn hàng thành công",
@@ -1095,6 +1110,85 @@ namespace FressFood.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Gửi thông báo cho tất cả admin về đơn hàng mới
+        /// </summary>
+        private void NotifyAdminsNewOrder(string maDonHang, Order order, string connectionString)
+        {
+            try
+            {
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    connection.Open();
+
+                    // Lấy danh sách admin
+                    string adminQuery = "SELECT MaTaiKhoan FROM NguoiDung WHERE VaiTro = 'Admin' OR VaiTro = N'Admin'";
+                    var adminList = new List<string>();
+
+                    using (var adminCommand = new SqlCommand(adminQuery, connection))
+                    {
+                        using (var reader = adminCommand.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                var adminId = reader["MaTaiKhoan"].ToString();
+                                if (!string.IsNullOrEmpty(adminId))
+                                {
+                                    adminList.Add(adminId);
+                                }
+                            }
+                        }
+                    }
+
+                    // Tính tổng tiền đơn hàng
+                    decimal tongTien = 0;
+                    string orderDetailsQuery = @"
+                        SELECT SUM(GiaBan * SoLuong) as TongTien
+                        FROM ChiTietDonHang
+                        WHERE MaDonHang = @MaDonHang";
+                    
+                    using (var totalCommand = new SqlCommand(orderDetailsQuery, connection))
+                    {
+                        totalCommand.Parameters.AddWithValue("@MaDonHang", maDonHang);
+                        var result = totalCommand.ExecuteScalar();
+                        if (result != null && result != DBNull.Value)
+                        {
+                            tongTien = Convert.ToDecimal(result);
+                        }
+                    }
+
+                    // Tạo notification cho mỗi admin
+                    foreach (var adminId in adminList)
+                    {
+                        string maThongBao = $"NOTIF_ORDER_{maDonHang}_{adminId}_{DateTime.Now:yyyyMMddHHmmss}";
+                        string notifQuery = @"INSERT INTO Notification 
+                                            (MaThongBao, LoaiThongBao, MaDonHang, MaNguoiNhan, TieuDe, NoiDung, DaDoc, NgayTao)
+                                            VALUES (@MaThongBao, 'NewOrder', @MaDonHang, @MaNguoiNhan, @TieuDe, @NoiDung, 0, @NgayTao)";
+
+                        string tieuDe = "Đơn hàng mới";
+                        string noiDung = $"Đơn hàng {maDonHang} vừa được tạo. Tổng tiền: {tongTien:N0}₫. Trạng thái: {order.TrangThai}";
+
+                        using (var notifCommand = new SqlCommand(notifQuery, connection))
+                        {
+                            notifCommand.Parameters.AddWithValue("@MaThongBao", maThongBao);
+                            notifCommand.Parameters.AddWithValue("@LoaiThongBao", "NewOrder");
+                            notifCommand.Parameters.AddWithValue("@MaDonHang", maDonHang);
+                            notifCommand.Parameters.AddWithValue("@MaNguoiNhan", adminId);
+                            notifCommand.Parameters.AddWithValue("@TieuDe", tieuDe);
+                            notifCommand.Parameters.AddWithValue("@NoiDung", noiDung);
+                            notifCommand.Parameters.AddWithValue("@NgayTao", DateTime.Now);
+                            notifCommand.ExecuteNonQuery();
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error nhưng không throw để không ảnh hưởng response
+                System.Diagnostics.Debug.WriteLine($"Error notifying admins about new order {maDonHang}: {ex.Message}");
             }
         }
     }

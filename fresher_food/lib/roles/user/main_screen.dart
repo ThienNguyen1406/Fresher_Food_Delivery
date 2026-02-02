@@ -595,7 +595,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               child: Lottie.asset(
-                'lib/assets/lottie/live_chatbot.json',
+                'lib/assets/lottie/chatbot.json',
                 fit: BoxFit.contain,
                 repeat: true,
                 animate: true,

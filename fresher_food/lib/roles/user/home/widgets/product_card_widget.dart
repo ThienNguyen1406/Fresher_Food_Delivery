@@ -3,6 +3,8 @@ import 'package:fresher_food/models/Product.dart';
 import 'package:fresher_food/roles/user/home/provider/home_provider.dart';
 import 'package:fresher_food/roles/user/route/app_route.dart';
 import 'package:fresher_food/roles/user/widgets/price_with_sale_widget.dart';
+import 'package:fresher_food/roles/user/page/cart/widgets/cart_snackbar_widgets.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 import 'package:fresher_food/utils/date_formatter.dart';
 import 'package:fresher_food/utils/screen_size.dart';
 
@@ -273,7 +275,36 @@ class ProductCardWidget extends StatelessWidget {
                                     color: Colors.transparent,
                                     child: InkWell(
                                       onTap: canAddToCart
-                                          ? () => provider.addToCart(product)
+                                          ? () async {
+                                              try {
+                                                await provider.addToCart(product);
+                                                if (context.mounted) {
+                                                  final localizations = AppLocalizations.of(context);
+                                                  if (localizations != null) {
+                                                    CartSnackbarWidgets.showSuccess(
+                                                      context,
+                                                      localizations.addToCartSuccess,
+                                                    );
+                                                  } else {
+                                                    CartSnackbarWidgets.showSuccess(
+                                                      context,
+                                                      'Đã thêm sản phẩm vào giỏ hàng',
+                                                    );
+                                                  }
+                                                }
+                                              } catch (e) {
+                                                if (context.mounted) {
+                                                  final localizations = AppLocalizations.of(context);
+                                                  final errorMessage = e.toString().contains('đăng nhập')
+                                                      ? e.toString()
+                                                      : (localizations?.addToCartFailed ?? 'Không thể thêm sản phẩm vào giỏ hàng');
+                                                  CartSnackbarWidgets.showError(
+                                                    context,
+                                                    errorMessage,
+                                                  );
+                                                }
+                                              }
+                                            }
                                           : null,
                                       borderRadius: BorderRadius.circular(16),
                                       child: Icon(

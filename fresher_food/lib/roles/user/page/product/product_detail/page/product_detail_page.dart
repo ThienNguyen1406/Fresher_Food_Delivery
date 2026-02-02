@@ -11,6 +11,7 @@ import 'package:fresher_food/roles/user/page/product/product_detail/widgets/prod
 import 'package:fresher_food/roles/user/page/product/product_detail/widgets/product_back_button.dart';
 import 'package:fresher_food/roles/user/page/product/product_detail/widgets/rating_section.dart';
 import 'package:fresher_food/roles/user/page/product/product_detail/widgets/snackbar_widgets.dart';
+import 'package:fresher_food/utils/app_localizations.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final String productId;
@@ -551,16 +552,28 @@ class _ProductDetailPageState extends State<ProductDetailPage>
 
       final success = await productDetailProvider.addToCart();
       if (success) {
+        final localizations = AppLocalizations.of(context);
+        final productName = productDetailProvider.product!.tenSanPham;
+        final message = localizations != null
+            ? '${localizations.addToCartSuccess}: "$productName"'
+            : 'Đã thêm "$productName" vào giỏ hàng';
         SnackbarWidgets.showSuccess(
           context,
-          'Đã thêm "${productDetailProvider.product!.tenSanPham}" vào giỏ hàng',
+          message,
         );
       } else {
+        final localizations = AppLocalizations.of(context);
         SnackbarWidgets.showError(
-            context, 'Không thể thêm sản phẩm vào giỏ hàng');
+          context,
+          localizations?.addToCartFailed ?? 'Không thể thêm sản phẩm vào giỏ hàng',
+        );
       }
     } catch (e) {
-      SnackbarWidgets.showError(context, 'Lỗi: $e');
+      final localizations = AppLocalizations.of(context);
+      final errorMessage = e.toString().contains('đăng nhập')
+          ? e.toString()
+          : (localizations?.addToCartFailed ?? 'Không thể thêm sản phẩm vào giỏ hàng');
+      SnackbarWidgets.showError(context, errorMessage);
     }
   }
 

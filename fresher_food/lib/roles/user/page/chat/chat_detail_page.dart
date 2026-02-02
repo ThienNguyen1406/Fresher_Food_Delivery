@@ -60,16 +60,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   Timer? _botResponseWaitTimer;
   String? _selectedFileId;
   File? _selectedImage;
-  DateTime? _lastScrollCheck;
   bool _isPageVisible = true;
   bool _isWaitingForBot = false;
-  
-  DateTime? _lastLoadMessagesTime;
-  bool _isLoadingMessages = false;
-  String? _lastMessageId;
-  
-  bool _isUserScrolling = false;
-  DateTime? _lastUserScrollTime;
   
   double? _cachedScreenWidth;
   final DateFormat _timeFormat = DateFormat('HH:mm');
@@ -84,35 +76,15 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   }
 
   void _onScroll() {
-    final now = DateTime.now();
-    if (_lastScrollCheck != null && 
-        now.difference(_lastScrollCheck!).inMilliseconds < 300) {
-      return;
-    }
-    _lastScrollCheck = now;
-
     if (!_scrollController.hasClients || !_scrollController.position.hasContentDimensions) {
       return;
     }
 
+    // Đơn giản hóa: chỉ load more khi scroll gần top
     final currentPosition = _scrollController.position.pixels;
     final maxPosition = _scrollController.position.maxScrollExtent;
-    
-    // Với reverse: true, pixels = 0 là bottom (mới nhất), maxPosition là top (cũ nhất)
-    // Khi scroll lên để xem tin nhắn cũ, pixels tăng lên gần maxPosition
-    if (currentPosition < maxPosition - 300) {
-      _isUserScrolling = true;
-      _lastUserScrollTime = now;
-    } else {
-      if (_lastUserScrollTime != null && 
-          now.difference(_lastUserScrollTime!).inSeconds > 2) {
-        _isUserScrolling = false;
-      }
-    }
-
-    // Với reverse: true, load more khi gần top (maxPosition)
-    // Kiểm tra nếu còn cách top ít hơn 200px
     final distanceFromTop = maxPosition - currentPosition;
+    
     if (distanceFromTop <= 200 && 
         _hasMoreMessages && 
         !_isLoadingMore && 
@@ -214,37 +186,35 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   void _startRefreshTimer() {
     _refreshTimer?.cancel();
     
-    if (_isWaitingForBot) {
-      return;
-    }
-    
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      if (mounted && _isPageVisible && !_isWaitingForBot) {
-        _loadNewMessages();
+    // Đơn giản hóa: refresh mỗi 60s như admin_rag_chat
+    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted && _isPageVisible && !_isSending && !_isWaitingForBot) {
+        _loadMessages(silent: true);
       }
     });
   }
   
   void _waitForBotResponse() {
     _botResponseWaitTimer?.cancel();
-    _refreshTimer?.cancel();
     
     _isWaitingForBot = true;
     _isWaitingForBotResponseNotifier.value = true;
     
+    // Scroll to bottom để hiển thị typing indicator
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+      if (_scrollController.hasClients && mounted) {
         _scrollController.jumpTo(0);
       }
     });
     
+    // Đơn giản hóa: check bot response mỗi 1.5s, tối đa 8 lần (12s) như admin_rag_chat
     int attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 8;
     
-    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) {
+    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
       attempts++;
       if (mounted && _isPageVisible) {
-        _loadNewMessages();
+        _loadMessages(silent: true);
         
         if (_messages.isNotEmpty) {
           final lastMessage = _messages.first;
@@ -273,7 +243,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     });
   }
 
-  Future<void> _loadMessages({bool silent = false, bool forceReload = false}) async {
+  Future<void> _loadMessages({bool silent = false}) async {
     if (!silent) {
       _isLoadingNotifier.value = true;
     }
@@ -281,61 +251,69 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     try {
       final result = await _chatApi.getMessages(
         maChat: widget.maChat,
-        limit: 5, // Giảm từ 10 xuống 5 để load nhanh hơn
+        limit: 50, // Tăng lên 50 như admin_rag_chat để load mượt hơn
       );
       
       if (mounted) {
         final newMessages = result['messages'] as List<Message>;
         final hasMore = result['hasMore'] as bool;
         
+        // Đơn giản hóa: chỉ reverse và set trực tiếp
         final reversedMessages = newMessages.reversed.toList();
         
-        if (reversedMessages.isNotEmpty) {
-          _lastMessageId = reversedMessages.first.maTinNhan;
-        }
-        
-        // Nếu forceReload = true (pull to refresh), thay thế toàn bộ
-        // Nếu không, merge với messages hiện có để giữ lại tin nhắn cũ đã load
-        if (forceReload) {
-          _messagesNotifier.value = reversedMessages;
-        } else {
-          final currentMessages = _messages;
-          if (currentMessages.isEmpty) {
-            // Nếu chưa có messages, set trực tiếp
-            _messagesNotifier.value = reversedMessages;
-          } else {
-            // Merge: chỉ thêm tin nhắn mới, giữ lại tin nhắn cũ
-            final existingIds = <String>{};
-            for (var msg in currentMessages) {
-              existingIds.add(msg.maTinNhan);
-            }
+        // Nếu đang đợi bot response, merge thay vì replace để giữ optimistic messages
+        if (_isWaitingForBot) {
+          final currentMessages = List<Message>.from(_messages);
+          
+          // Nếu có messages hiện tại, merge
+          if (currentMessages.isNotEmpty) {
+            final existingIds = currentMessages.map((m) => m.maTinNhan).toSet();
             
-            final updatedMessages = <Message>[];
+            // Chỉ thêm messages mới (chưa có trong list)
+            final messagesToAdd = <Message>[];
             for (var newMsg in reversedMessages) {
               if (!existingIds.contains(newMsg.maTinNhan)) {
-                updatedMessages.add(newMsg);
+                messagesToAdd.add(newMsg);
               }
             }
             
-            // Giữ lại tin nhắn cũ đã load trước đó
-            if (updatedMessages.isNotEmpty) {
-              _messagesNotifier.value = [...updatedMessages, ...currentMessages];
+            // Giữ lại optimistic messages và thêm messages mới
+            if (messagesToAdd.isNotEmpty) {
+              _messagesNotifier.value = [...messagesToAdd, ...currentMessages];
             }
+            // Nếu không có messages mới, giữ nguyên current messages (không clear)
+          } else {
+            // Chưa có messages, set trực tiếp
+            _messagesNotifier.value = reversedMessages;
           }
+        } else {
+          // Không đợi bot response, set trực tiếp
+          _messagesNotifier.value = reversedMessages;
         }
         
         _hasMoreMessagesNotifier.value = hasMore;
         _isLoadingNotifier.value = false;
 
         // markAsRead không block UI
-        unawaited(
-          _chatApi.markAsRead(
-          maChat: widget.maChat,
-          maNguoiDoc: widget.currentUserId,
-          ).catchError((e) {
-            return false;
-          })
-        );
+        if (!silent) {
+          unawaited(
+            _chatApi.markAsRead(
+              maChat: widget.maChat,
+              maNguoiDoc: widget.currentUserId,
+            ).catchError((e) {
+              return false;
+            })
+          );
+        }
+
+        // Auto scroll to bottom nếu có tin nhắn mới
+        if (reversedMessages.isNotEmpty && _scrollController.hasClients) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients && mounted) {
+              _scrollController.jumpTo(0);
+            }
+          });
+        }
       }
     } catch (e) {
       if (mounted && !silent) {
@@ -426,7 +404,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           _messagesNotifier.value = currentMessages;
           
           if (reversedNewMessages.isNotEmpty) {
-            _lastMessageId = reversedNewMessages.first.maTinNhan;
           }
         }
       }
@@ -434,132 +411,6 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     }
   }
 
-  /// Load chỉ tin nhắn mới (dùng cho auto-refresh)
-  Future<void> _loadNewMessages() async {
-    if (!_isPageVisible) return;
-    
-    final now = DateTime.now();
-    if (_lastLoadMessagesTime != null && 
-        now.difference(_lastLoadMessagesTime!).inMilliseconds < 1000) { // Giảm debounce từ 1500ms xuống 1000ms
-      return;
-    }
-    
-    if (_isLoadingMessages) return;
-    
-    _isLoadingMessages = true;
-    _lastLoadMessagesTime = now;
-    
-    try {
-      final result = await _chatApi.getMessages(
-        maChat: widget.maChat,
-        limit: 2, // Giảm từ 3 xuống 2 để load nhanh hơn
-      );
-      
-      if (mounted) {
-        final newMessages = result['messages'] as List<Message>;
-        final hasMore = result['hasMore'] as bool;
-        
-        final reversedNewMessages = newMessages.reversed.toList();
-        final newLastMessageId = reversedNewMessages.isNotEmpty ? reversedNewMessages.first.maTinNhan : null;
-        final hasNewMessages = newLastMessageId != null && newLastMessageId != _lastMessageId;
-        
-        if (hasNewMessages) {
-          _lastMessageId = newLastMessageId;
-          
-          final currentMessages = List<Message>.from(_messages);
-          final currentLastMessageId = currentMessages.isNotEmpty ? currentMessages.first.maTinNhan : null;
-          
-          bool botResponded = false;
-          if (reversedNewMessages.isNotEmpty) {
-            final lastMessage = reversedNewMessages.first;
-            if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
-              botResponded = true;
-            }
-          }
-          
-          final updatedMessages = <Message>[];
-          final existingIds = currentMessages.map((m) => m.maTinNhan).toSet();
-          final messagesToRemove = <String>{};
-          
-          for (var newMsg in reversedNewMessages) {
-            if (!existingIds.contains(newMsg.maTinNhan)) {
-              updatedMessages.add(newMsg);
-              
-              if (newMsg.maNguoiGui == widget.currentUserId) {
-                final newMsgContent = newMsg.noiDung.replaceAll(RegExp(r'\[IMAGE_DATA\].*?\[/IMAGE_DATA\]'), '').trim();
-                
-                for (var existingMsg in currentMessages) {
-                  if (existingMsg.maTinNhan.startsWith('temp_') && 
-                      existingMsg.maNguoiGui == widget.currentUserId) {
-                    final existingContent = existingMsg.noiDung.replaceAll(RegExp(r'\[IMAGE_DATA\].*?\[/IMAGE_DATA\]'), '').trim();
-                    
-                    if (newMsgContent == existingContent || 
-                        newMsgContent.contains(existingContent) || 
-                        existingContent.contains(newMsgContent)) {
-                      messagesToRemove.add(existingMsg.maTinNhan);
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          }
-          
-          if (updatedMessages.isNotEmpty || messagesToRemove.isNotEmpty) {
-            final filteredCurrentMessages = currentMessages.where((m) => !messagesToRemove.contains(m.maTinNhan)).toList();
-            final mergedMessages = [...updatedMessages, ...filteredCurrentMessages];
-            _messagesNotifier.value = mergedMessages;
-          _hasMoreMessagesNotifier.value = hasMore;
-            
-          if (botResponded) {
-            _isWaitingForBotResponseNotifier.value = false;
-          }
-
-            if (currentLastMessageId != null && 
-                reversedNewMessages.isNotEmpty && 
-                reversedNewMessages.first.maTinNhan != currentLastMessageId &&
-              _scrollController.hasClients) {
-              final lastMessage = reversedNewMessages.first;
-            final isFromBot = lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT';
-            
-            final isNearTop = _scrollController.position.pixels <= 200;
-            
-            if ((isFromBot || isNearTop) && !_isUserScrolling) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (_scrollController.hasClients && mounted) {
-                  final currentPosition = _scrollController.position.pixels;
-                  
-                  final isStillNearTop = currentPosition <= 300;
-                  
-                  if ((isFromBot && currentPosition > 50) || 
-                      (isNearTop && isStillNearTop && currentPosition > 50)) {
-                    _scrollController.jumpTo(0);
-                  }
-                }
-              });
-            }
-          }
-
-            if (currentLastMessageId != null && 
-                reversedNewMessages.isNotEmpty && 
-                reversedNewMessages.first.maTinNhan != currentLastMessageId) {
-              unawaited(
-                _chatApi.markAsRead(
-              maChat: widget.maChat,
-              maNguoiDoc: widget.currentUserId,
-                ).catchError((e) {
-                  return false;
-                })
-            );
-            }
-          }
-        }
-      }
-    } catch (e) {
-    } finally {
-      _isLoadingMessages = false;
-    }
-  }
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
@@ -592,9 +443,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && mounted) {
-        if (!_isUserScrolling) {
-          _scrollController.jumpTo(0);
-        }
+        _scrollController.jumpTo(0);
       }
     });
 
@@ -631,7 +480,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         _isWaitingForBotResponseNotifier.value = true;
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+          if (_scrollController.hasClients && mounted) {
             _scrollController.jumpTo(0);
           }
         });
@@ -715,7 +564,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             noiDung: '📄 Đã upload file: ${result.files.single.name}',
           );
 
-          _loadNewMessages();
+          _loadMessages(silent: true);
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -809,7 +658,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _messageController.clear();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+      if (_scrollController.hasClients && mounted) {
         _scrollController.jumpTo(0);
       }
     });
@@ -855,7 +704,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       _isWaitingForBotResponseNotifier.value = true;
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+        if (_scrollController.hasClients && mounted) {
           _scrollController.jumpTo(0);
         }
       });
@@ -1020,7 +869,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           _isWaitingForBotResponseNotifier.value = false;
           
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+            if (_scrollController.hasClients && mounted) {
               _scrollController.jumpTo(0);
             }
           });
@@ -1032,7 +881,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             noiDung: messageContent,
           );
           
-          await _loadNewMessages();
+          await _loadMessages(silent: true);
           
           final updatedMessages = List<Message>.from(_messages);
           final hasRealMessage = updatedMessages.any((m) => 
@@ -1068,7 +917,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             _messagesNotifier.value = currentMessages;
             
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+              if (_scrollController.hasClients && mounted) {
                 _scrollController.jumpTo(0);
               }
             });
@@ -1113,7 +962,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         _messagesNotifier.value = currentMessages;
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+          if (_scrollController.hasClients && mounted) {
             _scrollController.jumpTo(0);
           }
         });
@@ -1385,7 +1234,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       _messagesNotifier.value = currentMessages;
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (_scrollController.hasClients && mounted && !_isUserScrolling) {
+        if (_scrollController.hasClients && mounted) {
           _scrollController.jumpTo(0);
         }
       });
@@ -1399,7 +1248,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       );
       
       // Load messages mới để thay thế optimistic message
-      await _loadNewMessages();
+      await _loadMessages(silent: true);
       
       // Xóa optimistic message nếu đã có message thật từ server
       final updatedMessages = List<Message>.from(_messages);
@@ -1465,20 +1314,38 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
                   return ValueListenableBuilder<List<Message>>(
                     valueListenable: _messagesNotifier,
                     builder: (context, messages, _) {
-                      if (isLoading && messages.isEmpty) {
-                        return const LoadingWidget();
-                      }
-                      if (messages.isEmpty) {
-                        return const EmptyWidget();
-                      }
-                      return MessagesList(
-                        scrollController: _scrollController,
-                        messagesNotifier: _messagesNotifier,
-                        isLoadingMoreNotifier: _isLoadingMoreNotifier,
-                        isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
-                        screenWidth: _cachedScreenWidth ?? 400,
-                        timeFormat: _timeFormat,
-                        onRefresh: () => _loadMessages(forceReload: true),
+                      return ValueListenableBuilder<bool>(
+                        valueListenable: _isWaitingForBotResponseNotifier,
+                        builder: (context, isWaiting, _) {
+                          // Nếu đang đợi bot response, luôn hiển thị MessagesList (có typing indicator)
+                          if (isWaiting) {
+                            return MessagesList(
+                              scrollController: _scrollController,
+                              messagesNotifier: _messagesNotifier,
+                              isLoadingMoreNotifier: _isLoadingMoreNotifier,
+                              isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
+                              screenWidth: _cachedScreenWidth ?? 400,
+                              timeFormat: _timeFormat,
+                              onRefresh: () => _loadMessages(),
+                            );
+                          }
+                          
+                          if (isLoading && messages.isEmpty) {
+                            return const LoadingWidget();
+                          }
+                          if (messages.isEmpty) {
+                            return const EmptyWidget();
+                          }
+                          return MessagesList(
+                            scrollController: _scrollController,
+                            messagesNotifier: _messagesNotifier,
+                            isLoadingMoreNotifier: _isLoadingMoreNotifier,
+                            isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
+                            screenWidth: _cachedScreenWidth ?? 400,
+                            timeFormat: _timeFormat,
+                            onRefresh: () => _loadMessages(),
+                          );
+                        },
                       );
                     },
                   );

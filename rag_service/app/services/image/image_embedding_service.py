@@ -15,8 +15,6 @@ class ImageEmbeddingService:
     """
     Service tạo embedding vectors từ ảnh
     """
-    
-    #  SINGLETON: CLIP model được load 1 lần duy nhất
     _clip_model = None
     _clip_preprocess = None
     _clip_device = None
@@ -115,12 +113,6 @@ class ImageEmbeddingService:
     async def create_embedding(self, image_bytes: bytes) -> Optional[np.ndarray]:
         """
         Tạo embedding vector từ ảnh
-        
-        Args:
-            image_bytes: Ảnh dưới dạng bytes
-            
-        Returns:
-            Embedding vector (numpy array) hoặc None nếu lỗi
         """
         if not image_bytes:
             return None
@@ -142,7 +134,7 @@ class ImageEmbeddingService:
     
     def create_text_embedding(self, text: str) -> Optional[np.ndarray]:
         """
-        Tạo text embedding sử dụng CLIP text encoder (512 dim)
+        Tạo text embedding sử dụng CLIP text encoder
         Tương thích với image embedding để search products
         """
         if not text or not text.strip():

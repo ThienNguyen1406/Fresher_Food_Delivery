@@ -100,7 +100,6 @@ class ImageAttributeExtractor:
     def attributes_to_text(self, attributes: Dict[str, Any]) -> str:
         """
         Convert JSON attributes to searchable text for embedding
-        Chỉ dùng khi ingest để tạo text embedding từ attributes
         """
         if not attributes:
             return ""

@@ -134,6 +134,7 @@ class AppLocalizations {
       'quantity_will_be_zero':
           'Số lượng sẽ là 0. Bạn có muốn xóa sản phẩm này khỏi giỏ hàng?',
       'add_to_cart_failed': 'Không thể thêm sản phẩm vào giỏ hàng',
+      'add_to_cart_success': 'Đã thêm sản phẩm vào giỏ hàng',
       'only_left': 'Chỉ còn',
       'products_left': 'sản phẩm',
 
@@ -379,6 +380,7 @@ class AppLocalizations {
       'quantity_will_be_zero':
           'Quantity will be 0. Do you want to remove this product from cart?',
       'add_to_cart_failed': 'Cannot add product to cart',
+      'add_to_cart_success': 'Product added to cart successfully',
       'only_left': 'Only',
       'products_left': 'left',
 
@@ -621,6 +623,7 @@ class AppLocalizations {
   String get pleaseSelectAtLeastOne => translate('please_select_at_least_one');
   String get quantityWillBeZero => translate('quantity_will_be_zero');
   String get addToCartFailed => translate('add_to_cart_failed');
+  String get addToCartSuccess => translate('add_to_cart_success');
   String get onlyLeft => translate('only_left');
   String get productsLeft => translate('products_left');
 
