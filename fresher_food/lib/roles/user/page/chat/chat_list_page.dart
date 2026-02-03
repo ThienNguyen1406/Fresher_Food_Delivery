@@ -136,7 +136,7 @@ class _ChatListPageState extends State<ChatListPage> {
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => ChatDetailPage(
+                builder: (context) => ChatDetailPage.withProvider(
                   maChat: result['maChat'],
                   currentUserId: _currentUser!.maTaiKhoan,
                 ),
@@ -518,7 +518,7 @@ class _ChatListPageState extends State<ChatListPage> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => ChatDetailPage(
+              builder: (context) => ChatDetailPage.withProvider(
                 maChat: chat.maChat,
                 currentUserId: chat.maNguoiDung,
               ),

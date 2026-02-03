@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:fresher_food/models/Chat.dart';
 import 'package:fresher_food/services/api/chat_api.dart';
 import 'package:fresher_food/services/api/rag_api.dart';
@@ -6,6 +7,7 @@ import 'package:fresher_food/services/api/category_api.dart';
 import 'package:fresher_food/services/api/product_api.dart';
 import 'package:fresher_food/services/api_service.dart';
 import 'package:fresher_food/utils/constant.dart';
+import 'package:fresher_food/roles/user/page/chat/provider/chat_provider.dart';
 import 'package:fresher_food/roles/user/page/chat/widgets/chat_app_bar.dart';
 import 'package:fresher_food/roles/user/page/chat/widgets/message_input.dart';
 import 'package:fresher_food/roles/user/page/chat/widgets/messages_list.dart';
@@ -33,6 +35,25 @@ class ChatDetailPage extends StatefulWidget {
 
   @override
   State<ChatDetailPage> createState() => _ChatDetailPageState();
+  
+  /// Tạo provider cho chat detail page
+  static Widget withProvider({
+    required String maChat,
+    required String currentUserId,
+  }) {
+    return ChangeNotifierProvider(
+      create: (_) => ChatProvider(
+        maChat: maChat,
+        currentUserId: currentUserId,
+      ),
+      builder: (context, child) {
+        return ChatDetailPage(
+          maChat: maChat,
+          currentUserId: currentUserId,
+        );
+      },
+    );
+  }
 }
 
 class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObserver {
@@ -43,25 +64,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  final ValueNotifier<List<Message>> _messagesNotifier = ValueNotifier<List<Message>>([]);
-  final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(true);
-  final ValueNotifier<bool> _isLoadingMoreNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _hasMoreMessagesNotifier = ValueNotifier<bool>(true);
-  final ValueNotifier<bool> _isSendingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _isUploadingFileNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _isWaitingForBotResponseNotifier = ValueNotifier<bool>(false);
-  
-  List<Message> get _messages => _messagesNotifier.value;
-  bool get _hasMoreMessages => _hasMoreMessagesNotifier.value;
-  bool get _isLoadingMore => _isLoadingMoreNotifier.value;
-  bool get _isSending => _isSendingNotifier.value;
-  
-  Timer? _refreshTimer;
-  Timer? _botResponseWaitTimer;
-  String? _selectedFileId;
-  File? _selectedImage;
-  bool _isPageVisible = true;
-  bool _isWaitingForBot = false;
+  ChatProvider? _chatProvider;
   
   double? _cachedScreenWidth;
   final DateFormat _timeFormat = DateFormat('HH:mm');
@@ -70,9 +73,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _loadMessages();
     _scrollController.addListener(_onScroll);
-    _startRefreshTimer();
+    
+    // Provider sẽ tự động load messages trong _initialize()
   }
 
   void _onScroll() {
@@ -80,16 +83,19 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       return;
     }
 
+    final provider = _chatProvider;
+    if (provider == null) return;
+
     // Đơn giản hóa: chỉ load more khi scroll gần top
     final currentPosition = _scrollController.position.pixels;
     final maxPosition = _scrollController.position.maxScrollExtent;
     final distanceFromTop = maxPosition - currentPosition;
     
     if (distanceFromTop <= 200 && 
-        _hasMoreMessages && 
-        !_isLoadingMore && 
-        _messages.isNotEmpty) {
-      _loadMoreMessages();
+        provider.hasMoreMessages && 
+        !provider.isLoadingMore && 
+        provider.messages.isNotEmpty) {
+      provider.loadMoreMessages();
     }
   }
 
@@ -160,284 +166,36 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _scrollController.removeListener(_onScroll);
     _messageController.dispose();
     _scrollController.dispose();
-    _refreshTimer?.cancel();
-    _botResponseWaitTimer?.cancel();
     
-    _messagesNotifier.dispose();
-    _isLoadingNotifier.dispose();
-    _isLoadingMoreNotifier.dispose();
-    _hasMoreMessagesNotifier.dispose();
-    _isSendingNotifier.dispose();
-    _isUploadingFileNotifier.dispose();
-    _isWaitingForBotResponseNotifier.dispose();
-    
+    // Provider sẽ tự dispose khi widget bị remove
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    _isPageVisible = state == AppLifecycleState.resumed;
-    if (!_isPageVisible) {
-      _botResponseWaitTimer?.cancel();
+    final provider = _chatProvider;
+    if (provider != null) {
+      provider.setPageVisible(state == AppLifecycleState.resumed);
     }
   }
 
-  void _startRefreshTimer() {
-    _refreshTimer?.cancel();
-    
-    // Đơn giản hóa: refresh mỗi 60s như admin_rag_chat
-    _refreshTimer = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (mounted && _isPageVisible && !_isSending && !_isWaitingForBot) {
-        _loadMessages(silent: true);
-      }
-    });
-  }
-  
-  void _waitForBotResponse() {
-    _botResponseWaitTimer?.cancel();
-    
-    _isWaitingForBot = true;
-    _isWaitingForBotResponseNotifier.value = true;
-    
-    // Scroll to bottom để hiển thị typing indicator
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients && mounted) {
-        _scrollController.jumpTo(0);
-      }
-    });
-    
-    // Đơn giản hóa: check bot response mỗi 1.5s, tối đa 8 lần (12s) như admin_rag_chat
-    int attempts = 0;
-    const maxAttempts = 8;
-    
-    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
-      attempts++;
-      if (mounted && _isPageVisible) {
-        _loadMessages(silent: true);
-        
-        if (_messages.isNotEmpty) {
-          final lastMessage = _messages.first;
-          if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
-            _isWaitingForBot = false;
-            _isWaitingForBotResponseNotifier.value = false;
-            timer.cancel();
-            _startRefreshTimer();
-            
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (_scrollController.hasClients && mounted) {
-                _scrollController.jumpTo(0);
-              }
-            });
-            return;
-          }
-        }
-      }
-      
-      if (attempts >= maxAttempts) {
-        _isWaitingForBot = false;
-        _isWaitingForBotResponseNotifier.value = false;
-        timer.cancel();
-        _startRefreshTimer();
-      }
-    });
-  }
-
-  Future<void> _loadMessages({bool silent = false}) async {
-    if (!silent) {
-      _isLoadingNotifier.value = true;
-    }
-
-    try {
-      final result = await _chatApi.getMessages(
-        maChat: widget.maChat,
-        limit: 50, // Tăng lên 50 như admin_rag_chat để load mượt hơn
-      );
-      
-      if (mounted) {
-        final newMessages = result['messages'] as List<Message>;
-        final hasMore = result['hasMore'] as bool;
-        
-        // Đơn giản hóa: chỉ reverse và set trực tiếp
-        final reversedMessages = newMessages.reversed.toList();
-        
-        // Nếu đang đợi bot response, merge thay vì replace để giữ optimistic messages
-        if (_isWaitingForBot) {
-          final currentMessages = List<Message>.from(_messages);
-          
-          // Nếu có messages hiện tại, merge
-          if (currentMessages.isNotEmpty) {
-            final existingIds = currentMessages.map((m) => m.maTinNhan).toSet();
-            
-            // Chỉ thêm messages mới (chưa có trong list)
-            final messagesToAdd = <Message>[];
-            for (var newMsg in reversedMessages) {
-              if (!existingIds.contains(newMsg.maTinNhan)) {
-                messagesToAdd.add(newMsg);
-              }
-            }
-            
-            // Giữ lại optimistic messages và thêm messages mới
-            if (messagesToAdd.isNotEmpty) {
-              _messagesNotifier.value = [...messagesToAdd, ...currentMessages];
-            }
-            // Nếu không có messages mới, giữ nguyên current messages (không clear)
-          } else {
-            // Chưa có messages, set trực tiếp
-            _messagesNotifier.value = reversedMessages;
-          }
-        } else {
-          // Không đợi bot response, set trực tiếp
-          _messagesNotifier.value = reversedMessages;
-        }
-        
-        _hasMoreMessagesNotifier.value = hasMore;
-        _isLoadingNotifier.value = false;
-
-        // markAsRead không block UI
-        if (!silent) {
-          unawaited(
-            _chatApi.markAsRead(
-              maChat: widget.maChat,
-              maNguoiDoc: widget.currentUserId,
-            ).catchError((e) {
-              return false;
-            })
-          );
-        }
-
-        // Auto scroll to bottom nếu có tin nhắn mới
-        if (reversedMessages.isNotEmpty && _scrollController.hasClients) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients && mounted) {
-              _scrollController.jumpTo(0);
-            }
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted && !silent) {
-        _isLoadingNotifier.value = false;
-      }
-    }
-  }
-
-  /// Load thêm tin nhắn cũ hơn khi scroll lên
-  Future<void> _loadMoreMessages() async {
-    if (_isLoadingMore || !_hasMoreMessages || _messages.isEmpty) return;
-
-    _isLoadingMoreNotifier.value = true;
-
-    try {
-      // Với reverse: true, _messages.last là tin nhắn cũ nhất (ở top)
-      final oldestMessage = _messages.last;
-      
-      final result = await _chatApi.getMessages(
-        maChat: widget.maChat,
-        limit: 20,
-        beforeMessageId: oldestMessage.maTinNhan,
-      );
-
-      if (mounted) {
-        final olderMessages = result['messages'] as List<Message>;
-        final hasMore = result['hasMore'] as bool;
-        
-        if (olderMessages.isNotEmpty) {
-          final reversedOlderMessages = olderMessages.reversed.toList();
-          
-          final currentScrollPosition = _scrollController.position.pixels;
-          final currentMaxScroll = _scrollController.position.maxScrollExtent;
-          
-          // Thêm tin nhắn cũ vào cuối list (sau tin nhắn cũ nhất hiện tại)
-          final updatedMessages = [..._messages, ...reversedOlderMessages];
-          _messagesNotifier.value = updatedMessages;
-          _hasMoreMessagesNotifier.value = hasMore;
-          _isLoadingMoreNotifier.value = false;
-
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              final newMaxScroll = _scrollController.position.maxScrollExtent;
-              final scrollDifference = newMaxScroll - currentMaxScroll;
-              _scrollController.jumpTo(currentScrollPosition + scrollDifference);
-            }
-          });
-        } else {
-          _hasMoreMessagesNotifier.value = false;
-          _isLoadingMoreNotifier.value = false;
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        _isLoadingMoreNotifier.value = false;
-      }
-      print('Error loading more messages: $e');
-    }
-  }
-
-  /// Sync optimistic message với real message từ server (không reload toàn bộ)
-  Future<void> _syncOptimisticMessage(String tempMessageId) async {
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      
-      if (!mounted) return;
-      
-      final result = await _chatApi.getMessages(
-        maChat: widget.maChat,
-        limit: 3,
-      );
-      
-      if (mounted) {
-        final newMessages = result['messages'] as List<Message>;
-        final reversedNewMessages = newMessages.reversed.toList();
-        
-        final currentMessages = List<Message>.from(_messages);
-        final tempIndex = currentMessages.indexWhere((m) => m.maTinNhan == tempMessageId);
-        
-        if (tempIndex != -1 && reversedNewMessages.isNotEmpty) {
-          final realMessage = reversedNewMessages.firstWhere(
-            (m) => m.maNguoiGui == widget.currentUserId && 
-                   m.noiDung.trim() == currentMessages[tempIndex].noiDung.trim(),
-            orElse: () => reversedNewMessages.first,
-          );
-          
-          currentMessages[tempIndex] = realMessage;
-          _messagesNotifier.value = currentMessages;
-          
-          if (reversedNewMessages.isNotEmpty) {
-          }
-        }
-      }
-    } catch (e) {
-    }
-  }
+  // Các method _loadMessages, _loadMoreMessages, _waitForBotResponse, _startRefreshTimer 
+  // đã được chuyển sang ChatProvider, không cần nữa
 
 
   Future<void> _sendMessage() async {
+    final provider = _chatProvider;
+    if (provider == null) return;
+    
     final text = _messageController.text.trim();
     
-    if (_selectedImage != null) {
+    if (provider.selectedImagePath != null) {
       await _searchProductsByImage();
       return;
     }
     
-    if (text.isEmpty || _isSending) return;
-
-    _isSendingNotifier.value = true;
-
-    final tempMessageId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
-    final optimisticMessage = Message(
-      maTinNhan: tempMessageId,
-      maChat: widget.maChat,
-      maNguoiGui: widget.currentUserId,
-      loaiNguoiGui: 'User',
-      noiDung: text,
-      ngayGui: DateTime.now(),
-      daDoc: false,
-    );
-    
-    final currentMessages = List<Message>.from(_messages);
-    currentMessages.insert(0, optimisticMessage);
-    _messagesNotifier.value = currentMessages;
+    if (text.isEmpty || provider.isSending) return;
     
     _messageController.clear();
     
@@ -448,59 +206,36 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     });
 
     try {
-      if (_selectedFileId != null) {
+      if (provider.selectedFileId != null) {
         final response = await _ragApi.askWithDocument(
           question: text,
-          fileId: _selectedFileId,
+          fileId: provider.selectedFileId,
           maChat: widget.maChat,
           baseUrl: Constant().baseUrl,
         );
 
         if (response != null && mounted) {
-          await _chatApi.sendMessage(
+          await provider.chatService.sendMessage(
             maChat: widget.maChat,
             maNguoiGui: widget.currentUserId,
             loaiNguoiGui: 'User',
             noiDung: text,
           );
 
-          _waitForBotResponse();
-          unawaited(_syncOptimisticMessage(tempMessageId));
+          await provider.loadMessages(silent: true);
         } else {
-          await _chatApi.sendMessage(
+          await provider.chatService.sendMessage(
             maChat: widget.maChat,
             maNguoiGui: widget.currentUserId,
             loaiNguoiGui: 'User',
             noiDung: text,
           );
-          _waitForBotResponse();
-          unawaited(_syncOptimisticMessage(tempMessageId));
+          await provider.loadMessages(silent: true);
         }
       } else {
-        _isWaitingForBotResponseNotifier.value = true;
+        final success = await provider.sendMessage(text);
         
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (_scrollController.hasClients && mounted) {
-            _scrollController.jumpTo(0);
-          }
-        });
-        
-        final success = await _chatApi.sendMessage(
-          maChat: widget.maChat,
-          maNguoiGui: widget.currentUserId,
-          loaiNguoiGui: 'User',
-          noiDung: text,
-        );
-
-        if (success && mounted) {
-          _waitForBotResponse();
-          
-          unawaited(_syncOptimisticMessage(tempMessageId));
-        } else if (mounted) {
-          _isWaitingForBotResponseNotifier.value = false;
-          final updatedMessages = _messages.where((m) => m.maTinNhan != tempMessageId).toList();
-          _messagesNotifier.value = updatedMessages;
-          
+        if (!success && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Không thể gửi tin nhắn. Vui lòng thử lại.')),
           );
@@ -508,21 +243,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       }
     } catch (e) {
       if (mounted) {
-        final updatedMessages = _messages.where((m) => m.maTinNhan != tempMessageId).toList();
-        _messagesNotifier.value = updatedMessages;
-        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Lỗi: $e')),
         );
-      }
-    } finally {
-      if (mounted) {
-        _isSendingNotifier.value = false;
       }
     }
   }
 
   Future<void> _uploadDocument() async {
+    final provider = _chatProvider;
+    if (provider == null) return;
+    
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -532,7 +263,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
         
-        _isUploadingFileNotifier.value = true;
+        provider.setUploadingFile(true);
 
         // Hiển thị loading
         if (mounted) {
@@ -546,25 +277,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         }
 
         // Upload file lên RAG service
-        final response = await _ragApi.uploadDocument(file);
+        final response = await provider.chatService.uploadDocument(file);
 
         if (mounted) {
           Navigator.pop(context); // Đóng loading dialog
         }
 
         if (response != null && mounted) {
-          _selectedFileId = response['file_id'];
-          _isUploadingFileNotifier.value = false;
+          provider.setSelectedFile(response['file_id'], null);
+          provider.setUploadingFile(false);
 
           // Gửi thông báo vào chat
-          await _chatApi.sendMessage(
+          await provider.chatService.sendMessage(
             maChat: widget.maChat,
             maNguoiGui: widget.currentUserId,
             loaiNguoiGui: 'User',
             noiDung: '📄 Đã upload file: ${result.files.single.name}',
           );
 
-          _loadMessages(silent: true);
+          await provider.loadMessages(silent: true);
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -573,7 +304,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             ),
           );
         } else {
-          _isUploadingFileNotifier.value = false;
+          provider.setUploadingFile(false);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -585,7 +316,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         }
       }
     } catch (e) {
-      _isUploadingFileNotifier.value = false;
+      provider.setUploadingFile(false);
       if (mounted) {
         Navigator.pop(context); // Đóng loading dialog nếu có
         ScaffoldMessenger.of(context).showSnackBar(
@@ -596,6 +327,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   }
 
   Future<void> _pickImageForSearch() async {
+    final provider = _chatProvider;
+    if (provider == null) return;
+    
     try {
       final ImagePicker picker = ImagePicker();
       final XFile? image = await picker.pickImage(
@@ -607,9 +341,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
       if (image == null) return;
 
-      setState(() {
-        _selectedImage = File(image.path);
-      });
+      provider.setSelectedFile(null, File(image.path));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -620,18 +352,22 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   }
 
   void _removeSelectedImage() {
-    setState(() {
-      _selectedImage = null;
-    });
+    final provider = _chatProvider;
+    if (provider != null) {
+      provider.setSelectedFile(null, null);
+    }
   }
 
   Future<void> _searchProductsByImage() async {
-    if (_selectedImage == null) return;
+    final provider = _chatProvider;
+    if (provider == null) return;
+    
+    if (provider.selectedImagePath == null) return;
 
-    final imageFile = _selectedImage!;
+    final imageFile = File(provider.selectedImagePath!);
     final description = _messageController.text.trim();
     
-    _isUploadingFileNotifier.value = true;
+    provider.setUploadingFile(true);
     
     String messageContent = description.isNotEmpty 
         ? '🖼️ $description'
@@ -648,13 +384,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       daDoc: false,
     );
     
-    final currentMessages = List<Message>.from(_messages);
+    // Add optimistic message through provider
+    final currentMessages = List<Message>.from(provider.messages);
     currentMessages.insert(0, optimisticImageMessage);
-    _messagesNotifier.value = currentMessages;
+        provider.updateMessages(currentMessages);
     
-    setState(() {
-      _selectedImage = null;
-    });
+    provider.setSelectedFile(null, null);
     _messageController.clear();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -673,7 +408,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     
     if (imageBase64 != null) {
       final updatedMessageContent = '$messageContent\n\n[IMAGE_DATA]$imageBase64[/IMAGE_DATA]';
-      final updatedMessages = List<Message>.from(_messages);
+      final updatedMessages = List<Message>.from(provider.messages);
       final messageIndex = updatedMessages.indexWhere((m) => m.maTinNhan == tempMessageId);
       if (messageIndex != -1) {
         updatedMessages[messageIndex] = Message(
@@ -685,7 +420,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           ngayGui: updatedMessages[messageIndex].ngayGui,
           daDoc: false,
         );
-        _messagesNotifier.value = updatedMessages;
+        provider.updateMessages(updatedMessages);
       }
     }
 
@@ -694,14 +429,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           ? '$messageContent\n\n[IMAGE_DATA]$imageBase64[/IMAGE_DATA]'
           : messageContent;
       
-      await _chatApi.sendMessage(
+      await provider.chatService.sendMessage(
         maChat: widget.maChat,
         maNguoiGui: widget.currentUserId,
         loaiNguoiGui: 'User',
         noiDung: finalMessageContent,
       );
       
-      _isWaitingForBotResponseNotifier.value = true;
+      provider.setWaitingForBotResponse(true);
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && mounted) {
@@ -709,14 +444,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         }
       });
 
-      final result = await _ragApi.searchProductsByImage(
+      final result = await provider.chatService.searchProductsByImage(
         imageFile: imageFile,
         userDescription: description,
         topK: 10,
       );
 
-      _isWaitingForBotResponseNotifier.value = false;
-      _isUploadingFileNotifier.value = false;
+      provider.setUploadingAndWaiting(uploading: false, waiting: false);
 
       if (result != null && result['results'] != null && mounted) {
         final List<dynamic> products = result['results'];
@@ -862,11 +596,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             daDoc: false,
           );
           
-          final currentMessages = List<Message>.from(_messages);
+          final currentMessages = List<Message>.from(provider.messages);
           currentMessages.insert(0, optimisticBotMessage);
-          _messagesNotifier.value = currentMessages;
+          provider.updateMessages(currentMessages);
           
-          _isWaitingForBotResponseNotifier.value = false;
+          provider.setWaitingForBotResponse(false);
           
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollController.hasClients && mounted) {
@@ -881,9 +615,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             noiDung: messageContent,
           );
           
-          await _loadMessages(silent: true);
+          await provider.loadMessages(silent: true);
           
-          final updatedMessages = List<Message>.from(_messages);
+          final updatedMessages = List<Message>.from(provider.messages);
           final hasRealMessage = updatedMessages.any((m) => 
             m.maNguoiGui == 'BOT' && 
             m.maTinNhan != tempBotMessageId &&
@@ -892,11 +626,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           
           if (hasRealMessage) {
             updatedMessages.removeWhere((m) => m.maTinNhan == tempBotMessageId);
-            _messagesNotifier.value = updatedMessages;
+            provider.updateMessages(updatedMessages);
           }
         }
       } else {
-        _isWaitingForBotResponseNotifier.value = false;
+        provider.setWaitingForBotResponse(false);
         
         try {
           await _sendFallbackProducts();
@@ -912,9 +646,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
               daDoc: false,
             );
             
-            final currentMessages = List<Message>.from(_messages);
+            final currentMessages = List<Message>.from(provider.messages);
             currentMessages.insert(0, errorMessage);
-            _messagesNotifier.value = currentMessages;
+            provider.updateMessages(currentMessages);
             
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (_scrollController.hasClients && mounted) {
@@ -943,8 +677,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         }
       }
     } catch (e) {
-      _isUploadingFileNotifier.value = false;
-      _isWaitingForBotResponseNotifier.value = false;
+        provider.setUploadingAndWaiting(uploading: false, waiting: false);
       
       try {
         final errorMessage = Message(
@@ -957,9 +690,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           daDoc: false,
         );
         
-        final currentMessages = List<Message>.from(_messages);
+        final currentMessages = List<Message>.from(provider.messages);
         currentMessages.insert(0, errorMessage);
-        _messagesNotifier.value = currentMessages;
+        provider.updateMessages(currentMessages);
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_scrollController.hasClients && mounted) {
@@ -983,8 +716,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         );
       }
     } finally {
-      _isUploadingFileNotifier.value = false;
-      _isWaitingForBotResponseNotifier.value = false;
+        provider.setUploadingAndWaiting(uploading: false, waiting: false);
     }
   }
 
@@ -1040,17 +772,28 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
               if (imageUrl != null && imageUrl.isNotEmpty) {
                 // 🔥 TỐI ƯU: Download image parallel
                 try {
-                  final imageResponse = await http.get(Uri.parse(imageUrl)).timeout(
-                    const Duration(seconds: 5),
-                  );
-                  
-                  if (imageResponse.statusCode == 200) {
+                  // Kiểm tra URL hợp lệ
+                  final uri = Uri.tryParse(imageUrl);
+                  if (uri == null || !uri.hasScheme || (!uri.scheme.startsWith('http'))) {
+                    print('⚠️ Invalid image URL for product $productId: $imageUrl');
+                  } else {
+                    final imageResponse = await http.get(uri).timeout(
+                      const Duration(seconds: 10), // Tăng timeout lên 10 giây
+                    );
+                    
+                    if (imageResponse.statusCode == 200 && imageResponse.bodyBytes.isNotEmpty) {
                     imageData = base64Encode(imageResponse.bodyBytes);
                     imageMimeType = imageResponse.headers['content-type'] ?? 'image/jpeg';
+                      print('✅ Successfully downloaded image for product $productId (${imageData.length} bytes)');
+                    } else {
+                      print('⚠️ Failed to download image for product $productId: HTTP ${imageResponse.statusCode}, body length: ${imageResponse.bodyBytes.length}');
+                    }
                   }
                 } catch (e) {
-                  print('Error downloading image from $imageUrl: $e');
+                  print('❌ Error downloading image from $imageUrl for product $productId: $e');
                 }
+              } else {
+                print('⚠️ No image URL for product $productId');
               }
             }
           } catch (e) {
@@ -1063,16 +806,25 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
           finalProductName = 'Sản phẩm #$productId';
         }
         
-        return {
+        // Chỉ thêm imageData nếu không null và không empty
+        final result = {
           'productId': productId,
           'productName': finalProductName,
           'categoryId': categoryId,
           'categoryName': categoryName,
           'price': price,
           'similarity': similarity,
-          'imageData': imageData,
-          'imageMimeType': imageMimeType,
         };
+        
+        // Chỉ thêm imageData nếu có dữ liệu hợp lệ
+        if (imageData != null && imageData.isNotEmpty) {
+          result['imageData'] = imageData;
+          if (imageMimeType != null) {
+            result['imageMimeType'] = imageMimeType;
+          }
+        }
+        
+        return result;
       }).toList();
       
       final productsWithImages = await Future.wait(productInfoFutures);
@@ -1101,27 +853,46 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         final imageUrl = product.anh;
         if (imageUrl.isNotEmpty) {
           try {
-            final imageResponse = await http.get(Uri.parse(imageUrl)).timeout(
-              const Duration(seconds: 5),
-            );
-            
-            if (imageResponse.statusCode == 200) {
+            // Kiểm tra URL hợp lệ
+            final uri = Uri.tryParse(imageUrl);
+            if (uri == null || !uri.hasScheme || (!uri.scheme.startsWith('http'))) {
+              print('⚠️ Invalid image URL for product ${product.maSanPham}: $imageUrl');
+            } else {
+              final imageResponse = await http.get(uri).timeout(
+                const Duration(seconds: 10), // Tăng timeout lên 10 giây
+              );
+              
+              if (imageResponse.statusCode == 200 && imageResponse.bodyBytes.isNotEmpty) {
               imageData = base64Encode(imageResponse.bodyBytes);
               imageMimeType = imageResponse.headers['content-type'] ?? 'image/jpeg';
+                print('✅ Successfully downloaded image for product ${product.maSanPham} (${imageData.length} bytes)');
+              } else {
+                print('⚠️ Failed to download image for product ${product.maSanPham}: HTTP ${imageResponse.statusCode}');
+              }
             }
           } catch (e) {
-            print('Error downloading image from $imageUrl: $e');
+            print('❌ Error downloading image from $imageUrl for product ${product.maSanPham}: $e');
           }
+        } else {
+          print('⚠️ No image URL for product ${product.maSanPham}');
         }
         
-        return {
+        final result = {
           'productId': product.maSanPham,
           'productName': product.tenSanPham,
           'categoryId': product.maDanhMuc,
           'price': product.giaBan,
-          'imageData': imageData,
-          'imageMimeType': imageMimeType,
         };
+        
+        // Chỉ thêm imageData nếu có dữ liệu hợp lệ
+        if (imageData != null && imageData.isNotEmpty) {
+          result['imageData'] = imageData;
+          if (imageMimeType != null) {
+            result['imageMimeType'] = imageMimeType;
+          }
+        }
+        
+        return result;
       }).toList();
       
       return await Future.wait(productFutures);
@@ -1151,27 +922,46 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         final imageUrl = product.anh;
         if (imageUrl.isNotEmpty) {
           try {
-            final imageResponse = await http.get(Uri.parse(imageUrl)).timeout(
-              const Duration(seconds: 5),
-            );
-            
-            if (imageResponse.statusCode == 200) {
+            // Kiểm tra URL hợp lệ
+            final uri = Uri.tryParse(imageUrl);
+            if (uri == null || !uri.hasScheme || (!uri.scheme.startsWith('http'))) {
+              print('⚠️ Invalid image URL for product ${product.maSanPham}: $imageUrl');
+            } else {
+              final imageResponse = await http.get(uri).timeout(
+                const Duration(seconds: 10), // Tăng timeout lên 10 giây
+              );
+              
+              if (imageResponse.statusCode == 200 && imageResponse.bodyBytes.isNotEmpty) {
               imageData = base64Encode(imageResponse.bodyBytes);
               imageMimeType = imageResponse.headers['content-type'] ?? 'image/jpeg';
+                print('✅ Successfully downloaded image for product ${product.maSanPham} (${imageData.length} bytes)');
+              } else {
+                print('⚠️ Failed to download image for product ${product.maSanPham}: HTTP ${imageResponse.statusCode}');
+              }
             }
                     } catch (e) {
-            print('Error downloading image from $imageUrl: $e');
+            print('❌ Error downloading image from $imageUrl for product ${product.maSanPham}: $e');
           }
+        } else {
+          print('⚠️ No image URL for product ${product.maSanPham}');
         }
         
-        return {
+        final result = {
           'productId': product.maSanPham,
           'productName': product.tenSanPham,
           'categoryId': product.maDanhMuc,
           'price': product.giaBan,
-          'imageData': imageData,
-          'imageMimeType': imageMimeType,
         };
+        
+        // Chỉ thêm imageData nếu có dữ liệu hợp lệ
+        if (imageData != null && imageData.isNotEmpty) {
+          result['imageData'] = imageData;
+          if (imageMimeType != null) {
+            result['imageMimeType'] = imageMimeType;
+          }
+        }
+        
+        return result;
       }).toList();
       
       return await Future.wait(productFutures);
@@ -1229,9 +1019,12 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         daDoc: false,
       );
       
-      final currentMessages = List<Message>.from(_messages);
+      final provider = _chatProvider;
+      if (provider == null) return;
+      
+      final currentMessages = List<Message>.from(provider.messages);
       currentMessages.insert(0, optimisticBotMessage);
-      _messagesNotifier.value = currentMessages;
+      provider.updateMessages(currentMessages);
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients && mounted) {
@@ -1240,7 +1033,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       });
       
       // Gửi tin nhắn từ bot (background)
-      await _chatApi.sendMessage(
+      await provider.chatService.sendMessage(
         maChat: widget.maChat,
         maNguoiGui: 'BOT',
         loaiNguoiGui: 'Admin',
@@ -1248,10 +1041,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       );
       
       // Load messages mới để thay thế optimistic message
-      await _loadMessages(silent: true);
+      await provider.loadMessages(silent: true);
       
       // Xóa optimistic message nếu đã có message thật từ server
-      final updatedMessages = List<Message>.from(_messages);
+      final updatedMessages = List<Message>.from(provider.messages);
       final hasRealMessage = updatedMessages.any((m) => 
         m.maNguoiGui == 'BOT' && 
         m.maTinNhan != tempBotMessageId &&
@@ -1260,23 +1053,29 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       
       if (hasRealMessage) {
         updatedMessages.removeWhere((m) => m.maTinNhan == tempBotMessageId);
-        _messagesNotifier.value = updatedMessages;
+        provider.updateMessages(updatedMessages);
       }
       
       // 🔥 Đảm bảo typing indicator đã tắt sau khi gửi fallback products
-      _isWaitingForBotResponseNotifier.value = false;
+      provider.setWaitingForBotResponse(false);
     } catch (e) {
       print('Error sending fallback products: $e');
-      // 🔥 Đảm bảo typing indicator đã tắt khi có lỗi
-      _isWaitingForBotResponseNotifier.value = false;
-      await _chatApi.sendMessage(
-        maChat: widget.maChat,
-        maNguoiGui: 'BOT',
-        loaiNguoiGui: 'Admin',
-        noiDung: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm sản phẩm.',
-      );
+      final provider = _chatProvider;
+      if (provider != null) {
+        // 🔥 Đảm bảo typing indicator đã tắt khi có lỗi
+        provider.setWaitingForBotResponse(false);
+        await provider.chatService.sendMessage(
+          maChat: widget.maChat,
+          maNguoiGui: 'BOT',
+          loaiNguoiGui: 'Admin',
+          noiDung: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm sản phẩm.',
+        );
+      }
     } finally {
-      _isWaitingForBotResponseNotifier.value = false;
+      final provider = _chatProvider;
+      if (provider != null) {
+        provider.setWaitingForBotResponse(false);
+      }
     }
   }
 
@@ -1286,13 +1085,17 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       _cachedScreenWidth = MediaQuery.of(context).size.width;
     }
 
+    // Lấy provider từ context - sử dụng listen: false vì chúng ta sẽ dùng Consumer bên dưới
+    final provider = Provider.of<ChatProvider>(context, listen: false);
+    _chatProvider = provider;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: ChatAppBar(
         onDeleteChat: _deleteChat,
         onCreateNewChat: _createNewChat,
         onUploadDocument: _uploadDocument,
-        isUploadingFileNotifier: _isUploadingFileNotifier,
+        isUploadingFileNotifier: ValueNotifier(provider.isUploadingFile),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -1308,58 +1111,49 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         child: Column(
           children: [
             Expanded(
-              child: ValueListenableBuilder<bool>(
-                valueListenable: _isLoadingNotifier,
-                builder: (context, isLoading, _) {
-                  return ValueListenableBuilder<List<Message>>(
-                    valueListenable: _messagesNotifier,
-                    builder: (context, messages, _) {
-                      return ValueListenableBuilder<bool>(
-                        valueListenable: _isWaitingForBotResponseNotifier,
-                        builder: (context, isWaiting, _) {
+              child: Consumer<ChatProvider>(
+                builder: (context, provider, _) {
                           // Nếu đang đợi bot response, luôn hiển thị MessagesList (có typing indicator)
-                          if (isWaiting) {
+                  if (provider.isWaitingForBotResponse) {
                             return MessagesList(
                               scrollController: _scrollController,
-                              messagesNotifier: _messagesNotifier,
-                              isLoadingMoreNotifier: _isLoadingMoreNotifier,
-                              isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
+                      chatProvider: provider,
                               screenWidth: _cachedScreenWidth ?? 400,
                               timeFormat: _timeFormat,
-                              onRefresh: () => _loadMessages(),
+                      onRefresh: () => provider.loadMessages(),
                             );
                           }
                           
-                          if (isLoading && messages.isEmpty) {
+                  if (provider.isLoading && provider.messages.isEmpty) {
                             return const LoadingWidget();
                           }
-                          if (messages.isEmpty) {
+                  if (provider.messages.isEmpty) {
                             return const EmptyWidget();
                           }
                           return MessagesList(
                             scrollController: _scrollController,
-                            messagesNotifier: _messagesNotifier,
-                            isLoadingMoreNotifier: _isLoadingMoreNotifier,
-                            isWaitingForBotResponseNotifier: _isWaitingForBotResponseNotifier,
+                    chatProvider: provider,
                             screenWidth: _cachedScreenWidth ?? 400,
                             timeFormat: _timeFormat,
-                            onRefresh: () => _loadMessages(),
-                          );
-                        },
-                      );
-                    },
+                    onRefresh: () => provider.loadMessages(),
                   );
                 },
               ),
             ),
-            MessageInput(
+            Consumer<ChatProvider>(
+              builder: (context, provider, _) {
+                return MessageInput(
               messageController: _messageController,
-              selectedImage: _selectedImage,
-              isSendingNotifier: _isSendingNotifier,
-              isUploadingFileNotifier: _isUploadingFileNotifier,
+                  selectedImage: provider.selectedImagePath != null 
+                      ? File(provider.selectedImagePath!) 
+                      : null,
+                  isSendingNotifier: ValueNotifier(provider.isSending),
+                  isUploadingFileNotifier: ValueNotifier(provider.isUploadingFile),
               onSendMessage: _sendMessage,
               onPickImage: _pickImageForSearch,
               onRemoveImage: _removeSelectedImage,
+                );
+              },
             ),
           ],
         ),
