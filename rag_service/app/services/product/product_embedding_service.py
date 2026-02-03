@@ -149,20 +149,16 @@ class ProductEmbeddingService:
         
         primary_embedding = None
         
-        if text_clip_emb is not None and image_emb is not None:
-            # Có cả text và image → combine với weight
+        if text_clip_emb is not None and image_emb is not None: 
             text_norm = self._normalize(text_clip_emb)
             img_norm = self._normalize(image_emb)
             primary_embedding = 0.7 * text_norm + 0.3 * img_norm
-            # Normalize lại sau khi combine
             primary_embedding = self._normalize(primary_embedding)
             logger.debug(f"✅ Combined embedding (70% text CLIP + 30% image, dim: {len(primary_embedding)})")
         elif text_clip_emb is not None:
-            # Chỉ có text → dùng text CLIP (đã normalize trong CLIP model)
             primary_embedding = self._normalize(text_clip_emb)
             logger.debug(f"✅ Text CLIP embedding (dim: {len(primary_embedding)})")
         elif image_emb is not None:
-            # Chỉ có image → dùng image (đã normalize trong CLIP model)
             primary_embedding = self._normalize(image_emb)
             logger.debug(f"✅ Image embedding (dim: {len(primary_embedding)})")
         
@@ -181,7 +177,6 @@ class ProductEmbeddingService:
         if not products:
             return []
         
-        # Chuẩn bị texts và images cho batch
         texts = []
         image_list = []
         
@@ -218,14 +213,10 @@ class ProductEmbeddingService:
         text_embeddings = []
         valid_texts = [(i, t) for i, t in enumerate(texts) if t]
         if valid_texts:
-            # Batch process texts với CLIP text encoder
-            # CLIP text encoder có thể batch, nhưng hiện tại chỉ có single text method
-            # TODO: Optimize để batch thật nếu CLIP hỗ trợ
             for idx, text in valid_texts:
                 text_emb = self.image_embedding_service.create_text_embedding(text)
                 text_embeddings.append((idx, text_emb))
         
-        # Batch embed images (CLIP)
         image_embeddings = []
         valid_images = [(i, img) for i, img in enumerate(image_list) if img]
         if valid_images:

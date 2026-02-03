@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/roles/user/page/checkout/provider/checkout_provider.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/payment_option_widget.dart';
+import 'package:fresher_food/roles/user/page/checkout/widgets/add_card_dialog.dart';
 import 'package:fresher_food/models/SavedCard.dart';
 
 class PaymentMethodSection extends StatelessWidget {
@@ -11,10 +12,10 @@ class PaymentMethodSection extends StatelessWidget {
   final Color primaryColor;
   final Color accentColor;
   final Color backgroundColor;
-  final List<SavedCard> savedCards; // Danh sách thẻ đã lưu
-  final SavedCard? selectedCard; // Thẻ được chọn
-  final Function(SavedCard?)? onCardSelected; // Callback khi chọn thẻ
-  final Function()? onAddNewCard; // Callback khi chọn "Thêm thẻ mới"
+  final List<SavedCard> savedCards;
+  final SavedCard? selectedCard;
+  final Function(SavedCard?)? onCardSelected;
+  final Function()? onAddNewCard;
 
   const PaymentMethodSection({
     super.key,
@@ -131,25 +132,18 @@ class PaymentMethodSection extends StatelessWidget {
                 textSecondary: textSecondary,
                 backgroundColor: backgroundColor,
               ),
-              // Hiển thị dropdown chọn thẻ khi Stripe được chọn
-              // Luôn hiển thị để có thể chọn thẻ đã lưu hoặc thêm thẻ mới
-              Builder(
-                builder: (context) {
-                  final shouldShow = isStripe && isSelected;
-                  print('🔍 Should show dropdown: isStripe=$isStripe, isSelected=$isSelected, shouldShow=$shouldShow, savedCards=${savedCards.length}');
-                  if (shouldShow) {
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 12),
-                        _buildCardDropdown(),
-                      ],
-                    );
-                  }
-                  return const SizedBox.shrink();
-                },
-              ),
+              // ✅ Hiển thị dropdown chọn thẻ khi Stripe được chọn
+              if (isStripe && isSelected)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: 12),
+                    _buildCardDropdown(),
+                  ],
+                )
+              else
+                const SizedBox.shrink(),
             ],
           );
         }).toList(),
@@ -158,10 +152,6 @@ class PaymentMethodSection extends StatelessWidget {
   }
 
   Widget _buildCardDropdown() {
-    print('🔍 _buildCardDropdown called: savedCards=${savedCards.length}, selectedCard=${selectedCard?.displayName ?? "null"}');
-    print('🔍 onCardSelected=${onCardSelected != null}, onAddNewCard=${onAddNewCard != null}');
-    
-    // Đảm bảo dropdown luôn hiển thị, kể cả khi không có thẻ
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -186,10 +176,12 @@ class PaymentMethodSection extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          DropdownButtonFormField<SavedCard?>(
-            value: selectedCard,
-            isExpanded: true, // Đảm bảo dropdown mở rộng đầy đủ
-            decoration: InputDecoration(
+          Builder(
+            builder: (dropdownContext) {
+              return DropdownButtonFormField<SavedCard?>(
+                value: selectedCard,
+                isExpanded: true,
+                decoration: InputDecoration(
               filled: true,
               fillColor: surfaceColor,
               hintText: savedCards.isEmpty ? 'Chưa có thẻ, chọn "Thêm thẻ mới"' : 'Chọn thẻ thanh toán',
@@ -209,8 +201,55 @@ class PaymentMethodSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(color: primaryColor, width: 2),
               ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             ),
+            selectedItemBuilder: (BuildContext context) {
+              // Custom builder để hiển thị giá trị đã chọn - chỉ 1 dòng để tránh overflow
+              return [
+                // Option "Thêm thẻ mới"
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add_circle_outline, size: 18, color: primaryColor),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Thêm thẻ mới',
+                        style: TextStyle(
+                          color: primaryColor,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ],
+                ),
+                // Danh sách thẻ đã lưu - chỉ hiển thị tên thẻ (1 dòng)
+                ...savedCards.map((card) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.credit_card, size: 16, color: textPrimary),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${card.displayName}${card.isDefault ? ' • Mặc định' : ''}',
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ];
+            },
             items: [
               // Option "Thêm thẻ mới"
               DropdownMenuItem<SavedCard?>(
@@ -237,111 +276,74 @@ class PaymentMethodSection extends StatelessWidget {
               ...savedCards.map((card) {
                 return DropdownMenuItem<SavedCard?>(
                   value: card,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.credit_card, size: 18, color: textPrimary),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              card.displayName,
-                              style: TextStyle(
-                                color: textPrimary,
-                                fontWeight: FontWeight.w500,
-                                fontSize: 14,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Hết hạn: ${card.expiryDate}${card.isDefault ? ' • Mặc định' : ''}',
-                              style: TextStyle(
-                                color: textSecondary,
-                                fontSize: 11,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-            ],
-            onChanged: (card) {
-              if (card == null) {
-                // Chọn "Thêm thẻ mới"
-                onAddNewCard?.call();
-              } else {
-                // Chọn thẻ đã lưu
-                onCardSelected?.call(card);
-              }
-            },
-            dropdownColor: surfaceColor,
-            style: TextStyle(color: textPrimary, fontSize: 14),
-            icon: Icon(Icons.arrow_drop_down, color: primaryColor),
-            itemHeight: 60, // Tăng chiều cao item để tránh overflow
-            selectedItemBuilder: (BuildContext context) {
-              // Hiển thị đơn giản trong field để tránh overflow
-              // Phải trả về list có cùng số lượng với items (1 + savedCards.length)
-              return [
-                // Item đầu tiên: "Thêm thẻ mới"
-                if (selectedCard == null)
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.add_circle_outline, size: 18, color: primaryColor),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          'Thêm thẻ mới',
-                          style: TextStyle(
-                            color: primaryColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                          maxLines: 1,
-                        ),
-                      ),
-                    ],
-                  )
-                else
-                  const SizedBox.shrink(),
-                // Các item thẻ đã lưu
-                ...savedCards.map((card) {
-                  if (selectedCard != null && selectedCard!.id == card.id) {
-                    return Row(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.credit_card, size: 18, color: textPrimary),
                         const SizedBox(width: 8),
-                        Flexible(
-                          child: Text(
-                            card.displayName,
-                            style: TextStyle(
-                              color: textPrimary,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                card.displayName,
+                                style: TextStyle(
+                                  color: textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                  fontSize: 14,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Hết hạn: ${card.expiryDate}${card.isDefault ? ' • Mặc định' : ''}',
+                                style: TextStyle(
+                                  color: textSecondary,
+                                  fontSize: 11,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ],
                           ),
                         ),
                       ],
+                    ),
+                  ),
+                );
+              }),
+            ],
+                onChanged: (card) async {
+                  if (card == null) {
+                    // Chọn "Thêm thẻ mới" - Mở dialog
+                    final savedCard = await AddCardDialog.show(
+                      context: dropdownContext,
+                      savedCards: savedCards,
+                      primaryColor: primaryColor,
+                      surfaceColor: surfaceColor,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
                     );
+                    
+                    // Nếu thẻ được lưu thành công, chọn thẻ đó
+                    if (savedCard != null) {
+                      onCardSelected?.call(savedCard);
+                    }
+                  } else {
+                    // Chọn thẻ đã lưu
+                    onCardSelected?.call(card);
                   }
-                  return const SizedBox.shrink();
-                }),
-              ];
+                },
+                dropdownColor: surfaceColor,
+                style: TextStyle(color: textPrimary, fontSize: 14),
+                icon: Icon(Icons.arrow_drop_down, color: primaryColor),
+                itemHeight: 70, // Tăng từ 60 lên 70 để tránh overflow
+              );
             },
           ),
         ],

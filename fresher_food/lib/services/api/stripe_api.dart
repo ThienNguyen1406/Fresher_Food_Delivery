@@ -124,7 +124,10 @@ class StripeApi {
   }
 
   // Xác nhận thanh toán
-  Future<Map<String, dynamic>> confirmPayment(String paymentIntentId) async {
+  Future<Map<String, dynamic>> confirmPayment({
+    required String paymentIntentId,
+    String? userId,
+  }) async {
     try {
       final headers = await ApiService().getHeaders();
       final response = await http
@@ -136,6 +139,7 @@ class StripeApi {
             },
             body: jsonEncode({
               'paymentIntentId': paymentIntentId,
+              'userId': userId,
             }),
           )
           .timeout(const Duration(seconds: 30));

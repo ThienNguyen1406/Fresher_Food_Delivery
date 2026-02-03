@@ -33,7 +33,6 @@ class StripeCardInput extends StatefulWidget {
 }
 
 class _StripeCardInputState extends State<StripeCardInput> {
-  bool _cardComplete = false;
   final TextEditingController _cardholderController = TextEditingController();
   String? _expiryMonth;
   String? _expiryYear;
@@ -71,30 +70,8 @@ class _StripeCardInputState extends State<StripeCardInput> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          // Header với nút đóng
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Nhập thông tin thẻ',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: widget.textPrimary,
-                ),
-              ),
-              IconButton(
-                onPressed: widget.onClose,
-                icon: Icon(
-                  Icons.close,
-                  color: widget.textSecondary,
-                  size: 24,
-                ),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ],
-          ),
+          // ✅ Flow đơn giản: Không hiển thị header và nút đóng
+          // Form nhập thẻ được hiển thị trực tiếp trong checkout page
           const SizedBox(height: 12),
           // Card Preview
           CardPreview(
@@ -150,16 +127,11 @@ class _StripeCardInputState extends State<StripeCardInput> {
               // Chỉ có thể lấy last4, brand, expMonth, expYear
               if (details != null) {
                 setState(() {
-                  _cardComplete = isComplete;
                   // Không thể lấy số thẻ đầy đủ từ CardFormField
                   // Chỉ hiển thị placeholder hoặc last4 nếu có
                   _expiryMonth = details.expiryMonth?.toString().padLeft(2, '0');
                   _expiryYear = details.expiryYear?.toString().substring(2);
                   _brand = details.brand;
-                });
-              } else {
-                setState(() {
-                  _cardComplete = isComplete;
                 });
               }
               
@@ -183,82 +155,8 @@ class _StripeCardInputState extends State<StripeCardInput> {
               backgroundColor: widget.surfaceColor,
             ),
           ),
-          const SizedBox(height: 16),
-          // Chỉ hiển thị buttons nếu có callbacks
-          if (widget.onClose != null || widget.onCardConfirmed != null)
-            Row(
-              children: [
-                if (widget.onClose != null) ...[
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: widget.onClose,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: widget.textSecondary,
-                        side: BorderSide(
-                          color: widget.textSecondary.withOpacity(0.3),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text(
-                        'Hủy',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (widget.onCardConfirmed != null) const SizedBox(width: 12),
-                ],
-                if (widget.onCardConfirmed != null)
-                  Expanded(
-                    flex: widget.onClose != null ? 2 : 1,
-                    child: ElevatedButton(
-                      onPressed: _cardComplete ? _confirmCard : null,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: widget.primaryColor,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        disabledBackgroundColor: widget.textSecondary.withOpacity(0.3),
-                      ),
-                      child: const Text(
-                        'Xác nhận thẻ',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            )
-          else
-            // Nếu không có callbacks, hiển thị button "Lưu thẻ" mặc định
-            ElevatedButton(
-              onPressed: _cardComplete ? _confirmCard : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: widget.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                disabledBackgroundColor: widget.textSecondary.withOpacity(0.3),
-              ),
-              child: const Text(
-                'Lưu thẻ',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
+          // ✅ Flow đơn giản: Không hiển thị button "Lưu thẻ" hoặc "Xác nhận thẻ"
+          // User chỉ cần nhập thẻ và bấm "Đặt hàng" ở checkout page
           ],
         ),
       ),
@@ -271,9 +169,4 @@ class _StripeCardInputState extends State<StripeCardInput> {
     super.dispose();
   }
 
-  void _confirmCard() {
-    if (_cardComplete) {
-      widget.onCardConfirmed?.call();
-    }
-  }
 }
