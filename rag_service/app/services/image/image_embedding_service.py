@@ -188,14 +188,12 @@ class ImageEmbeddingService:
             txt_norm = text_emb / (np.linalg.norm(text_emb) + 1e-8)
             # Weighted average: 60% image, 40% text
             combined = 0.6 * img_norm + 0.4 * txt_norm
-            # Normalize lại sau khi combine
             combined = combined / (np.linalg.norm(combined) + 1e-8)
             return combined.astype(np.float32)
         elif image_emb is not None:
             # Chỉ có image (đã normalize trong CLIP)
             return image_emb
         elif text_emb is not None:
-            # Chỉ có text (đã normalize trong CLIP)
             return text_emb
         
         return None

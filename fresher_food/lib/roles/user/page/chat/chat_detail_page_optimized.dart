@@ -9,10 +9,6 @@ import 'dart:async';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 
-/// TỐI ƯU HIỆU NĂNG - PHÂN TÍCH VẤN ĐỀ:
-/// 
-/// giảm rebuild mỗi khi chuyển màn
-
 class ChatDetailPage extends StatefulWidget {
   final String maChat;
   final String currentUserId;
@@ -27,21 +23,26 @@ class ChatDetailPage extends StatefulWidget {
   State<ChatDetailPage> createState() => _ChatDetailPageState();
 }
 
-class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObserver {
+class _ChatDetailPageState extends State<ChatDetailPage>
+    with WidgetsBindingObserver {
   final ChatApi _chatApi = ChatApi();
   final RagApi _ragApi = RagApi();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   // TỐI ƯU: Sử dụng ValueNotifier thay vì setState toàn màn hình
-  final ValueNotifier<List<Message>> _messagesNotifier = ValueNotifier<List<Message>>([]);
+  final ValueNotifier<List<Message>> _messagesNotifier =
+      ValueNotifier<List<Message>>([]);
   final ValueNotifier<bool> _isLoadingNotifier = ValueNotifier<bool>(true);
   final ValueNotifier<bool> _isLoadingMoreNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _hasMoreMessagesNotifier = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _hasMoreMessagesNotifier =
+      ValueNotifier<bool>(true);
   final ValueNotifier<bool> _isSendingNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _isUploadingFileNotifier = ValueNotifier<bool>(false);
-  final ValueNotifier<bool> _isWaitingForBotResponseNotifier = ValueNotifier<bool>(false);
-  
+  final ValueNotifier<bool> _isUploadingFileNotifier =
+      ValueNotifier<bool>(false);
+  final ValueNotifier<bool> _isWaitingForBotResponseNotifier =
+      ValueNotifier<bool>(false);
+
   // Getters để tương thích với code cũ
   List<Message> get _messages => _messagesNotifier.value;
   bool get _isLoading => _isLoadingNotifier.value;
@@ -50,13 +51,13 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   bool get _isSending => _isSendingNotifier.value;
   bool get _isUploadingFile => _isUploadingFileNotifier.value;
   bool get _isWaitingForBotResponse => _isWaitingForBotResponseNotifier.value;
-  
+
   Timer? _refreshTimer;
   Timer? _botResponseWaitTimer;
   String? _selectedFileId;
   DateTime? _lastScrollCheck;
   bool _isPageVisible = true;
-  
+
   // TỐI ƯU: Cache MediaQuery và DateFormat
   double? _cachedScreenWidth;
   final DateFormat _timeFormat = DateFormat('HH:mm');
@@ -67,7 +68,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     _loadMessages();
     _scrollController.addListener(_onScroll);
-    
+
     // TỐI ƯU: Tăng interval từ 5s lên 8s để giảm API calls
     _refreshTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (mounted && _isPageVisible) {
@@ -78,19 +79,20 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
   void _onScroll() {
     final now = DateTime.now();
-    if (_lastScrollCheck != null && 
+    if (_lastScrollCheck != null &&
         now.difference(_lastScrollCheck!).inMilliseconds < 200) {
       return;
     }
     _lastScrollCheck = now;
 
-    if (!_scrollController.hasClients || !_scrollController.position.hasContentDimensions) {
+    if (!_scrollController.hasClients ||
+        !_scrollController.position.hasContentDimensions) {
       return;
     }
 
-    if (_scrollController.position.pixels <= 150 && 
-        _hasMoreMessages && 
-        !_isLoadingMore && 
+    if (_scrollController.position.pixels <= 150 &&
+        _hasMoreMessages &&
+        !_isLoadingMore &&
         _messages.isNotEmpty) {
       _loadMoreMessages();
     }
@@ -104,7 +106,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _scrollController.dispose();
     _refreshTimer?.cancel();
     _botResponseWaitTimer?.cancel();
-    
+
     // TỐI ƯU: Dispose ValueNotifiers
     _messagesNotifier.dispose();
     _isLoadingNotifier.dispose();
@@ -113,7 +115,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     _isSendingNotifier.dispose();
     _isUploadingFileNotifier.dispose();
     _isWaitingForBotResponseNotifier.dispose();
-    
+
     super.dispose();
   }
 
@@ -128,10 +130,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
   void _waitForBotResponse() {
     _botResponseWaitTimer?.cancel();
-    
+
     // TỐI ƯU: Chỉ update flag, không rebuild toàn màn hình
     _isWaitingForBotResponseNotifier.value = true;
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && mounted) {
         _scrollController.animateTo(
@@ -141,25 +143,27 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         );
       }
     });
-    
+
     int attempts = 0;
     const maxAttempts = 8;
-    
-    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) {
+
+    _botResponseWaitTimer =
+        Timer.periodic(const Duration(milliseconds: 1500), (timer) {
       attempts++;
       if (mounted && _isPageVisible) {
         _loadNewMessages();
-        
+
         if (_messages.isNotEmpty) {
           final lastMessage = _messages.last;
-          if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
+          if (lastMessage.loaiNguoiGui == 'Admin' ||
+              lastMessage.maNguoiGui == 'BOT') {
             _isWaitingForBotResponseNotifier.value = false;
             timer.cancel();
             return;
           }
         }
       }
-      
+
       if (attempts >= maxAttempts) {
         _isWaitingForBotResponseNotifier.value = false;
         timer.cancel();
@@ -177,11 +181,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         maChat: widget.maChat,
         limit: 10,
       );
-      
+
       if (mounted) {
         final newMessages = result['messages'] as List<Message>;
         final hasMore = result['hasMore'] as bool;
-        
+
         // TỐI ƯU: Chỉ update ValueNotifier, không rebuild toàn màn hình
         _messagesNotifier.value = newMessages;
         _hasMoreMessagesNotifier.value = hasMore;
@@ -195,7 +199,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         if (newMessages.isNotEmpty && _scrollController.hasClients) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (_scrollController.hasClients) {
-              _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+              _scrollController
+                  .jumpTo(_scrollController.position.maxScrollExtent);
             }
           });
         }
@@ -214,7 +219,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
     try {
       final oldestMessage = _messages.first;
-      
+
       final result = await _chatApi.getMessages(
         maChat: widget.maChat,
         limit: 10,
@@ -224,11 +229,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       if (mounted) {
         final olderMessages = result['messages'] as List<Message>;
         final hasMore = result['hasMore'] as bool;
-        
+
         if (olderMessages.isNotEmpty) {
           final currentScrollPosition = _scrollController.position.pixels;
           final currentMaxScroll = _scrollController.position.maxScrollExtent;
-          
+
           // TỐI ƯU: Update ValueNotifier thay vì setState
           final updatedMessages = [...olderMessages, ..._messages];
           _messagesNotifier.value = updatedMessages;
@@ -239,7 +244,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             if (_scrollController.hasClients) {
               final newMaxScroll = _scrollController.position.maxScrollExtent;
               final scrollDifference = newMaxScroll - currentMaxScroll;
-              _scrollController.jumpTo(currentScrollPosition + scrollDifference);
+              _scrollController
+                  .jumpTo(currentScrollPosition + scrollDifference);
             }
           });
         } else {
@@ -257,33 +263,36 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   /// TỐI ƯU: Chỉ update messages nếu có thay đổi thực sự
   Future<void> _loadNewMessages() async {
     if (!_isPageVisible) return;
-    
+
     try {
       final result = await _chatApi.getMessages(
         maChat: widget.maChat,
         limit: 10,
       );
-      
+
       if (mounted) {
         final newMessages = result['messages'] as List<Message>;
         final hasMore = result['hasMore'] as bool;
-        
+
         // TỐI ƯU: So sánh reference và chỉ update nếu thay đổi
         final currentMessages = _messages;
-        if (newMessages.length != currentMessages.length || 
-            (newMessages.isNotEmpty && currentMessages.isNotEmpty && 
-             newMessages.last.maTinNhan != currentMessages.last.maTinNhan)) {
-          
-          final oldLastMessageId = currentMessages.isNotEmpty ? currentMessages.last.maTinNhan : null;
-          
+        if (newMessages.length != currentMessages.length ||
+            (newMessages.isNotEmpty &&
+                currentMessages.isNotEmpty &&
+                newMessages.last.maTinNhan != currentMessages.last.maTinNhan)) {
+          final oldLastMessageId = currentMessages.isNotEmpty
+              ? currentMessages.last.maTinNhan
+              : null;
+
           bool botResponded = false;
           if (newMessages.isNotEmpty) {
             final lastMessage = newMessages.last;
-            if (lastMessage.loaiNguoiGui == 'Admin' || lastMessage.maNguoiGui == 'BOT') {
+            if (lastMessage.loaiNguoiGui == 'Admin' ||
+                lastMessage.maNguoiGui == 'BOT') {
               botResponded = true;
             }
           }
-          
+
           // TỐI ƯU: Chỉ update ValueNotifier, không rebuild toàn màn hình
           _messagesNotifier.value = newMessages;
           _hasMoreMessagesNotifier.value = hasMore;
@@ -291,11 +300,11 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             _isWaitingForBotResponseNotifier.value = false;
           }
 
-          if (oldLastMessageId != null && 
-              newMessages.isNotEmpty && 
+          if (oldLastMessageId != null &&
+              newMessages.isNotEmpty &&
               newMessages.last.maTinNhan != oldLastMessageId &&
               _scrollController.hasClients) {
-            final isNearBottom = _scrollController.position.pixels >= 
+            final isNearBottom = _scrollController.position.pixels >=
                 _scrollController.position.maxScrollExtent - 200;
             if (isNearBottom) {
               _scrollController.animateTo(
@@ -306,8 +315,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
             }
           }
 
-          if (oldLastMessageId != null && 
-              newMessages.isNotEmpty && 
+          if (oldLastMessageId != null &&
+              newMessages.isNotEmpty &&
               newMessages.last.maTinNhan != oldLastMessageId) {
             await _chatApi.markAsRead(
               maChat: widget.maChat,
@@ -398,7 +407,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
 
       if (result != null && result.files.single.path != null) {
         final file = File(result.files.single.path!);
-        
+
         _isUploadingFileNotifier.value = true;
 
         if (mounted) {
@@ -465,7 +474,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     if (_cachedScreenWidth == null) {
       _cachedScreenWidth = MediaQuery.of(context).size.width;
     }
-    
+
     final theme = Theme.of(context);
     final localizations = AppLocalizations.of(context)!;
 
@@ -725,18 +734,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
                   builder: (context, isWaiting, _) {
                     return ListView.builder(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       reverse: false,
                       itemCount: messages.length + (isWaiting ? 1 : 0),
                       // TỐI ƯU: Tăng cacheExtent và thêm các flags
                       cacheExtent: 2000, // Tăng từ 1000 lên 2000
                       addAutomaticKeepAlives: false,
                       addRepaintBoundaries: true,
-                      // TỐI ƯU: Thêm itemExtent nếu có thể (giúp Flutter tính toán tốt hơn)
-                      // itemExtent: 80, // Uncomment nếu messages có chiều cao cố định
                       itemBuilder: (context, index) {
                         if (isWaiting && index == messages.length) {
-                          return _TypingIndicatorWidget(screenWidth: _cachedScreenWidth ?? 400);
+                          return _TypingIndicatorWidget(
+                              screenWidth: _cachedScreenWidth ?? 400);
                         }
                         final message = messages[index];
                         // TỐI ƯU: Sử dụng key ổn định và cache screenWidth
@@ -791,7 +800,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
                           padding: EdgeInsets.all(12),
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.green),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.green),
                           ),
                         )
                       : IconButton(
@@ -879,7 +889,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
                               padding: EdgeInsets.all(12),
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
                               ),
                             )
                           : const Icon(
@@ -944,12 +955,17 @@ class MessageBubbleOptimized extends StatelessWidget {
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
-                  bottomLeft: isFromUser ? const Radius.circular(20) : const Radius.circular(4),
-                  bottomRight: isFromUser ? const Radius.circular(4) : const Radius.circular(20),
+                  bottomLeft: isFromUser
+                      ? const Radius.circular(20)
+                      : const Radius.circular(4),
+                  bottomRight: isFromUser
+                      ? const Radius.circular(4)
+                      : const Radius.circular(20),
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: (isFromUser ? Colors.green : Colors.black).withOpacity(0.1),
+                    color: (isFromUser ? Colors.green : Colors.black)
+                        .withOpacity(0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -1181,4 +1197,3 @@ class _TypingDotState extends State<_TypingDot>
     );
   }
 }
-

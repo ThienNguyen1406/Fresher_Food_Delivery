@@ -119,7 +119,7 @@ class ChatApi {
             uri,
             headers: _cachedHeaders!,
           )
-          .timeout(const Duration(seconds: 10)); // Tăng lại timeout lên 10s để tránh timeout quá sớm
+          .timeout(const Duration(seconds: 8)); // Giảm timeout xuống 8s để load nhanh hơn
 
       if (res.statusCode != 200) {
         print('Failed to get messages: ${res.statusCode}');

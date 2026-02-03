@@ -75,7 +75,18 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     WidgetsBinding.instance.addObserver(this);
     _scrollController.addListener(_onScroll);
     
-    // Provider sẽ tự động load messages trong _initialize()
+    // Provider sẽ tự động load messages và mark as read trong _initialize()
+    // Đảm bảo mark as read ngay khi vào page
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = Provider.of<ChatProvider>(context, listen: false);
+      provider.chatService.markAsRead(
+        maChat: widget.maChat,
+        maNguoiDoc: widget.currentUserId,
+      ).catchError((e) {
+        print('Error marking as read in initState: $e');
+        return false;
+      });
+    });
   }
 
   void _onScroll() {
@@ -361,7 +372,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
   Future<void> _searchProductsByImage() async {
     final provider = _chatProvider;
     if (provider == null) return;
-    
+
     if (provider.selectedImagePath == null) return;
 
     final imageFile = File(provider.selectedImagePath!);
@@ -387,10 +398,7 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
     // Add optimistic message through provider
     final currentMessages = List<Message>.from(provider.messages);
     currentMessages.insert(0, optimisticImageMessage);
-        provider.updateMessages(currentMessages);
-    
-    provider.setSelectedFile(null, null);
-    _messageController.clear();
+    provider.updateMessages(currentMessages);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients && mounted) {
@@ -436,6 +444,10 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         noiDung: finalMessageContent,
       );
       
+      // Clear ảnh và text sau khi gửi thành công
+      provider.setSelectedFile(null, null);
+      _messageController.clear();
+      
       provider.setWaitingForBotResponse(true);
       
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -450,6 +462,8 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         topK: 10,
       );
 
+      // Đảm bảo clear ảnh sau khi xử lý xong (dù thành công hay thất bại)
+      provider.setSelectedFile(null, null);
       provider.setUploadingAndWaiting(uploading: false, waiting: false);
 
       if (result != null && result['results'] != null && mounted) {
@@ -677,7 +691,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         }
       }
     } catch (e) {
-        provider.setUploadingAndWaiting(uploading: false, waiting: false);
+      // Đảm bảo clear ảnh khi có lỗi
+      provider.setSelectedFile(null, null);
+      provider.setUploadingAndWaiting(uploading: false, waiting: false);
       
       try {
         final errorMessage = Message(
@@ -716,7 +732,9 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
         );
       }
     } finally {
-        provider.setUploadingAndWaiting(uploading: false, waiting: false);
+      // Đảm bảo clear ảnh trong mọi trường hợp
+      provider.setSelectedFile(null, null);
+      provider.setUploadingAndWaiting(uploading: false, waiting: false);
     }
   }
 
@@ -1062,14 +1080,14 @@ class _ChatDetailPageState extends State<ChatDetailPage> with WidgetsBindingObse
       print('Error sending fallback products: $e');
       final provider = _chatProvider;
       if (provider != null) {
-        // 🔥 Đảm bảo typing indicator đã tắt khi có lỗi
+      // 🔥 Đảm bảo typing indicator đã tắt khi có lỗi
         provider.setWaitingForBotResponse(false);
         await provider.chatService.sendMessage(
-          maChat: widget.maChat,
-          maNguoiGui: 'BOT',
-          loaiNguoiGui: 'Admin',
-          noiDung: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm sản phẩm.',
-        );
+        maChat: widget.maChat,
+        maNguoiGui: 'BOT',
+        loaiNguoiGui: 'Admin',
+        noiDung: 'Xin lỗi, có lỗi xảy ra khi tìm kiếm sản phẩm.',
+      );
       }
     } finally {
       final provider = _chatProvider;

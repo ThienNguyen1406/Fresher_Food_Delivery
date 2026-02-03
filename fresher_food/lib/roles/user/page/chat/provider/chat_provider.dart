@@ -31,6 +31,7 @@ class ChatProvider with ChangeNotifier {
   bool _isWaitingForBot = false;
   bool _isPageVisible = true;
   bool _isLoadingMessages = false;
+  bool _disposed = false; // Flag để kiểm tra xem provider đã bị dispose chưa
   DateTime? _lastLoadTime;
   
   // Timers
@@ -47,10 +48,29 @@ class ChatProvider with ChangeNotifier {
   void _initialize() {
     loadMessages();
     _startRefreshTimer();
+    // Đánh dấu đã đọc ngay khi vào chat
+    _markAsReadOnInit();
+  }
+
+  /// Đánh dấu đã đọc khi khởi tạo
+  Future<void> _markAsReadOnInit() async {
+    try {
+      await _chatService.markAsRead(
+        maChat: maChat,
+        maNguoiDoc: currentUserId,
+      );
+      print('✅ Marked messages as read on init');
+    } catch (e) {
+      print('⚠️ Error marking as read on init: $e');
+    }
   }
 
   /// Update state và notify listeners
   void _updateState(ChatState newState) {
+    if (_disposed) {
+      print('⚠️ Attempted to update state after dispose, ignoring...');
+      return;
+    }
     _state = newState;
     notifyListeners();
   }
@@ -67,16 +87,23 @@ class ChatProvider with ChangeNotifier {
 
   /// Load messages
   Future<void> loadMessages({bool silent = false}) async {
-    // Debounce: Tránh load quá nhiều lần trong thời gian ngắn
+    // Kiểm tra nếu đã bị dispose
+    if (_disposed) {
+      print('⚠️ Attempted to load messages after dispose, ignoring...');
+      return;
+    }
+    
+    // Debounce: Tránh load quá nhiều lần trong thời gian ngắn (chỉ áp dụng cho silent calls)
     final now = DateTime.now();
     if (_isLoadingMessages) {
       print('⏳ Already loading messages, skipping...');
       return;
     }
     
-    if (_lastLoadTime != null && !silent) {
+    // Chỉ debounce cho silent calls, không debounce cho lần load đầu tiên
+    if (silent && _lastLoadTime != null) {
       final timeSinceLastLoad = now.difference(_lastLoadTime!);
-      if (timeSinceLastLoad.inMilliseconds < 500) {
+      if (timeSinceLastLoad.inMilliseconds < 300) { // Giảm từ 500ms xuống 300ms
         print('⏳ Too soon since last load, skipping...');
         return;
       }
@@ -85,15 +112,22 @@ class ChatProvider with ChangeNotifier {
     _isLoadingMessages = true;
     _lastLoadTime = now;
     
-    if (!silent) {
+    if (!silent && !_disposed) {
       _updateState(_state.loading());
     }
 
     try {
+      // Giảm limit từ 30 xuống 20 để load nhanh hơn
       final result = await _chatService.getMessages(
         maChat: maChat,
-        limit: 30,
+        limit: 20,
       );
+      
+      // Kiểm tra lại sau async operation
+      if (_disposed) {
+        print('⚠️ Provider disposed during loadMessages, ignoring result...');
+        return;
+      }
       
       final newMessages = result['messages'] as List<Message>;
       final hasMore = result['hasMore'] as bool;
@@ -102,70 +136,63 @@ class ChatProvider with ChangeNotifier {
       final reversedMessages = newMessages.reversed.toList();
       
       // Nếu đang đợi bot response, merge thay vì replace để giữ optimistic messages
-      if (_isWaitingForBot) {
-        final currentMessages = List<Message>.from(_state.messages);
+      if (_isWaitingForBot && _state.messages.isNotEmpty) {
+        final currentMessages = _state.messages;
+        final existingIds = currentMessages.map((m) => m.maTinNhan).toSet();
         
-        // Nếu có messages hiện tại, merge
-        if (currentMessages.isNotEmpty) {
-          final existingIds = currentMessages.map((m) => m.maTinNhan).toSet();
-          
-          // Chỉ thêm messages mới (chưa có trong list)
-          final messagesToAdd = <Message>[];
-          for (var newMsg in reversedMessages) {
-            if (!existingIds.contains(newMsg.maTinNhan)) {
-              messagesToAdd.add(newMsg);
-            }
-          }
-          
-          // Nếu có messages mới, merge và cập nhật
-          if (messagesToAdd.isNotEmpty) {
-            final mergedMessages = [...messagesToAdd, ...currentMessages];
-            _updateState(_state.copyWith(
-              messages: mergedMessages,
-              isLoading: false,
-              hasMoreMessages: hasMore,
-            ));
-            
-            print('✅ New messages detected: ${messagesToAdd.length} new, total: ${mergedMessages.length}');
-            
-            // Kiểm tra nếu có bot response trong messages mới
-            final hasBotResponse = messagesToAdd.any((msg) => 
-              msg.loaiNguoiGui == 'Admin' || 
-              msg.maNguoiGui == 'BOT' || 
-              msg.maNguoiGui == 'Bot'
-            );
-            
-            if (hasBotResponse) {
-              print('✅ Bot response found in new messages!');
-            }
-          } else {
-            // Nếu không có messages mới, vẫn cập nhật để đảm bảo UI sync
-            _updateState(_state.copyWith(
-              isLoading: false,
-              hasMoreMessages: hasMore,
-            ));
-          }
+        // Tối ưu: chỉ thêm messages mới (chưa có trong list) - dùng where thay vì for loop
+        final messagesToAdd = reversedMessages.where((msg) => !existingIds.contains(msg.maTinNhan)).toList();
+        
+        if (messagesToAdd.isNotEmpty) {
+          // Merge messages mới vào đầu list
+          final mergedMessages = [...messagesToAdd, ...currentMessages];
+          _updateState(_state.copyWith(
+            messages: mergedMessages,
+            isLoading: false,
+            hasMoreMessages: hasMore,
+          ));
         } else {
-          // Chưa có messages, set trực tiếp
-          _updateState(_state.success(reversedMessages, hasMore: hasMore));
+          // Không có messages mới, chỉ update state
+          _updateState(_state.copyWith(
+            isLoading: false,
+            hasMoreMessages: hasMore,
+          ));
         }
       } else {
-        // Không đợi bot response, set trực tiếp
+        // Không đợi bot response hoặc chưa có messages, set trực tiếp (nhanh hơn)
         _updateState(_state.success(reversedMessages, hasMore: hasMore));
       }
+      
+      // Đánh dấu đã đọc sau khi load messages thành công (chỉ cho lần load đầu tiên, không phải silent)
+      if (!silent && !_disposed && reversedMessages.isNotEmpty) {
+        // Gọi markAsRead không block UI
+        _chatService.markAsRead(
+          maChat: maChat,
+          maNguoiDoc: currentUserId,
+        ).catchError((e) {
+          print('Error marking messages as read: $e');
+          return false;
+        });
+      }
     } catch (e) {
+      if (_disposed) {
+        print('⚠️ Provider disposed during loadMessages error handling, ignoring...');
+        return;
+      }
       print('❌ Error loading messages: $e');
       if (!silent) {
         _updateState(_state.error());
       }
     } finally {
-      _isLoadingMessages = false;
+      if (!_disposed) {
+        _isLoadingMessages = false;
+      }
     }
   }
 
   /// Load more messages (pagination)
   Future<void> loadMoreMessages() async {
-    if (_state.isLoadingMore || !_state.hasMoreMessages || _state.messages.isEmpty) return;
+    if (_disposed || _state.isLoadingMore || !_state.hasMoreMessages || _state.messages.isEmpty) return;
 
     _updateState(_state.copyWith(isLoadingMore: true));
 
@@ -177,6 +204,11 @@ class ChatProvider with ChangeNotifier {
         limit: 20,
         beforeMessageId: oldestMessage.maTinNhan,
       );
+
+      // Kiểm tra lại sau async operation
+      if (_disposed) {
+        return;
+      }
 
       final olderMessages = result['messages'] as List<Message>;
       final hasMore = result['hasMore'] as bool;
@@ -195,14 +227,16 @@ class ChatProvider with ChangeNotifier {
         ));
       }
     } catch (e) {
-      print('Error loading more messages: $e');
-      _updateState(_state.copyWith(isLoadingMore: false));
+      if (!_disposed) {
+        print('Error loading more messages: $e');
+        _updateState(_state.copyWith(isLoadingMore: false));
+      }
     }
   }
 
   /// Send message
   Future<bool> sendMessage(String text, {String? fileId}) async {
-    if (_state.isSending) return false;
+    if (_disposed || _state.isSending) return false;
     
     _updateState(_state.copyWith(isSending: true));
 
@@ -233,8 +267,8 @@ class ChatProvider with ChangeNotifier {
       );
 
       if (success) {
-        // Đợi một chút để backend xử lý message
-        await Future.delayed(const Duration(milliseconds: 500));
+        // Giảm delay từ 500ms xuống 300ms để phản hồi nhanh hơn
+        await Future.delayed(const Duration(milliseconds: 300));
         
         // Load messages một lần để đảm bảo sync
         await loadMessages(silent: true);
@@ -266,17 +300,29 @@ class ChatProvider with ChangeNotifier {
     _isWaitingForBot = true;
     _updateState(_state.copyWith(isWaitingForBotResponse: true));
     
-    // Check bot response mỗi 2s, tối đa 10 lần (20s)
+    // Check bot response mỗi 1.5s, tối đa 12 lần (18s) - nhanh hơn và nhiều attempts hơn
     int attempts = 0;
-    const maxAttempts = 10;
+    const maxAttempts = 12;
     int lastMessageCount = _state.messages.length;
     
-    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 2000), (timer) async {
+    _botResponseWaitTimer = Timer.periodic(const Duration(milliseconds: 1500), (timer) async {
+      // Kiểm tra nếu đã bị dispose
+      if (_disposed) {
+        timer.cancel();
+        return;
+      }
+      
       attempts++;
-      if (_isPageVisible) {
+      if (_isPageVisible && !_disposed) {
         try {
           // Load messages và đợi kết quả
           await loadMessages(silent: true);
+          
+          // Kiểm tra lại sau async operation
+          if (_disposed) {
+            timer.cancel();
+            return;
+          }
           
           // Kiểm tra nếu có messages mới (bot đã trả lời)
           final currentMessageCount = _state.messages.length;
@@ -303,24 +349,30 @@ class ChatProvider with ChangeNotifier {
               timer.cancel();
               
               // Force notify để đảm bảo UI cập nhật
-              _startRefreshTimer();
+              if (!_disposed) {
+                _startRefreshTimer();
+              }
               return;
             }
           }
         } catch (e) {
-          print('❌ Error checking bot response: $e');
+          if (!_disposed) {
+            print('❌ Error checking bot response: $e');
+          }
         }
       }
       
-      if (attempts >= maxAttempts) {
-        print('⚠️ Bot response timeout after $maxAttempts attempts');
-        _isWaitingForBot = false;
-        _updateState(_state.copyWith(isWaitingForBotResponse: false));
+      if (attempts >= maxAttempts || _disposed) {
+        if (!_disposed) {
+          print('⚠️ Bot response timeout after $maxAttempts attempts');
+          _isWaitingForBot = false;
+          _updateState(_state.copyWith(isWaitingForBotResponse: false));
+          _startRefreshTimer();
+          
+          // Load messages một lần cuối để đảm bảo sync
+          await loadMessages(silent: true);
+        }
         timer.cancel();
-        _startRefreshTimer();
-        
-        // Load messages một lần cuối để đảm bảo sync
-        await loadMessages(silent: true);
       }
     });
   }
@@ -331,6 +383,10 @@ class ChatProvider with ChangeNotifier {
     
     // Refresh mỗi 30s để đảm bảo sync
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      if (_disposed) {
+        _refreshTimer?.cancel();
+        return;
+      }
       if (_isPageVisible && !_state.isSending && !_isWaitingForBot && !_isLoadingMessages) {
         loadMessages(silent: true);
       }
@@ -339,9 +395,15 @@ class ChatProvider with ChangeNotifier {
 
   /// Set selected file
   void setSelectedFile(String? fileId, File? image) {
+    final newFileId = fileId;
+    final newImagePath = image?.path;
+    
+    // Luôn update để đảm bảo UI được refresh
     _updateState(_state.copyWith(
-      selectedFileId: fileId,
-      selectedImagePath: image?.path,
+      selectedFileId: newFileId,
+      selectedImagePath: newImagePath,
+      clearSelectedFileId: newFileId == null,
+      clearSelectedImagePath: newImagePath == null,
     ));
   }
 
@@ -411,8 +473,12 @@ class ChatProvider with ChangeNotifier {
   /// Cleanup
   @override
   void dispose() {
+    _disposed = true; // Đánh dấu đã dispose trước khi cancel timers
     _refreshTimer?.cancel();
     _botResponseWaitTimer?.cancel();
+    _refreshTimer = null;
+    _botResponseWaitTimer = null;
+    _isLoadingMessages = false;
     super.dispose();
   }
 }
