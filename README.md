@@ -1,4 +1,4 @@
-# 🍽️ Fresher Food Delivery - Hệ thống Giao Đồ Ăn Tươi Sống
+# 🍽️ Fresher Food Delivery - Được lên ý tưởng về hệ thống cung cấp nguồn thực phẩm sạch tới tay người tiêu dùng trong hoàn cảnh hiện nay có rất nhiều thực phẩm không rõ nguồn gốc được đưa ra thị trường ảnh hưởng sức khỏe người tiêu dùng
 
 Hệ thống giao đồ ăn tươi sống hoàn chỉnh với ứng dụng di động Flutter, backend ASP.NET Core, và tích hợp AI chatbot hỗ trợ khách hàng sử dụng RAG (Retrieval Augmented Generation).
 
@@ -110,8 +110,6 @@ Hệ thống giao đồ ăn tươi sống hoàn chỉnh với ứng dụng di đ
 - OpenAI API (Embeddings & LLM)
 - ChromaDB (Vector Store)
 - Sentence Transformers (Fallback)
-
-**Xem chi tiết:** [rag_service/README.md](rag_service/README.md)
 
 ### 4. Database (`csdl/`)
 
@@ -549,14 +547,6 @@ Fresher_Food_Delivery/
 4. Xem logs của Python service
 
 ---
-
-## 🤝 Đóng góp
-
-1. Fork repository
-2. Tạo feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to branch (`git push origin feature/AmazingFeature`)
-5. Mở Pull Request
 
 ### Coding Standards
 
