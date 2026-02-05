@@ -1,21 +1,6 @@
 # 🍽️ Fresher Food Delivery - Được lên ý tưởng về hệ thống cung cấp nguồn thực phẩm sạch tới tay người tiêu dùng trong hoàn cảnh hiện nay có rất nhiều thực phẩm không rõ nguồn gốc được đưa ra thị trường ảnh hưởng sức khỏe người tiêu dùng
 
 Hệ thống giao đồ ăn tươi sống hoàn chỉnh với ứng dụng di động Flutter, backend ASP.NET Core, và tích hợp AI chatbot hỗ trợ khách hàng sử dụng RAG (Retrieval Augmented Generation).
-
-## 📋 Mục lục
-
-- [Tổng quan](#tổng-quan)
-- [Kiến trúc hệ thống](#kiến-trúc-hệ-thống)
-- [Các thành phần](#các-thành-phần)
-- [Tính năng](#tính-năng)
-- [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-- [Cài đặt và Cấu hình](#cài-đặt-và-cấu-hình)
-- [Chạy dự án](#chạy-dự-án)
-- [Cấu trúc dự án](#cấu-trúc-dự-án)
-- [API Documentation](#api-documentation)
-- [Troubleshooting](#troubleshooting)
-- [Đóng góp](#đóng-góp)
-
 ---
 
 ## 🎯 Tổng quan
@@ -28,14 +13,9 @@ Hệ thống giao đồ ăn tươi sống hoàn chỉnh với ứng dụng di đ
 - 💾 **SQL Server Database** - Lưu trữ dữ liệu
 
 ### Điểm nổi bật
-
-- ✅ Hỗ trợ đa ngôn ngữ (Tiếng Việt/Tiếng Anh)
-- ✅ Dark/Light mode
 - ✅ Thanh toán online qua Stripe
 - ✅ AI Chatbot với RAG - Upload tài liệu và hỏi đáp thông minh
-- ✅ Push notifications qua Firebase
 - ✅ Quản lý đơn hàng real-time
-- ✅ Theo dõi truy xuất nguồn gốc sản phẩm (Blockchain)
 - ✅ Dashboard thống kê cho admin
 
 ---
@@ -565,6 +545,7 @@ Dự án này được phát triển cho mục đích học tập và nghiên c�
 ## 📞 Liên hệ
 
 Nếu có câu hỏi hoặc vấn đề, vui lòng tạo issue trên repository.
+Contact nhận db qua email nvt1406nvt@gmail.com
 
 ---
 
