@@ -190,5 +190,200 @@ class RagApi {
       return null;
     }
   }
+
+  /// Multi-Agent RAG query (text only) - Gọi qua C# backend
+  Future<Map<String, dynamic>?> multiAgentQuery({
+    required String query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+    required String baseUrl,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      
+      final res = await http
+          .post(
+            Uri.parse('$baseUrl/Chat/multi-agent-query'),
+            headers: headers,
+            body: jsonEncode({
+              'query': query,
+              'userDescription': userDescription,
+              'categoryId': categoryId,
+              'topK': topK,
+              'enableCritic': enableCritic,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (res.statusCode != 200) {
+        print('Error in Multi-Agent RAG query: ${res.statusCode} - ${res.body}');
+        return null;
+      }
+
+      return jsonDecode(res.body);
+    } catch (e) {
+      print('Exception in Multi-Agent RAG query: $e');
+      return null;
+    }
+  }
+
+  /// Multi-Agent RAG query với image - Gọi qua C# backend
+  Future<Map<String, dynamic>?> multiAgentQueryWithImage({
+    required File imageFile,
+    String? query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+    required String baseUrl,
+  }) async {
+    try {
+      final headers = await ApiService().getHeaders();
+      
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$baseUrl/Chat/multi-agent-query-image'),
+      );
+
+      // Add image
+      final fileStream = http.ByteStream(imageFile.openRead());
+      final fileLength = await imageFile.length();
+      final multipartFile = http.MultipartFile(
+        'image',
+        fileStream,
+        fileLength,
+        filename: imageFile.path.split('/').last,
+      );
+      request.files.add(multipartFile);
+
+      // Add form fields
+      if (query != null && query.isNotEmpty) {
+        request.fields['query'] = query;
+      }
+      if (userDescription != null && userDescription.isNotEmpty) {
+        request.fields['userDescription'] = userDescription;
+      }
+      if (categoryId != null && categoryId.isNotEmpty) {
+        request.fields['categoryId'] = categoryId;
+      }
+      request.fields['topK'] = topK.toString();
+      request.fields['enableCritic'] = enableCritic.toString();
+
+      // Add headers
+      request.headers.addAll(headers);
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 90),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        print('Error in Multi-Agent RAG query with image: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      print('Exception in Multi-Agent RAG query with image: $e');
+      return null;
+    }
+  }
+
+  /// Multi-Agent RAG query (text only) - Gọi trực tiếp Python service
+  Future<Map<String, dynamic>?> multiAgentQueryDirect({
+    required String query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+  }) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_ragServiceUrl/api/multi-agent/query'),
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({
+              'query': query,
+              'user_description': userDescription,
+              'category_id': categoryId,
+              'top_k': topK,
+              'enable_critic': enableCritic,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
+
+      if (res.statusCode != 200) {
+        print('Error in Multi-Agent RAG query (direct): ${res.statusCode} - ${res.body}');
+        return null;
+      }
+
+      return jsonDecode(res.body);
+    } catch (e) {
+      print('Exception in Multi-Agent RAG query (direct): $e');
+      return null;
+    }
+  }
+
+  /// Multi-Agent RAG query với image - Gọi trực tiếp Python service
+  Future<Map<String, dynamic>?> multiAgentQueryWithImageDirect({
+    required File imageFile,
+    String? query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$_ragServiceUrl/api/multi-agent/query-image'),
+      );
+
+      // Add image
+      final fileStream = http.ByteStream(imageFile.openRead());
+      final fileLength = await imageFile.length();
+      final multipartFile = http.MultipartFile(
+        'image',
+        fileStream,
+        fileLength,
+        filename: imageFile.path.split('/').last,
+      );
+      request.files.add(multipartFile);
+
+      // Add query parameters
+      if (query != null && query.isNotEmpty) {
+        request.fields['query'] = query;
+      }
+      if (userDescription != null && userDescription.isNotEmpty) {
+        request.fields['user_description'] = userDescription;
+      }
+      if (categoryId != null && categoryId.isNotEmpty) {
+        request.fields['category_id'] = categoryId;
+      }
+      request.fields['top_k'] = topK.toString();
+      request.fields['enable_critic'] = enableCritic.toString();
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 90),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        print('Error in Multi-Agent RAG query with image (direct): ${response.statusCode} - ${response.body}');
+        return null;
+      }
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      print('Exception in Multi-Agent RAG query with image (direct): $e');
+      return null;
+    }
+  }
 }
 

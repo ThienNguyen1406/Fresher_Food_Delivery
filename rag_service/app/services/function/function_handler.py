@@ -149,6 +149,7 @@ class FunctionHandler:
                 "getProductsExpiringSoon": self._get_products_expiring_soon,
                 "getMonthlyRevenue": self._get_monthly_revenue,
                 "getRevenueStatistics": self._get_revenue_statistics,
+                "getProductMonthlyRevenue": self._get_product_monthly_revenue,  # Doanh thu theo product_id
                 "getBestSellingProductImage": self._get_best_selling_product_image,
                 "getProductInfo": self._get_product_info,
                 "getOrderStatus": self._get_order_status,
@@ -450,6 +451,114 @@ class FunctionHandler:
             logger.error(f"Error in _get_revenue_statistics: {str(ex)}", exc_info=True)
             return json.dumps({
                 "error": f"Lỗi khi lấy thống kê doanh thu: {str(ex)}"
+            }, ensure_ascii=False)
+    
+    async def _get_product_monthly_revenue(self, args: Dict[str, Any]) -> str:
+        """Lấy doanh thu theo tháng của một sản phẩm cụ thể"""
+        try:
+            product_id = args.get("productId")
+            year = args.get("year")
+            
+            if not product_id:
+                return json.dumps({
+                    "error": "Cần cung cấp productId"
+                }, ensure_ascii=False)
+            
+            if not year:
+                year = datetime.now().year
+            elif not isinstance(year, int) or year < 2000 or year > 2100:
+                year = datetime.now().year
+            
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                
+                # Query doanh thu theo tháng của sản phẩm
+                query = """
+                    SELECT 
+                        MONTH(dh.NgayDat) as Thang,
+                        ISNULL(SUM(od.GiaBan * od.SoLuong), 0) as DoanhThu,
+                        ISNULL(SUM(od.SoLuong), 0) as SoLuongBan
+                    FROM DonHang dh
+                    INNER JOIN ChiTietDonHang od ON dh.MaDonHang = od.MaDonHang
+                    WHERE YEAR(dh.NgayDat) = ?
+                        AND od.MaSanPham = ?
+                        AND (dh.TrangThai IN (N'Hoàn thành', N'Đã giao hàng', 'completed', 'completed')
+                             OR dh.TrangThai LIKE '%complete%'
+                             OR dh.TrangThai LIKE '%Complete%')
+                    GROUP BY MONTH(dh.NgayDat)
+                    ORDER BY MONTH(dh.NgayDat)
+                """
+                
+                cursor.execute(query, (year, product_id))
+                rows = cursor.fetchall()
+                
+                # Lấy tên sản phẩm
+                product_query = """
+                    SELECT TenSanPham
+                    FROM SanPham
+                    WHERE MaSanPham = ? AND (IsDeleted = 0 OR IsDeleted IS NULL)
+                """
+                cursor.execute(product_query, product_id)
+                product_row = cursor.fetchone()
+                product_name = product_row[0] if product_row else "N/A"
+                
+                cursor.close()
+            
+            monthly_revenue = {}
+            for row in rows:
+                thang, doanh_thu, so_luong = row
+                monthly_revenue[thang] = {
+                    "doanhThu": float(doanh_thu),
+                    "soLuongBan": int(so_luong)
+                }
+            
+            # Đảm bảo có đủ 12 tháng
+            month_names = [
+                "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
+                "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"
+            ]
+            
+            monthly_data = []
+            total_revenue = 0
+            max_month = 0
+            max_revenue = 0
+            
+            for month in range(1, 13):
+                data = monthly_revenue.get(month, {"doanhThu": 0, "soLuongBan": 0})
+                doanh_thu = data["doanhThu"]
+                total_revenue += doanh_thu
+                
+                if doanh_thu > max_revenue:
+                    max_revenue = doanh_thu
+                    max_month = month
+                
+                monthly_data.append({
+                    "thang": month,
+                    "tenThang": month_names[month - 1],
+                    "doanhThu": doanh_thu,
+                    "soLuongBan": data["soLuongBan"]
+                })
+            
+            result = {
+                "productId": product_id,
+                "productName": product_name,
+                "year": year,
+                "totalRevenue": total_revenue,
+                "monthlyData": monthly_data,
+                "bestMonth": {
+                    "thang": max_month,
+                    "tenThang": month_names[max_month - 1] if max_month > 0 else None,
+                    "doanhThu": max_revenue
+                } if max_month > 0 else None,
+                "message": f"Doanh thu của {product_name} năm {year}: {total_revenue:,.0f} VND"
+            }
+            
+            return json.dumps(result, ensure_ascii=False)
+            
+        except Exception as ex:
+            logger.error(f"Error in _get_product_monthly_revenue: {str(ex)}", exc_info=True)
+            return json.dumps({
+                "error": f"Lỗi khi lấy doanh thu theo tháng của sản phẩm: {str(ex)}"
             }, ensure_ascii=False)
     
     async def _get_best_selling_product_image(self, args: Dict[str, Any]) -> str:

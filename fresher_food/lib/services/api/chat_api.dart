@@ -12,26 +12,45 @@ class ChatApi {
     String? noiDungTinNhanDau,
   }) async {
     try {
+      final url = '${Constant().baseUrl}/Chat';
+      final body = {
+        'maNguoiDung': maNguoiDung,
+        'tieuDe': tieuDe,
+        'noiDungTinNhanDau': noiDungTinNhanDau,
+      };
+      
+      print('🔵 Creating chat - URL: $url');
+      print('🔵 Request body: $body');
+      
       final res = await http
           .post(
-            Uri.parse('${Constant().baseUrl}/Chat'),
+            Uri.parse(url),
             headers: await ApiService().getHeaders(),
-            body: jsonEncode({
-              'maNguoiDung': maNguoiDung,
-              'tieuDe': tieuDe,
-              'noiDungTinNhanDau': noiDungTinNhanDau,
-            }),
+            body: jsonEncode(body),
           )
           .timeout(const Duration(seconds: 60));
 
-      if (res.statusCode != 200) {
-        print('Failed to create chat: ${res.statusCode}');
+      print('🔵 Response status: ${res.statusCode}');
+      print('🔵 Response body: ${res.body}');
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        try {
+          final result = jsonDecode(res.body);
+          print('🔵 Parsed result: $result');
+          return result;
+        } catch (e) {
+          print('❌ Error parsing response: $e');
+          print('❌ Response body: ${res.body}');
+          return null;
+        }
+      } else {
+        print('❌ Failed to create chat: ${res.statusCode}');
+        print('❌ Response body: ${res.body}');
         return null;
       }
-
-      return jsonDecode(res.body);
-    } catch (e) {
-      print('Error creating chat: $e');
+    } catch (e, stackTrace) {
+      print('❌ Error creating chat: $e');
+      print('❌ Stack trace: $stackTrace');
       return null;
     }
   }

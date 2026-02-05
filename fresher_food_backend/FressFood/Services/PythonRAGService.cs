@@ -241,6 +241,138 @@ namespace FressFood.Services
                 return null;
             }
         }
+
+        /// <summary>
+        /// Multi-Agent RAG query - Sử dụng Multi-Agent system để xử lý query
+        /// </summary>
+        public async Task<MultiAgentRAGResponse?> MultiAgentQueryAsync(
+            string query, 
+            string? userDescription = null, 
+            string? categoryId = null, 
+            int topK = 5, 
+            bool enableCritic = true)
+        {
+            try
+            {
+                var url = $"{_ragServiceUrl}/api/multi-agent/query";
+                _logger.LogInformation($"Multi-Agent RAG query: '{query}' (category: {categoryId}, topK: {topK})");
+                
+                var request = new
+                {
+                    query = query,
+                    user_description = userDescription,
+                    category_id = categoryId,
+                    top_k = topK,
+                    enable_critic = enableCritic
+                };
+
+                var response = await _httpClient.PostAsJsonAsync(url, request);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MultiAgentRAGResponse>();
+                    _logger.LogInformation($"Multi-Agent RAG response received: Answer length={result?.FinalAnswer?.Length ?? 0}, Confidence={result?.AnswerConfidence ?? 0}");
+                    return result;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Error in Multi-Agent RAG query: {response.StatusCode} - {errorContent}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error calling Multi-Agent RAG service: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Multi-Agent RAG query với image
+        /// </summary>
+        public async Task<MultiAgentRAGResponse?> MultiAgentQueryWithImageAsync(
+            Stream imageStream,
+            string fileName,
+            string? query = null,
+            string? userDescription = null,
+            string? categoryId = null,
+            int topK = 5,
+            bool enableCritic = true)
+        {
+            try
+            {
+                var url = $"{_ragServiceUrl}/api/multi-agent/query-image";
+                _logger.LogInformation($"Multi-Agent RAG query with image: '{query}' (category: {categoryId}, topK: {topK})");
+                
+                using var content = new MultipartFormDataContent();
+                
+                // Add image
+                var imageContent = new StreamContent(imageStream);
+                imageContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+                content.Add(imageContent, "image", fileName);
+                
+                // Add query parameters
+                if (!string.IsNullOrEmpty(query))
+                    content.Add(new StringContent(query), "query");
+                if (!string.IsNullOrEmpty(userDescription))
+                    content.Add(new StringContent(userDescription), "user_description");
+                if (!string.IsNullOrEmpty(categoryId))
+                    content.Add(new StringContent(categoryId), "category_id");
+                content.Add(new StringContent(topK.ToString()), "top_k");
+                content.Add(new StringContent(enableCritic.ToString().ToLower()), "enable_critic");
+
+                var response = await _httpClient.PostAsync(url, content);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    var result = await response.Content.ReadFromJsonAsync<MultiAgentRAGResponse>();
+                    _logger.LogInformation($"Multi-Agent RAG response with image received: Answer length={result?.FinalAnswer?.Length ?? 0}");
+                    return result;
+                }
+                else
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError($"Error in Multi-Agent RAG query with image: {response.StatusCode} - {errorContent}");
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error calling Multi-Agent RAG service with image: {ex.Message}");
+                return null;
+            }
+        }
+    }
+
+    public class MultiAgentRAGResponse
+    {
+        [System.Text.Json.Serialization.JsonPropertyName("final_answer")]
+        public string FinalAnswer { get; set; } = string.Empty;
+        
+        [System.Text.Json.Serialization.JsonPropertyName("query_type")]
+        public string QueryType { get; set; } = "text";
+        
+        [System.Text.Json.Serialization.JsonPropertyName("intent")]
+        public Dictionary<string, object>? Intent { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("knowledge_results")]
+        public List<Dictionary<string, object>>? KnowledgeResults { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("tool_results")]
+        public List<Dictionary<string, object>>? ToolResults { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("answer_confidence")]
+        public double AnswerConfidence { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("critic_score")]
+        public double? CriticScore { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("has_hallucination")]
+        public bool HasHallucination { get; set; }
+        
+        [System.Text.Json.Serialization.JsonPropertyName("metadata")]
+        public Dictionary<string, object>? Metadata { get; set; }
     }
 
     public class ProcessDocumentResponse

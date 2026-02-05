@@ -22,7 +22,7 @@ class ImageVectorStore(VectorStore):
         self.store_type = "chroma"
         self.collection = None
         self._init_chroma()
-    
+
     def _init_chroma(self):
         """Khởi tạo Chroma database và collection riêng cho images"""
         try:

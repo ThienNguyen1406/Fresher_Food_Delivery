@@ -64,5 +64,14 @@ class SavedCard {
   String get expiryDate {
     return '${expMonth.toString().padLeft(2, '0')}/${expYear.toString().substring(2)}';
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is SavedCard && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
 
