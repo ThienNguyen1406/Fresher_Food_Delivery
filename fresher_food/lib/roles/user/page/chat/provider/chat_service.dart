@@ -92,6 +92,46 @@ class ChatService {
     );
   }
 
+  /// Multi-Agent RAG query (text only) - Gọi qua C# backend
+  Future<Map<String, dynamic>?> multiAgentQuery({
+    required String query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+    required String baseUrl,
+  }) async {
+    return await _ragApi.multiAgentQuery(
+      query: query,
+      userDescription: userDescription,
+      categoryId: categoryId,
+      topK: topK,
+      enableCritic: enableCritic,
+      baseUrl: baseUrl,
+    );
+  }
+
+  /// Multi-Agent RAG query với image - Gọi qua C# backend
+  Future<Map<String, dynamic>?> multiAgentQueryWithImage({
+    required File imageFile,
+    String? query,
+    String? userDescription,
+    String? categoryId,
+    int topK = 5,
+    bool enableCritic = true,
+    required String baseUrl,
+  }) async {
+    return await _ragApi.multiAgentQueryWithImage(
+      imageFile: imageFile,
+      query: query,
+      userDescription: userDescription,
+      categoryId: categoryId,
+      topK: topK,
+      enableCritic: enableCritic,
+      baseUrl: baseUrl,
+    );
+  }
+
   /// Fetch product images từ backend
   Future<List<Map<String, dynamic>>> fetchProductImages(List<dynamic> products) async {
     final baseUrl = Constant().baseUrl;

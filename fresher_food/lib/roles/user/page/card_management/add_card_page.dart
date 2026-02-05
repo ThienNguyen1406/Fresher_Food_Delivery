@@ -20,6 +20,7 @@ class AddCardPage extends StatefulWidget {
 class _AddCardPageState extends State<AddCardPage> {
   final StripeApi _stripeApi = StripeApi();
   bool _cardComplete = false;
+  bool _isSaving = false;
   List<SavedCard> _savedCards = [];
 
   final Color _primaryColor = const Color(0xFF10B981);
@@ -73,6 +74,14 @@ class _AddCardPageState extends State<AddCardPage> {
       return;
     }
 
+    if (_isSaving) {
+      return; // Đang lưu, không cho phép lưu lại
+    }
+
+    setState(() {
+      _isSaving = true;
+    });
+
     try {
       // Tạo payment method từ card form
       // Stripe sẽ tự động lấy card details từ CardFormField
@@ -89,19 +98,34 @@ class _AddCardPageState extends State<AddCardPage> {
       // Lấy thông tin thẻ từ PaymentMethod
       final cardInfo = paymentMethod.card;
       if (cardInfo == null) {
+        setState(() {
+          _isSaving = false;
+        });
         throw Exception('Không thể lấy thông tin thẻ');
       }
 
-      final newCardLast4 = cardInfo.last4 ?? '';
-      final newCardBrand = cardInfo.brand ?? 'card';
-      final newCardExpMonth = cardInfo.expMonth ?? 0;
-      final newCardExpYear = cardInfo.expYear ?? 0;
+      final newCardLast4 = cardInfo.last4;
+      final newCardBrand = cardInfo.brand;
+      final newCardExpMonth = cardInfo.expMonth;
+      final newCardExpYear = cardInfo.expYear;
+      
+      if (newCardLast4 == null || newCardLast4.isEmpty) {
+        setState(() {
+          _isSaving = false;
+        });
+        throw Exception('Không thể lấy số thẻ từ PaymentMethod');
+      }
+
+      // Reload danh sách thẻ để đảm bảo có danh sách mới nhất trước khi kiểm tra
+      await _loadSavedCards();
 
       // So sánh với các thẻ đã lưu
       bool isDuplicate = false;
+      final newCardBrandLower = newCardBrand?.toLowerCase() ?? 'card';
       for (final savedCard in _savedCards) {
+        final savedCardBrandLower = savedCard.brand.toLowerCase();
         if (savedCard.last4 == newCardLast4 &&
-            savedCard.brand.toLowerCase() == newCardBrand.toLowerCase() &&
+            savedCardBrandLower == newCardBrandLower &&
             savedCard.expMonth == newCardExpMonth &&
             savedCard.expYear == newCardExpYear) {
           isDuplicate = true;
@@ -111,6 +135,9 @@ class _AddCardPageState extends State<AddCardPage> {
 
       if (isDuplicate) {
         // Thẻ đã tồn tại - thông báo và không lưu
+        setState(() {
+          _isSaving = false;
+        });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -149,6 +176,9 @@ class _AddCardPageState extends State<AddCardPage> {
         Navigator.pop(context, true);
       }
     } catch (e) {
+      setState(() {
+        _isSaving = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -205,23 +235,79 @@ class _AddCardPageState extends State<AddCardPage> {
               ),
             ),
             const SizedBox(height: 24),
-          StripeCardInput(
-            surfaceColor: _surfaceColor,
-            textPrimary: _textPrimary,
-            textSecondary: _textSecondary,
-            primaryColor: _primaryColor,
-            onCardComplete: (isComplete) {
-              setState(() {
-                _cardComplete = isComplete;
-              });
-            },
-            onCardConfirmed: () async {
-              await _saveCard();
-            },
-            onClose: () {
-              Navigator.pop(context);
-            },
-          ),
+            StripeCardInput(
+              surfaceColor: _surfaceColor,
+              textPrimary: _textPrimary,
+              textSecondary: _textSecondary,
+              primaryColor: _primaryColor,
+              onCardComplete: (isComplete) {
+                setState(() {
+                  _cardComplete = isComplete;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+            // Nút Lưu và Hủy
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isSaving ? null : () {
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _textSecondary,
+                      side: BorderSide(
+                        color: _textSecondary.withOpacity(0.3),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: const Text(
+                      'Hủy',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton(
+                    onPressed: (_isSaving || !_cardComplete) ? null : _saveCard,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _primaryColor,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      disabledBackgroundColor: _textSecondary.withOpacity(0.3),
+                    ),
+                    child: _isSaving
+                        ? SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Text(
+                            'Lưu thẻ',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),

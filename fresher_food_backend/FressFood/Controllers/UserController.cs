@@ -5,8 +5,12 @@ using Microsoft.AspNetCore.Identity.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using FressFood.Controllers;
 
-namespace FoodShop.Controllers
+namespace FressFood.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
@@ -239,6 +243,18 @@ namespace FoodShop.Controllers
                         string newId = command.ExecuteScalar()?.ToString();
                         user.MaTaiKhoan = newId;
 
+                        // ✅ Tạo Stripe Customer cho user mới đăng ký
+                        try
+                        {
+                            var stripeController = new StripeController(_configuration);
+                            var customerId = stripeController.GetOrCreateCustomer(newId);
+                            _logger.LogInformation($"✅ Created Stripe Customer {customerId} for user {newId}");
+                        }
+                        catch (Exception stripeEx)
+                        {
+                            // Log lỗi nhưng không fail đăng ký
+                            _logger.LogWarning($"⚠️ Could not create Stripe Customer for user {newId}: {stripeEx.Message}");
+                        }
                     }
                 }
                 return Ok(new { message = "Thêm người dùng thành công", user });

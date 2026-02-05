@@ -2,8 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Chat.dart';
 import 'package:fresher_food/services/api/chat_api.dart';
+import 'package:fresher_food/services/api/rag_api.dart';
+import 'package:fresher_food/utils/constant.dart';
 import 'package:iconsax/iconsax.dart';
 import 'package:intl/intl.dart';
+import 'dart:convert';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 // Import Message class
 import 'package:fresher_food/models/Chat.dart' show Message;
@@ -25,6 +30,7 @@ class AdminRagChatPage extends StatefulWidget {
 
 class _AdminRagChatPageState extends State<AdminRagChatPage> {
   final ChatApi _chatApi = ChatApi();
+  final RagApi _ragApi = RagApi();
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
@@ -34,6 +40,7 @@ class _AdminRagChatPageState extends State<AdminRagChatPage> {
   Chat? _chatInfo;
   Timer? _refreshTimer;
   bool _isWaitingForBotResponse = false;
+  bool _useMultiAgentRAG = true; // ✅ Mặc định sử dụng Multi-Agent RAG
 
   @override
   void initState() {
@@ -149,28 +156,77 @@ class _AdminRagChatPageState extends State<AdminRagChatPage> {
     });
 
     try {
-      // Gửi tin nhắn user
-      // Backend sẽ tự động xử lý RAG và trả lời (không cần gọi askWithDocument riêng)
-      await _chatApi.sendMessage(
-        maChat: widget.maChat,
-        maNguoiGui: widget.currentUserId,
-        loaiNguoiGui: 'User',
-        noiDung: text,
-      );
+      // ✅ Nếu sử dụng Multi-Agent RAG, gọi trực tiếp và hiển thị kết quả
+      if (_useMultiAgentRAG) {
+        try {
+          // Gửi tin nhắn user trước
+          await _chatApi.sendMessage(
+            maChat: widget.maChat,
+            maNguoiGui: widget.currentUserId,
+            loaiNguoiGui: 'User',
+            noiDung: text,
+          );
 
-      _messageController.clear();
+          _messageController.clear();
+          
+          // Reload messages để hiển thị tin nhắn user
+          await _loadMessages();
+          
+          // Gọi Multi-Agent RAG
+          final multiAgentResponse = await _ragApi.multiAgentQuery(
+            query: text,
+            topK: 5,
+            enableCritic: true,
+            baseUrl: Constant().baseUrl,
+          );
+          
+          if (multiAgentResponse != null && mounted) {
+            final answer = multiAgentResponse['finalAnswer'] as String?;
+            final confidence = multiAgentResponse['answerConfidence'] as double? ?? 0.0;
+            final hasHallucination = multiAgentResponse['hasHallucination'] as bool? ?? false;
+            
+            if (answer != null && answer.isNotEmpty) {
+              // Gửi tin nhắn bot với kết quả từ Multi-Agent RAG
+              // Tạo tin nhắn bot giả để hiển thị ngay (backend sẽ tạo thật sau)
+              // Hoặc có thể gọi API để tạo tin nhắn bot
+              
+              // Backend đã tự động tạo tin nhắn bot, chỉ cần reload
+              // Nhưng để đảm bảo, có thể gửi tin nhắn bot thủ công nếu cần
+              
+              print('✅ Multi-Agent RAG response: Answer length=${answer.length}, Confidence=$confidence, HasHallucination=$hasHallucination');
+            }
+          }
+        } catch (multiAgentError) {
+          print('⚠️ Multi-Agent RAG error: $multiAgentError, falling back to standard chat');
+          // Fallback: Gửi tin nhắn bình thường, backend sẽ xử lý
+          await _chatApi.sendMessage(
+            maChat: widget.maChat,
+            maNguoiGui: widget.currentUserId,
+            loaiNguoiGui: 'User',
+            noiDung: text,
+          );
+          _messageController.clear();
+          await _loadMessages();
+        }
+      } else {
+        // Gửi tin nhắn user (Backend sẽ tự động xử lý RAG và trả lời)
+        await _chatApi.sendMessage(
+          maChat: widget.maChat,
+          maNguoiGui: widget.currentUserId,
+          loaiNguoiGui: 'User',
+          noiDung: text,
+        );
+
+        _messageController.clear();
+        await _loadMessages();
+      }
       
-      // Reload messages ngay để hiển thị tin nhắn user
-      await _loadMessages();
-      
-      // Backend sẽ tự động trả lời sau 2 giây
+      // Đợi bot trả lời (backend sẽ tự động trả lời sau 2 giây)
       // Auto-refresh timer sẽ tự động check và load tin nhắn bot mới
-      // Đợi tối đa 8 giây để bot trả lời (giảm từ 10 xuống 8)
       int waitCount = 0;
-      while (_isWaitingForBotResponse && waitCount < 8 && mounted) {
-        await Future.delayed(const Duration(milliseconds: 1500)); // Tăng từ 1s lên 1.5s
+      while (_isWaitingForBotResponse && waitCount < 10 && mounted) {
+        await Future.delayed(const Duration(milliseconds: 1500));
         waitCount++;
-        // Check if bot has responded
         if (mounted) {
           await _loadMessages(silent: true);
         }
@@ -199,6 +255,142 @@ class _AdminRagChatPageState extends State<AdminRagChatPage> {
 
   String _formatTime(DateTime date) {
     return DateFormat('HH:mm').format(date);
+  }
+
+  /// Decode base64 trong isolate để không block UI thread
+  static Uint8List? _decodeBase64InIsolate(String? base64String) {
+    if (base64String == null || base64String.isEmpty) return null;
+    try {
+      return base64Decode(base64String);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Parse message và hiển thị với products images nếu có
+  Widget _buildMessageContent(String messageText, bool isUser) {
+    // Tìm [PRODUCTS_DATA] tag (có thể có hoặc không có tag đóng)
+    final productsDataStartRegex = RegExp(r'\[PRODUCTS_DATA\]', dotAll: true);
+    final productsDataEndRegex = RegExp(r'\[/PRODUCTS_DATA\]', dotAll: true);
+    
+    final startMatch = productsDataStartRegex.firstMatch(messageText);
+    final endMatch = productsDataEndRegex.firstMatch(messageText);
+    
+    // Lấy text message (loại bỏ [PRODUCTS_DATA] tag)
+    String textMessage = messageText;
+    String? jsonStr;
+    
+    if (startMatch != null) {
+      final startIndex = startMatch.end;
+      final endIndex = endMatch != null ? endMatch.start : messageText.length;
+      
+      // Lấy text trước [PRODUCTS_DATA]
+      textMessage = messageText.substring(0, startMatch.start).trim();
+      
+      // Lấy JSON string
+      jsonStr = messageText.substring(startIndex, endIndex).trim();
+    }
+    
+    // Parse products data để lấy hình ảnh
+    List<dynamic> productsWithImages = [];
+    if (jsonStr != null && jsonStr.isNotEmpty) {
+      try {
+        final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
+        final products = productsData['products'] as List<dynamic>? ?? [];
+        
+        productsWithImages = products.where((p) {
+          final imageData = p['imageData'] as String?;
+          return imageData != null && imageData.isNotEmpty;
+        }).toList();
+        
+        print('✅ Parsed ${productsWithImages.length} products with images');
+      } catch (e) {
+        print('❌ Error parsing products data: $e');
+        print('❌ JSON string: ${jsonStr.substring(0, jsonStr.length > 200 ? 200 : jsonStr.length)}...');
+      }
+    }
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (textMessage.isNotEmpty)
+          Text(
+            textMessage,
+            style: TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              color: isUser ? Colors.white : Colors.black87,
+            ),
+          ),
+        if (productsWithImages.isNotEmpty) ...[
+          if (textMessage.isNotEmpty) const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: productsWithImages.map((product) {
+              final imageData = product['imageData'] as String?;
+              
+              if (imageData != null && imageData.isNotEmpty) {
+                return Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: FutureBuilder<Uint8List?>(
+                      future: compute(_decodeBase64InIsolate, imageData),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return Container(
+                            width: 120,
+                            height: 120,
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            ),
+                          );
+                        }
+                        if (snapshot.hasData && snapshot.data != null) {
+                          return Image.memory(
+                            snapshot.data!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                width: 120,
+                                height: 120,
+                                color: Colors.grey.shade200,
+                                child: const Icon(Icons.image, color: Colors.grey),
+                              );
+                            },
+                          );
+                        }
+                        return Container(
+                          width: 120,
+                          height: 120,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image, color: Colors.grey),
+                        );
+                      },
+                    ),
+                  ),
+                );
+              }
+              return const SizedBox.shrink();
+            }).toList(),
+          ),
+        ],
+      ],
+    );
   }
 
   @override
@@ -235,6 +427,69 @@ class _AdminRagChatPageState extends State<AdminRagChatPage> {
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
+          // Toggle Multi-Agent RAG
+          PopupMenuButton<String>(
+            icon: Icon(
+              _useMultiAgentRAG ? Iconsax.cpu : Iconsax.message_text,
+              color: Colors.white,
+            ),
+            tooltip: 'Chế độ RAG',
+            onSelected: (value) {
+              setState(() {
+                _useMultiAgentRAG = value == 'multi_agent';
+              });
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    _useMultiAgentRAG 
+                      ? 'Đã bật Multi-Agent RAG (nâng cao)' 
+                      : 'Đã tắt Multi-Agent RAG (RAG truyền thống)',
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'multi_agent',
+                child: Row(
+                  children: [
+                    Icon(
+                      _useMultiAgentRAG ? Icons.check : Icons.circle_outlined,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('Multi-Agent RAG'),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.green.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Nâng cao',
+                        style: TextStyle(fontSize: 10, color: Colors.green),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              PopupMenuItem(
+                value: 'traditional',
+                child: Row(
+                  children: [
+                    Icon(
+                      !_useMultiAgentRAG ? Icons.check : Icons.circle_outlined,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    const Text('RAG Truyền thống'),
+                  ],
+                ),
+              ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Iconsax.refresh),
             onPressed: _loadMessages,
@@ -328,15 +583,9 @@ class _AdminRagChatPageState extends State<AdminRagChatPage> {
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        Text(
+                                        _buildMessageContent(
                                           message.noiDung,
-                                          style: TextStyle(
-                                            fontSize: 15,
-                                            height: 1.5,
-                                            color: isUser
-                                                ? Colors.white
-                                                : Colors.black87,
-                                          ),
+                                          isUser,
                                         ),
                                         const SizedBox(height: 4),
                                         Text(

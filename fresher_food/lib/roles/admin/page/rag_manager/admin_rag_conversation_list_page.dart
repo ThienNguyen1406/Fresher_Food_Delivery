@@ -101,7 +101,10 @@ class _AdminRagConversationListPageState
   }
 
   Future<void> _createNewConversation() async {
-    if (_currentUserId == null) {
+    // Reload user ID trước khi tạo chat để đảm bảo có user ID mới nhất
+    await _loadCurrentUser();
+    
+    if (_currentUserId == null || _currentUserId!.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -118,44 +121,70 @@ class _AdminRagConversationListPageState
     });
 
     try {
-      print('Creating conversation for user: $_currentUserId');
+      print('🔵 Creating RAG conversation for user: $_currentUserId');
       final result = await _chatApi.createChat(
         maNguoiDung: _currentUserId!,
         tieuDe: 'Cuộc trò chuyện mới',
-        noiDungTinNhanDau: null,
+        noiDungTinNhanDau: null, // null = RAG chat
       );
 
-      print('Create chat result: $result');
+      print('🔵 Create chat result: $result');
+      print('🔵 Result type: ${result.runtimeType}');
+      print('🔵 Result keys: ${result?.keys}');
 
-      if (result != null && result['maChat'] != null) {
-        if (mounted) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AdminRagChatPage(
-                maChat: result['maChat'],
-                currentUserId: _currentUserId!,
+      if (result != null) {
+        // Kiểm tra nhiều cách để lấy maChat
+        final maChat = result['maChat'] ?? 
+                       result['MaChat'] ?? 
+                       result['ma_chat'] ??
+                       result['Ma_Chat'];
+        
+        print('🔵 Extracted maChat: $maChat');
+
+        if (maChat != null && maChat.toString().isNotEmpty) {
+          if (mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AdminRagChatPage(
+                  maChat: maChat.toString(),
+                  currentUserId: _currentUserId!,
+                ),
               ),
-            ),
-          ).then((_) => _loadConversations());
+            ).then((_) => _loadConversations());
+          }
+        } else {
+          print('❌ maChat is null or empty in result');
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Không thể tạo cuộc trò chuyện. Response: ${result.toString()}'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+              ),
+            );
+          }
         }
       } else {
+        print('❌ Create chat returned null');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Không thể tạo cuộc trò chuyện. Vui lòng thử lại.'),
+              content: Text('Không thể tạo cuộc trò chuyện. Server không phản hồi.'),
               backgroundColor: Colors.red,
             ),
           );
         }
       }
-    } catch (e) {
-      print('Error creating conversation: $e');
+    } catch (e, stackTrace) {
+      print('❌ Error creating conversation: $e');
+      print('❌ Stack trace: $stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Lỗi tạo conversation: $e'),
+            content: Text('Lỗi tạo conversation: ${e.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }

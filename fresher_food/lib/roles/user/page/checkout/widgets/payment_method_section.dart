@@ -16,6 +16,7 @@ class PaymentMethodSection extends StatelessWidget {
   final SavedCard? selectedCard;
   final Function(SavedCard?)? onCardSelected;
   final Function()? onAddNewCard;
+  final Function()? onCardSaved;
 
   const PaymentMethodSection({
     super.key,
@@ -30,6 +31,7 @@ class PaymentMethodSection extends StatelessWidget {
     this.selectedCard,
     this.onCardSelected,
     this.onAddNewCard,
+    this.onCardSaved,
   });
 
   @override
@@ -178,8 +180,23 @@ class PaymentMethodSection extends StatelessWidget {
           const SizedBox(height: 8),
           Builder(
             builder: (dropdownContext) {
+              // Đảm bảo selectedCard khớp với một item trong danh sách
+              // Nếu không, set thành null để tránh lỗi DropdownButton
+              SavedCard? validSelectedCard;
+              if (selectedCard != null && savedCards.isNotEmpty) {
+                // Tìm card trong danh sách có cùng id
+                try {
+                  validSelectedCard = savedCards.firstWhere(
+                    (card) => card.id == selectedCard!.id,
+                  );
+                } catch (e) {
+                  // Không tìm thấy trong danh sách, set thành null
+                  validSelectedCard = null;
+                }
+              }
+              
               return DropdownButtonFormField<SavedCard?>(
-                value: selectedCard,
+                value: validSelectedCard,
                 isExpanded: true,
                 decoration: InputDecoration(
               filled: true,
@@ -330,8 +347,11 @@ class PaymentMethodSection extends StatelessWidget {
                       textSecondary: textSecondary,
                     );
                     
-                    // Nếu thẻ được lưu thành công, chọn thẻ đó
+                    // Nếu thẻ được lưu thành công, reload danh sách thẻ và chọn thẻ đó
                     if (savedCard != null) {
+                      // Gọi callback để reload danh sách thẻ
+                      onCardSaved?.call();
+                      // Chọn thẻ vừa lưu
                       onCardSelected?.call(savedCard);
                     }
                   } else {

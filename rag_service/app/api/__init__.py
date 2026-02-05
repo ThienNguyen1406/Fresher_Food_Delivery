@@ -1,6 +1,6 @@
 # API package
 from fastapi import APIRouter
-from app.api.routes import document, query, function, health, image, product
+from app.api.routes import document, query, function, health, image, product, multi_agent
 
 router = APIRouter()
 
@@ -11,4 +11,5 @@ router.include_router(function.router, prefix="/functions", tags=["Functions"])
 router.include_router(health.router, prefix="/health", tags=["Health"])
 router.include_router(image.router, prefix="/images", tags=["Images"])
 router.include_router(product.router, prefix="/products", tags=["Products"])
+router.include_router(multi_agent.router, prefix="/multi-agent", tags=["Multi-Agent RAG"])
 

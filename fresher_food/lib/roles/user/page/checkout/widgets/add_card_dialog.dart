@@ -4,7 +4,6 @@ import 'package:fresher_food/models/SavedCard.dart';
 import 'package:fresher_food/services/api/stripe_api.dart';
 import 'package:fresher_food/services/api/user_api.dart';
 import 'package:fresher_food/roles/user/page/checkout/widgets/stripe_card_input.dart';
-import 'package:fresher_food/roles/user/page/checkout/widgets/card_preview.dart';
 
 /// Dialog thêm thẻ mới - 80% màn hình
 class AddCardDialog extends StatefulWidget {
@@ -60,9 +59,6 @@ class _AddCardDialogState extends State<AddCardDialog> {
   bool _isSaving = false;
   String? _errorMessage;
   final TextEditingController _cardholderController = TextEditingController();
-  String? _expiryMonth;
-  String? _expiryYear;
-  String? _brand;
   String? _last4;
 
   @override
@@ -234,64 +230,13 @@ class _AddCardDialogState extends State<AddCardDialog> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Card Preview
-                    CardPreview(
-                      cardNumber: null,
-                      cardholderName: _cardholderController.text.isNotEmpty
-                          ? _cardholderController.text
-                          : null,
-                      expiryMonth: _expiryMonth,
-                      expiryYear: _expiryYear,
-                      brand: _brand,
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Cardholder name input
-                    TextField(
-                      controller: _cardholderController,
-                      decoration: InputDecoration(
-                        labelText: 'Tên chủ thẻ',
-                        hintText: 'Nhập tên chủ thẻ',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: widget.textSecondary.withOpacity(0.3),
-                          ),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: widget.textSecondary.withOpacity(0.3),
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(
-                            color: widget.primaryColor,
-                            width: 2,
-                          ),
-                        ),
-                        labelStyle: TextStyle(color: widget.textSecondary),
-                        hintStyle: TextStyle(
-                          color: widget.textSecondary.withOpacity(0.5),
-                        ),
-                      ),
-                      style: TextStyle(color: widget.textPrimary),
-                      textCapitalization: TextCapitalization.characters,
-                      onChanged: (value) {
-                        setState(() {});
-                      },
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // Stripe CardFormField
+                    // Stripe CardFormField (đã bao gồm CardPreview và TextField bên trong)
                     StripeCardInput(
                       surfaceColor: widget.surfaceColor,
                       textPrimary: widget.textPrimary,
                       textSecondary: widget.textSecondary,
                       primaryColor: widget.primaryColor,
+                      cardholderController: _cardholderController,
                       onCardComplete: (isComplete) {
                         setState(() {
                           _isCardComplete = isComplete;

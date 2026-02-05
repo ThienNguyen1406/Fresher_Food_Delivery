@@ -16,6 +16,7 @@ class StripeCardInput extends StatefulWidget {
   final Function(bool)? onCardComplete; // Callback để track card complete status
   final VoidCallback? onCardConfirmed; // Callback khi thẻ được xác nhận
   final VoidCallback? onClose; // Callback khi đóng form
+  final TextEditingController? cardholderController; // Controller cho tên chủ thẻ (tùy chọn)
 
   const StripeCardInput({
     super.key,
@@ -26,6 +27,7 @@ class StripeCardInput extends StatefulWidget {
     this.onCardComplete,
     this.onCardConfirmed,
     this.onClose,
+    this.cardholderController,
   });
 
   @override
@@ -33,10 +35,17 @@ class StripeCardInput extends StatefulWidget {
 }
 
 class _StripeCardInputState extends State<StripeCardInput> {
-  final TextEditingController _cardholderController = TextEditingController();
+  late final TextEditingController _cardholderController;
   String? _expiryMonth;
   String? _expiryYear;
   String? _brand;
+  
+  @override
+  void initState() {
+    super.initState();
+    // Sử dụng controller từ bên ngoài nếu có, nếu không thì tạo mới
+    _cardholderController = widget.cardholderController ?? TextEditingController();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -165,7 +174,10 @@ class _StripeCardInputState extends State<StripeCardInput> {
 
   @override
   void dispose() {
-    _cardholderController.dispose();
+    // Chỉ dispose controller nếu chúng ta tạo nó (không phải từ bên ngoài)
+    if (widget.cardholderController == null) {
+      _cardholderController.dispose();
+    }
     super.dispose();
   }
 

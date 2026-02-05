@@ -87,7 +87,7 @@ class StripeApi {
   }
 
   // Cập nhật PaymentIntent với PaymentMethod
-  Future<bool> updatePaymentIntent({
+  Future<Map<String, dynamic>> updatePaymentIntent({
     required String paymentIntentId,
     required String paymentMethodId,
   }) async {
@@ -112,7 +112,10 @@ class StripeApi {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['success'] as bool? ?? false;
+        return {
+          'success': data['success'] as bool? ?? false,
+          'clientSecret': data['clientSecret'] as String?,
+        };
       } else {
         final errorData = jsonDecode(response.body);
         throw Exception(errorData['error'] ?? 'Failed to update payment intent');

@@ -15,7 +15,7 @@ logging.basicConfig(
 from app.api import router as api_router
 
 app = FastAPI(
-    title="RAG Service",
+    title="AI Agent RAG Service",
     version="1.0.0",
     description="Retrieval Augmented Generation Service for Chatbot"
 )

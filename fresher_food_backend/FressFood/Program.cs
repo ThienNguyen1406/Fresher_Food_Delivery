@@ -1,3 +1,7 @@
+using FressFood.Filters;
+using Microsoft.AspNetCore.Http;
+using System.IO;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -34,12 +38,56 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API for Fresher Food Delivery System"
     });
     // Ignore lỗi khi generate schema - dùng FullName để tránh conflict
-    c.CustomSchemaIds(type => type.FullName?.Replace("+", ".") ?? type.Name);
+    c.CustomSchemaIds(type =>
+    {
+        try
+        {
+            if (type == null) return "Unknown";
+            return type.FullName?.Replace("+", ".") ?? type.Name;
+        }
+        catch
+        {
+            return type?.Name ?? "Unknown";
+        }
+    });
     // Ignore các model có vấn đề
     c.IgnoreObsoleteActions();
     c.IgnoreObsoleteProperties();
     // Xử lý nullable reference types
     c.SupportNonNullableReferenceTypes();
+    
+    // Xử lý IFormFile - map thành file upload type
+    c.MapType<IFormFile>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+    {
+        Type = "string",
+        Format = "binary"
+    });
+    
+    // Xử lý Stream - map thành file type
+    c.MapType<Stream>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+    {
+        Type = "string",
+        Format = "binary"
+    });
+    
+    // Xử lý FileStream - map thành file type
+    c.MapType<FileStream>(() => new Microsoft.OpenApi.Models.OpenApiSchema
+    {
+        Type = "string",
+        Format = "binary"
+    });
+    
+    // Bỏ qua các type không thể serialize
+    c.SchemaFilter<SwaggerSchemaFilter>();
+    
+    // Xử lý lỗi khi generate document
+    c.DocumentFilter<SwaggerDocumentFilter>();
+    
+    // Xử lý các operation có vấn đề
+    c.OperationFilter<SwaggerOperationFilter>();
+    
+    // Bỏ qua các action có lỗi
+    c.ResolveConflictingActions(apiDescriptions => apiDescriptions.First());
 });
 builder.Services.AddHttpContextAccessor();
 
@@ -87,12 +135,24 @@ app.Use(async (context, next) =>
         
         if (context.Request.Path.StartsWithSegments("/swagger"))
         {
+            // Log full exception details for debugging
+            logger.LogError(ex, "Swagger error: {Message}", ex.Message);
+            logger.LogError(ex, "Swagger error details: {StackTrace}", ex.StackTrace);
+            if (ex.InnerException != null)
+            {
+                logger.LogError(ex.InnerException, "Swagger inner exception: {Message}", ex.InnerException.Message);
+            }
+            
             context.Response.StatusCode = 500;
             context.Response.ContentType = "application/json";
             var errorJson = System.Text.Json.JsonSerializer.Serialize(new { 
                 error = "Swagger generation failed", 
                 message = ex.Message,
-                details = ex.ToString()
+                type = ex.GetType().Name,
+                innerException = ex.InnerException?.Message,
+                innerExceptionType = ex.InnerException?.GetType().Name,
+                stackTrace = app.Environment.IsDevelopment() ? ex.StackTrace : null,
+                innerStackTrace = app.Environment.IsDevelopment() ? ex.InnerException?.StackTrace : null
             });
             await context.Response.WriteAsync(errorJson);
             return;

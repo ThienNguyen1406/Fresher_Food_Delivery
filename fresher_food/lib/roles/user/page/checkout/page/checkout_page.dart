@@ -287,6 +287,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                 _showNewCardForm = false;
               });
             },
+            onCardSaved: () async {
+              // Reload danh sách thẻ sau khi lưu thành công
+              await _loadSavedCards();
+            },
             onAddNewCard: () async {
               // Dialog sẽ được mở từ payment_method_section
               // Không cần set _showNewCardForm nữa vì dialog sẽ xử lý
@@ -525,8 +529,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         paymentMethodId: selectedPaymentMethodId, // null nếu thẻ mới, có ID nếu thẻ đã lưu
       );
 
-      final clientSecret = paymentIntentData['clientSecret'] as String;
-      final paymentIntentId = paymentIntentData['paymentIntentId'] as String;
+      String clientSecret = paymentIntentData['clientSecret'] as String;
+      String paymentIntentId = paymentIntentData['paymentIntentId'] as String;
 
       // Với CardFormField, cần kiểm tra xem form đã có dữ liệu chưa
       // Nhưng thực tế, PaymentMethodParams.card() không tự động lấy dữ liệu từ CardFormField
@@ -538,11 +542,60 @@ class _CheckoutPageState extends State<CheckoutPage> {
       try {
         // ✅ Flow chuẩn: Dùng thẻ đã lưu hoặc tạo PaymentMethod mới
         if (_selectedSavedCard != null && !_showNewCardForm) {
-          // Sử dụng thẻ đã lưu - PaymentMethod đã được attach vào PaymentIntent
+          // Sử dụng thẻ đã lưu
           print('💳 Sử dụng thẻ đã lưu: ${_selectedSavedCard!.displayName}');
+          print('💳 PaymentMethod ID: ${_selectedSavedCard!.paymentMethodId}');
+          
+          // Thử update PaymentIntent với PaymentMethod ID
+          // Nếu thất bại (do PaymentIntent không có Customer), tạo PaymentIntent mới
+          String finalClientSecret = clientSecret;
+          String finalPaymentIntentId = paymentIntentId;
+          
+          try {
+            final updateResult = await _stripeApi.updatePaymentIntent(
+              paymentIntentId: paymentIntentId,
+              paymentMethodId: _selectedSavedCard!.paymentMethodId,
+            );
+            
+            if (updateResult['success'] as bool? ?? false) {
+              // Update thành công
+              finalClientSecret = updateResult['clientSecret'] as String? ?? clientSecret;
+              print('✅ PaymentIntent đã được cập nhật với PaymentMethod');
+            } else {
+              throw Exception('Update failed');
+            }
+          } catch (e) {
+            // Nếu update thất bại (thường do PaymentIntent không có Customer),
+            // tạo PaymentIntent mới với Customer và PaymentMethod
+            print('⚠️ Không thể update PaymentIntent, tạo PaymentIntent mới: $e');
+            print('🔄 Tạo PaymentIntent mới với Customer và PaymentMethod...');
+            
+            final newPaymentIntentData = await _stripeApi.createPaymentIntent(
+              amount: finalAmount,
+              userId: userId,
+              paymentMethodId: _selectedSavedCard!.paymentMethodId, // Set PaymentMethodId ngay từ đầu
+            );
+            
+            finalClientSecret = newPaymentIntentData['clientSecret'] as String;
+            finalPaymentIntentId = newPaymentIntentData['paymentIntentId'] as String;
+            
+            print('✅ Đã tạo PaymentIntent mới với Customer và PaymentMethod');
+            print('🔍 New PaymentIntent ID: $finalPaymentIntentId');
+            print('🔍 New ClientSecret: ${finalClientSecret.substring(0, 30)}...');
+          }
+          
+          // Confirm payment với clientSecret
+          // PaymentIntent đã có PaymentMethod và Customer, chỉ cần confirm
+          print('🔍 Confirming payment with clientSecret: ${finalClientSecret.substring(0, 30)}...');
           await Stripe.instance.confirmPayment(
-            paymentIntentClientSecret: clientSecret,
+            paymentIntentClientSecret: finalClientSecret,
           );
+          
+          // Cập nhật paymentIntentId và clientSecret để dùng cho confirm payment sau này (nếu đã tạo mới)
+          if (finalPaymentIntentId != paymentIntentId) {
+            paymentIntentId = finalPaymentIntentId;
+            clientSecret = finalClientSecret;
+          }
         } else {
           // Tạo PaymentMethod mới từ CardFormField
           print('💳 Tạo PaymentMethod mới từ CardFormField');
