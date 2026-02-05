@@ -33,12 +33,13 @@ class MultiAgentQueryResponse(BaseModel):
     metadata: dict = {}
 
 
-@router.post("/multi-agent/query", response_model=MultiAgentQueryResponse)
+@router.post("/query", response_model=MultiAgentQueryResponse)
 async def multi_agent_query(
     request: MultiAgentQueryRequest = Body(...)
 ):
     """
     Multi-Agent RAG query endpoint (text only)
+    Full path: /api/multi-agent/query
     """
     try:
         orchestrator = MultiAgentOrchestrator()
@@ -68,7 +69,7 @@ async def multi_agent_query(
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 
-@router.post("/multi-agent/query-image", response_model=MultiAgentQueryResponse)
+@router.post("/query-image", response_model=MultiAgentQueryResponse)
 async def multi_agent_query_image(
     image: UploadFile = File(...),
     query: Optional[str] = Query(None),
@@ -79,6 +80,7 @@ async def multi_agent_query_image(
 ):
     """
     Multi-Agent RAG query endpoint với image
+    Full path: /api/multi-agent/query-image
     """
     try:
         # Đọc image data
@@ -112,13 +114,14 @@ async def multi_agent_query_image(
         raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
 
 
-@router.post("/multi-agent/query-batch")
+@router.post("/query-batch")
 async def multi_agent_query_batch(
     requests: List[MultiAgentQueryRequest] = Body(...),
     max_concurrent: int = Query(3, ge=1, le=10)
 ):
     """
     Batch Multi-Agent RAG queries
+    Full path: /api/multi-agent/query-batch
     """
     try:
         orchestrator = MultiAgentOrchestrator()

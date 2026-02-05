@@ -11,6 +11,7 @@ __init__ Routes cho Multi Agents
 """
 
 from app.agents.router_agent import RouterAgent
+from app.agents.entity_resolver_agent import EntityResolverAgent
 from app.agents.knowledge_agent import KnowledgeAgent
 from app.agents.tool_agent import ToolAgent
 from app.agents.reasoning_agent import ReasoningAgent
@@ -20,6 +21,7 @@ from app.agents.orchestrator import MultiAgentOrchestrator
 
 __all__ = [
     "RouterAgent",
+    "EntityResolverAgent",
     "KnowledgeAgent",
     "ToolAgent",
     "ReasoningAgent",

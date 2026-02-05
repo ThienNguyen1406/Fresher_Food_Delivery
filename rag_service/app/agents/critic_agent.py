@@ -13,10 +13,6 @@ logger = logging.getLogger(__name__)
 class CriticAgent(BaseAgent):
     """
     Critic Agent kiểm tra:
-    - Hallucination: Câu trả lời có thông tin không có trong context không?
-    - Accuracy: Câu trả lời có chính xác không?
-    - Completeness: Câu trả lời có đầy đủ không?
-    - Relevance: Câu trả lời có liên quan đến câu hỏi không?
     """
     
     def __init__(self, llm_provider: Optional[LLMProvider] = None):
@@ -26,13 +22,6 @@ class CriticAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Kiểm tra chất lượng câu trả lời
-        
-        Returns:
-            Updated state with:
-                - critic_score: Điểm đánh giá (0-1)
-                - critic_feedback: Phản hồi từ critic
-                - has_hallucination: Có hallucination không?
-                - final_answer_verified: Câu trả lời đã được verify
         """
         query = state.get("query", "").strip()
         final_answer = state.get("final_answer", "")
@@ -113,28 +102,29 @@ class CriticAgent(BaseAgent):
         """Tạo prompt cho critic"""
         prompt = f"""Kiểm tra chất lượng câu trả lời sau:
 
-Câu hỏi: {query}
+                    Câu hỏi: {query}
 
-Câu trả lời:
-{final_answer}
+                    Câu trả lời:
+                    {final_answer}
 
-Thông tin có sẵn (context):
-{knowledge_context if knowledge_context else "Không có"}
-{tool_context if tool_context else ""}
-{reasoning_context if reasoning_context else ""}
+                    Thông tin có sẵn (context):
+                    {knowledge_context if knowledge_context else "Không có"}
+                    {tool_context if tool_context else ""}
+                    {reasoning_context if reasoning_context else ""}
 
-Hãy đánh giá:
-1. Hallucination: Câu trả lời có chứa thông tin KHÔNG có trong context không? (true/false)
-2. Accuracy: Câu trả lời có chính xác dựa trên context không? (0-1)
-3. Completeness: Câu trả lời có đầy đủ không? (0-1)
-4. Relevance: Câu trả lời có liên quan đến câu hỏi không? (0-1)
+                    Hãy đánh giá:
+                    1. Hallucination: Câu trả lời có chứa thông tin KHÔNG có trong context không? (true/false)
+                    2. Accuracy: Câu trả lời có chính xác dựa trên context không? (0-1)
+                    3. Completeness: Câu trả lời có đầy đủ không? (0-1)
+                    4. Relevance: Câu trả lời có liên quan đến câu hỏi không? (0-1)
 
-Trả lời theo format:
-HALLUCINATION: true/false
-ACCURACY: 0.0-1.0
-COMPLETENESS: 0.0-1.0
-RELEVANCE: 0.0-1.0
-FEEDBACK: [Nhận xét chi tiết]"""
+                    Trả lời theo format:
+                    HALLUCINATION: true/false
+                    ACCURACY: 0.0-1.0
+                    COMPLETENESS: 0.0-1.0
+                    RELEVANCE: 0.0-1.0
+                    FEEDBACK: [Nhận xét chi tiết]
+                """
         
         return prompt
     
@@ -185,19 +175,19 @@ FEEDBACK: [Nhận xét chi tiết]"""
         try:
             fix_prompt = f"""Câu trả lời sau có chứa thông tin không chính xác (hallucination). Hãy sửa lại chỉ dựa trên thông tin có sẵn:
 
-Câu hỏi: {query}
+                                Câu hỏi: {query}
 
-Câu trả lời gốc (có lỗi):
-{original_answer}
+                                Câu trả lời gốc (có lỗi):
+                                {original_answer}
 
-Thông tin có sẵn:
-{knowledge_context if knowledge_context else "Không có"}
-{tool_context if tool_context else ""}
+                                Thông tin có sẵn:
+                                {knowledge_context if knowledge_context else "Không có"}
+                                {tool_context if tool_context else ""}
 
-Phản hồi từ Critic:
-{critic_feedback}
+                                Phản hồi từ Critic:
+                                {critic_feedback}
 
-Hãy sửa lại câu trả lời, CHỈ sử dụng thông tin có trong context. Nếu không có đủ thông tin, hãy nói rõ."""
+                                Hãy sửa lại câu trả lời, CHỈ sử dụng thông tin có trong context. Nếu không có đủ thông tin, hãy nói rõ."""
             
             fixed_answer = await self.llm_provider.generate(
                 prompt=fix_prompt,

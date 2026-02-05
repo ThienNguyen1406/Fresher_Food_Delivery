@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Optional
 import logging
 from app.agents.base_agent import BaseAgent
 from app.services.function.function_handler import FunctionHandler
+from app.core.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,16 +20,20 @@ class ToolAgent(BaseAgent):
     
     def __init__(self, function_handler: Optional[FunctionHandler] = None):
         super().__init__("ToolAgent")
-        self.function_handler = function_handler or FunctionHandler()
+        if function_handler is None:
+            # Lấy connection string từ Settings
+            connection_string = Settings.DATABASE_CONNECTION_STRING
+            if not connection_string:
+                logger.warning("DATABASE_CONNECTION_STRING not found in settings. Tool Agent will not be able to query database.")
+                self.function_handler = None
+            else:
+                self.function_handler = FunctionHandler(connection_string)
+        else:
+            self.function_handler = function_handler
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Thực hiện function calling dựa trên intent và query
-        
-        Returns:
-            Updated state with:
-                - tool_results: Results from function calls
-                - tool_context: Formatted context from tool results
         """
         query = state.get("query", "").strip()
         intent = state.get("intent", {})
@@ -37,6 +42,15 @@ class ToolAgent(BaseAgent):
         
         tool_results = []
         tool_context = ""
+        
+        # Kiểm tra function_handler có sẵn không
+        if not self.function_handler:
+            self.log("⚠️ FunctionHandler not available. Skipping tool agent.")
+            state.update({
+                "tool_results": [],
+                "tool_context": ""
+            })
+            return state
         
         try:
             # Quyết định functions cần gọi dựa trên intent
@@ -133,15 +147,26 @@ class ToolAgent(BaseAgent):
                     "productId": product_id,
                     "year": year
                 }))
-            # Nếu không có product_id nhưng có từ khóa "theo tháng" hoặc "doanh thu"
+            # 🔥 FIX: Không fallback sang toàn hệ thống nếu user hỏi về sản phẩm cụ thể
+            # Chỉ gọi getMonthlyRevenue nếu query KHÔNG đề cập đến sản phẩm cụ thể
             elif "theo tháng" in query_lower or "monthly" in query_lower or "doanh số" in query_lower or "doanh thu" in query_lower:
-                # Extract năm từ query (nếu có)
-                year_match = re.search(r"(?:năm|year)\s*(\d{4})", query_lower)
-                year = int(year_match.group(1)) if year_match else datetime.now().year
+                # Kiểm tra xem query có đề cập đến sản phẩm cụ thể không
+                product_keywords = ["cá", "thịt", "rau", "gà", "tôm", "sản phẩm", "món"]
+                has_product_mention = any(kw in query_lower for kw in product_keywords)
                 
-                # Gọi function lấy doanh thu theo tháng (tổng)
-                self.log(f"🔧 Calling getMonthlyRevenue for year {year}")
-                functions.append(("getMonthlyRevenue", {"year": year}))
+                if has_product_mention:
+                    # User hỏi về sản phẩm cụ thể nhưng không tìm thấy → không fallback
+                    self.log(f"⚠️ User asked about specific product but no product_id found. NOT calling getMonthlyRevenue to avoid wrong context.")
+                    # 🔥 UX: Set flag để Synthesis Agent biết cần hỏi lại user
+                    tool_context = "⚠️ Không tìm thấy sản phẩm cụ thể trong hệ thống. Hệ thống có thể cung cấp doanh thu toàn cửa hàng nếu bạn muốn."
+                    # Không gọi function, để Synthesis Agent xử lý
+                else:
+                    # Query không đề cập sản phẩm cụ thể → có thể là doanh thu toàn hệ thống
+                    year_match = re.search(r"(?:năm|year)\s*(\d{4})", query_lower)
+                    year = int(year_match.group(1)) if year_match else datetime.now().year
+                    
+                    self.log(f"🔧 Calling getMonthlyRevenue for year {year} (no specific product mentioned)")
+                    functions.append(("getMonthlyRevenue", {"year": year}))
             
             # Kiểm tra yêu cầu thống kê theo khoảng thời gian
             elif "khoảng" in query_lower or "từ" in query_lower or "đến" in query_lower:

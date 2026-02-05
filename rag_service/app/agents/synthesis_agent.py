@@ -13,10 +13,6 @@ logger = logging.getLogger(__name__)
 class SynthesisAgent(BaseAgent):
     """
     Synthesis Agent tổng hợp:
-    - Kết quả từ Knowledge Agent
-    - Kết quả từ Tool Agent
-    - Reasoning từ Reasoning Agent
-    - Tạo câu trả lời cuối cùng
     """
     
     def __init__(self, llm_provider: Optional[LLMProvider] = None):
@@ -26,11 +22,6 @@ class SynthesisAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Tổng hợp kết quả và tạo câu trả lời cuối cùng
-        
-        Returns:
-            Updated state with:
-                - final_answer: Câu trả lời cuối cùng
-                - answer_confidence: Độ tin cậy của câu trả lời
         """
         query = state.get("query", "").strip()
         intent = state.get("intent", {})
@@ -38,6 +29,7 @@ class SynthesisAgent(BaseAgent):
         tool_context = state.get("tool_context", "")
         reasoning_context = state.get("reasoning_context", "")
         knowledge_results = state.get("knowledge_results", [])
+        knowledge_error = state.get("knowledge_error")  # 🔥 BONUS FIX: Lấy error nếu có
         
         # Lazy load LLM provider
         if not self.llm_provider:
@@ -47,6 +39,28 @@ class SynthesisAgent(BaseAgent):
         answer_confidence = 0.0
         
         try:
+            # 🔥 LOG STATE TRƯỚC KHI SYNTHESIS (debug)
+            import json
+            state_summary = {
+                "knowledge_results_count": len(knowledge_results),
+                "knowledge_results": [{"product_id": r.get("product_id"), "product_name": r.get("product_name"), "similarity": r.get("similarity")} for r in knowledge_results[:3]],
+                "has_knowledge_context": bool(knowledge_context),
+                "has_tool_context": bool(tool_context),
+                "has_reasoning_context": bool(reasoning_context)
+            }
+            self.log(f"📊 STATE BEFORE SYNTHESIS: {json.dumps(state_summary, ensure_ascii=False, indent=2)}")
+            
+            # 🔥 XÁC ĐỊNH FACT TỪ STATE (không để LLM đoán)
+            has_products = len(knowledge_results) > 0
+            has_sales_data = bool(tool_context) and ("doanh" in tool_context.lower() or "thống kê" in tool_context.lower() or "revenue" in tool_context.lower())
+            product_names = [r.get("product_name", "") for r in knowledge_results[:3] if r.get("product_name")]
+            
+            # 🔥 FIX: Phát hiện nếu user hỏi về sản phẩm cụ thể nhưng không tìm thấy
+            query_lower = query.lower()
+            product_keywords = ["cá", "thịt", "rau", "gà", "tôm", "sản phẩm", "món"]
+            asked_about_specific_product = any(kw in query_lower for kw in product_keywords)
+            needs_clarification = asked_about_specific_product and not has_products and not has_sales_data
+            
             # Tạo synthesis prompt
             synthesis_prompt = self._create_synthesis_prompt(
                 query=query,
@@ -54,24 +68,30 @@ class SynthesisAgent(BaseAgent):
                 knowledge_context=knowledge_context,
                 tool_context=tool_context,
                 reasoning_context=reasoning_context,
-                knowledge_results=knowledge_results
+                knowledge_results=knowledge_results,
+                knowledge_error=knowledge_error  # 🔥 BONUS FIX: Truyền error vào prompt
             )
             
             # Gọi LLM để tổng hợp
             self.log("📝 Synthesizing final answer...")
-            system_context = """Bạn là Synthesis Agent trong hệ thống Multi-Agent RAG của Fresher Food Delivery. 
+            system_context = f"""Bạn là Synthesis Agent trong hệ thống Multi-Agent RAG của Fresher Food Delivery. 
 
-Nhiệm vụ của bạn:
-1. Tổng hợp thông tin từ Knowledge Agent (sản phẩm từ RAG search)
-2. Tổng hợp thông tin từ Tool Agent (doanh số, thống kê từ database)
-3. Tạo câu trả lời CUỐI CÙNG, ĐẦY ĐỦ cho khách hàng
+Nhiệm vụ của bạn là tổng hợp thông tin từ các agents và tạo câu trả lời cuối cùng cho khách hàng.
 
-Nguyên tắc:
-- Sử dụng TẤT CẢ thông tin có sẵn, không bỏ sót
-- Xử lý multi-part queries (ví dụ: hình ảnh + doanh số) một cách đầy đủ
-- Format rõ ràng, dễ đọc
-- Trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp
-- Nếu user yêu cầu nhiều thứ, trả lời đầy đủ tất cả"""
+🔥 DỮ LIỆU THẬT TỪ HỆ THỐNG (BẠN PHẢI DỰA VÀO ĐÂY, KHÔNG ĐOÁN):
+- Có sản phẩm tìm được: {'CÓ' if has_products else 'KHÔNG'}
+- Số lượng sản phẩm: {len(knowledge_results)}
+- Tên sản phẩm tìm được: {', '.join(product_names) if product_names else 'KHÔNG CÓ'}
+- Có dữ liệu doanh số: {'CÓ' if has_sales_data else 'KHÔNG'}
+
+🔥 QUY TẮC NGHIÊM NGẶT:
+1. NẾU có sản phẩm trong knowledge_results → BẠN PHẢI nói về sản phẩm đó
+2. NẾU có dữ liệu doanh số trong tool_context → BẠN PHẢI nói về doanh số đó
+3. KHÔNG được nói "chưa có hình ảnh" nếu knowledge_results có sản phẩm (hình ảnh sẽ được hệ thống tự động hiển thị)
+4. KHÔNG được nói "chưa có thông tin" nếu có dữ liệu trong knowledge_results hoặc tool_context
+5. CHỈ nói "chưa có" khi THỰC SỰ không có dữ liệu (knowledge_results rỗng VÀ tool_context rỗng)
+
+Hãy trả lời một cách thân thiện, chính xác và hữu ích."""
             
             final_answer = await self.llm_provider.generate(
                 prompt=synthesis_prompt,
@@ -97,11 +117,17 @@ Nguyên tắc:
             )
             answer_confidence = 0.5
         
-        # Cập nhật state
+        # Cập nhật state (KHÔNG overwrite knowledge_results)
         state.update({
             "final_answer": final_answer,
             "answer_confidence": answer_confidence
         })
+        
+        # 🔥 VALIDATION: Đảm bảo knowledge_results không bị mất
+        if "knowledge_results" not in state or len(state.get("knowledge_results", [])) == 0:
+            # Nếu knowledge_results bị mất, log warning nhưng không restore (vì có thể thực sự không có)
+            if len(knowledge_results) > 0:
+                self.log(f"⚠️ Warning: knowledge_results may have been lost. Original count: {len(knowledge_results)}")
         
         return state
     
@@ -112,19 +138,12 @@ Nguyên tắc:
         knowledge_context: str,
         tool_context: str,
         reasoning_context: str,
-        knowledge_results: list
+        knowledge_results: list,
+        knowledge_error: Optional[str] = None
     ) -> str:
         """Tạo prompt cho synthesis"""
         
-        # Phát hiện multi-part query (ví dụ: hình ảnh + doanh số)
-        has_product_query = bool(knowledge_results) or "sản phẩm" in query.lower() or "thịt" in query.lower() or "rau" in query.lower()
-        has_sales_query = "doanh số" in query.lower() or "doanh thu" in query.lower() or "thống kê" in query.lower() or "theo tháng" in query.lower()
-        has_image_query = "hình ảnh" in query.lower() or "ảnh" in query.lower() or "hình" in query.lower()
-        
-        # Kiểm tra xem có product revenue data trong tool_context không
-        has_product_revenue = "DOANH SỐ THEO THÁNG CỦA SẢN PHẨM" in tool_context if tool_context else False
-        
-        # Format knowledge results chi tiết hơn
+        # Format knowledge results
         products_info = ""
         if knowledge_results:
             products_info = "\n=== DANH SÁCH SẢN PHẨM TÌM ĐƯỢC ===\n"
@@ -146,81 +165,63 @@ Nguyên tắc:
                     product_line += f" - Mã: {product_id}"
                 products_info += product_line + "\n"
         
-        prompt = f"""Bạn là Synthesis Agent trong hệ thống Multi-Agent RAG của Fresher Food Delivery. 
-Nhiệm vụ của bạn là tổng hợp thông tin từ các agents và tạo câu trả lời CUỐI CÙNG, ĐẦY ĐỦ cho khách hàng.
+        prompt = f"""Dựa trên thông tin từ các agents, hãy tạo câu trả lời cho khách hàng:
 
-=== CÂU HỎI CỦA KHÁCH HÀNG ===
-{query}
+                    === CÂU HỎI CỦA KHÁCH HÀNG ===
+                    {query}
+                    
+                    === PHÂN LOẠI YÊU CẦU ===
+                    Intent: {intent.get('type', 'unknown')}
 
-=== PHÂN LOẠI YÊU CẦU ===
-Intent: {intent.get('type', 'unknown')}
-- Yêu cầu về sản phẩm: {'CÓ' if has_product_query else 'KHÔNG'}
-- Yêu cầu về hình ảnh: {'CÓ' if has_image_query else 'KHÔNG'}
-- Yêu cầu về doanh số/thống kê: {'CÓ' if has_sales_query else 'KHÔNG'}
+                    {reasoning_context if reasoning_context else ""}
 
-{reasoning_context}
+                    === THÔNG TIN TỪ RAG SEARCH (SẢN PHẨM) ===
+                    {products_info if products_info else "❌ KHÔNG TÌM THẤY SẢN PHẨM PHÙ HỢP"}
+                    
+                    {knowledge_context if knowledge_context and not products_info else ""}
 
-=== THÔNG TIN TỪ RAG SEARCH (SẢN PHẨM) ===
-{products_info if products_info else "Không tìm thấy sản phẩm phù hợp"}
+                    === THÔNG TIN TỪ DATABASE (DOANH SỐ, THỐNG KÊ, CHI TIẾT) ===
+                    {tool_context if tool_context else "Không có thông tin từ database"}
+                    
+                    {f'⚠️ LƯU Ý: Knowledge Agent gặp lỗi kỹ thuật: {knowledge_error}. Hệ thống tạm thời không thể tìm kiếm hình ảnh sản phẩm. Vui lòng thử lại sau.' if knowledge_error else ''}
 
-{knowledge_context if knowledge_context and not products_info else ""}
+                    🔥 FACT CHECK - DỮ LIỆU THẬT TỪ HỆ THỐNG:
+                    - Số lượng sản phẩm tìm được: {len(knowledge_results)}
+                    - {'✅ CÓ SẢN PHẨM - BẠN PHẢI GIỚI THIỆU SẢN PHẨM ĐÓ' if knowledge_results else '❌ KHÔNG CÓ SẢN PHẨM - MỚI NÓI "CHƯA CÓ THÔNG TIN"'}
+                    
+                    🔥 QUY TẮC NGHIÊM NGẶT DỰA TRÊN DỮ LIỆU THẬT:
+                    
+                    NẾU CÓ SẢN PHẨM (danh sách trên có {len(knowledge_results)} sản phẩm):
+                    → BẠN PHẢI giới thiệu sản phẩm đó: "Tôi tìm thấy sản phẩm: [tên sản phẩm]"
+                    → BẠN PHẢI nói về giá, mô tả nếu có
+                    → KHÔNG được nói "chưa có hình ảnh" - hình ảnh sẽ được hệ thống tự động hiển thị
+                    → KHÔNG được nói "chưa có mô tả chi tiết" - dùng thông tin có sẵn
+                    
+                    NẾU KHÔNG CÓ SẢN PHẨM (danh sách rỗng):
+                    → Nếu user hỏi về sản phẩm cụ thể: 
+                       "Xin lỗi, hiện tại chúng tôi chưa có thông tin về [tên sản phẩm user hỏi] trong hệ thống.
+                       
+                       Bạn có muốn:
+                       1️⃣ Xem danh sách sản phẩm tương tự?
+                       2️⃣ Xem doanh thu tổng theo tháng của toàn cửa hàng?"
+                    → Nếu user không hỏi sản phẩm cụ thể: "Xin lỗi, hiện tại chúng tôi chưa có thông tin về [tên sản phẩm user hỏi]"
+                    → KHÔNG được suggest sản phẩm khác
+                    → KHÔNG được tự động đổi sang doanh thu toàn hệ thống nếu user hỏi về sản phẩm cụ thể
+                    → Hỏi lại user với 2 lựa chọn rõ ràng
+                    
+                    ⚠️ TUYỆT ĐỐI KHÔNG ĐƯỢC "BỊA" CHUYỆN:
+                    - Nếu có sản phẩm trong danh sách → PHẢI nói về sản phẩm đó
+                    - Nếu không có sản phẩm → MỚI nói "chưa có"
+                    - KHÔNG được tự đoán hoặc suy diễn - chỉ dựa vào FACT ở trên
 
-=== THÔNG TIN TỪ DATABASE (DOANH SỐ, THỐNG KÊ, CHI TIẾT) ===
-{tool_context if tool_context else "Không có thông tin từ database"}
+                    Yêu cầu:
+                    1. Trả lời câu hỏi một cách chính xác và đầy đủ dựa trên thông tin có sẵn
+                    2. Nếu có sản phẩm phù hợp, hãy liệt kê và mô tả ngắn gọn
+                    3. Nếu không có thông tin, hãy nói rõ và đề nghị khách hàng cung cấp thêm thông tin
+                    4. Giữ giọng điệu thân thiện và chuyên nghiệp
+                    5. Trả lời bằng tiếng Việt
 
-=== HƯỚNG DẪN TRẢ LỜI ===
-
-🔥 QUAN TRỌNG - XỬ LÝ MULTI-PART QUERIES:
-1. Nếu khách hàng yêu cầu CẢ hình ảnh sản phẩm VÀ doanh số/thống kê:
-   → Bạn PHẢI trả lời ĐẦY ĐỦ cả hai phần:
-   - Phần 1: Giới thiệu sản phẩm tìm được (tên, giá, mô tả ngắn)
-   - Phần 2: Thông tin doanh số/thống kê (nếu có trong tool_context)
-   - Ví dụ: "Tôi tìm thấy [số] sản phẩm: [tên sản phẩm]. [Thông tin doanh số theo tháng]"
-
-2. Nếu chỉ có thông tin sản phẩm:
-   → Trả lời về sản phẩm, liệt kê tên, giá, danh mục
-   → Nếu user yêu cầu hình ảnh, nhắc rằng hình ảnh sẽ được hiển thị kèm theo
-
-3. Nếu chỉ có thông tin doanh số/thống kê:
-   → Trả lời về doanh số/thống kê một cách rõ ràng, có format số liệu
-
-4. Nếu có CẢ sản phẩm VÀ doanh số:
-   → Kết hợp cả hai, trả lời đầy đủ và có cấu trúc
-
-YÊU CẦU CHUNG:
-- Trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp
-- Sử dụng TẤT CẢ thông tin có sẵn từ RAG search và database
-- Nếu có sản phẩm, liệt kê rõ ràng: tên, giá, danh mục
-- Nếu có doanh số/thống kê, format rõ ràng với số liệu cụ thể
-- KHÔNG được bỏ sót thông tin quan trọng
-- Nếu thiếu thông tin, nói rõ và đề nghị khách hàng cung cấp thêm
-
-FORMAT KHUYẾN NGHỊ (UX xịn):
-- Nếu có CẢ sản phẩm VÀ doanh số:
-  → Format như sau:
-  
-  🥩 Sản phẩm: [Tên sản phẩm]
-  [Mô tả ngắn về sản phẩm]
-  
-  📸 Hình ảnh sản phẩm:
-  (Hình ảnh sẽ được hiển thị kèm theo)
-  
-  📊 Doanh thu theo tháng ([Năm]):
-  Tháng 1: [số tiền]đ
-  Tháng 2: [số tiền]đ
-  ...
-  👉 [Nhận xét về tháng bán chạy nhất nếu có]
-
-- Nếu chỉ có sản phẩm:
-  → "Tôi tìm thấy [số] sản phẩm: [danh sách với tên, giá]"
-  
-- Nếu chỉ có doanh số:
-  → "📊 Doanh số theo tháng: [số liệu chi tiết]"
-  
-- Kết thúc với câu hỏi hỗ trợ thêm (nếu cần)
-
-=== CÂU TRẢ LỜI CỦA BẠN ===
-"""
+                    Câu trả lời:"""
         
         return prompt
     

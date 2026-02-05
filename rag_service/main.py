@@ -32,6 +32,34 @@ app.add_middleware(
 # Include API routes
 app.include_router(api_router, prefix="/api", tags=["RAG"])
 
+# ⚡ WARM-UP: Load CLIP model khi server start (giảm ~20s cho request đầu tiên)
+@app.on_event("startup")
+async def warmup_models():
+    """Warm-up các models khi server start để tránh delay cho request đầu tiên"""
+    logger = logging.getLogger(__name__)
+    logger.info("🔥 Starting warm-up process...")
+    
+    try:
+        # Warm-up CLIP model (ImageEmbeddingService)
+        from app.api.deps import get_image_embedding_service
+        logger.info("📸 Warming up CLIP model...")
+        start_time = time.time()
+        image_embedding_service = get_image_embedding_service()
+        # Force initialization bằng cách tạo một dummy embedding
+        # CLIP sẽ tự động load model khi được gọi lần đầu
+        try:
+            # Tạo text embedding để trigger CLIP load (nhanh hơn image)
+            _ = image_embedding_service.create_text_embedding("warmup")
+            elapsed = time.time() - start_time
+            logger.info(f"✅ CLIP model warmed up in {elapsed:.2f}s")
+        except Exception as e:
+            logger.warning(f"⚠️ CLIP warm-up failed (non-critical): {str(e)}")
+        
+        logger.info("✅ Warm-up completed!")
+    except Exception as e:
+        logger.error(f"❌ Error during warm-up: {str(e)}", exc_info=True)
+        # Không crash server nếu warm-up fail
+
 # Middleware để log request time
 @app.middleware("http")
 async def log_requests(request: Request, call_next):

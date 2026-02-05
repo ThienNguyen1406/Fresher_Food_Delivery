@@ -23,16 +23,6 @@ class RouterAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Phân loại câu hỏi và quyết định routing
-        
-        Returns:
-            Updated state with:
-                - query_type: "text", "image", "hybrid", "chat"
-                - has_image: bool
-                - has_text: bool
-                - needs_knowledge_agent: bool
-                - needs_tool_agent: bool
-                - needs_reasoning: bool
-                - routing_decision: str
         """
         query = state.get("query", "").strip()
         image_data = state.get("image_data")
@@ -53,22 +43,29 @@ class RouterAgent(BaseAgent):
             query_type = "chat"  # Default fallback
         
         # Phân tích intent từ text
-        intent = self._analyze_intent(query or user_description)
+        original_query = query or user_description
+        intent = self._analyze_intent(original_query)
+        
+        # 🔥 GIẢI PHÁP 1: Decompose query thành sub-queries theo intent
+        sub_queries = self._decompose_query(original_query, intent)
         
         # Quyết định routing
         routing_decision = self._make_routing_decision(
             query_type=query_type,
             intent=intent,
             has_image=has_image,
-            has_text=has_text
+            has_text=has_text,
+            sub_queries=sub_queries
         )
         
         # Cập nhật state
         state.update({
+            "query": original_query,  # Giữ nguyên original query
             "query_type": query_type,
             "has_image": has_image,
             "has_text": has_text,
             "intent": intent,
+            "sub_queries": sub_queries,  # 🔥 Sub-queries cho từng intent
             "needs_knowledge_agent": routing_decision.get("use_knowledge", True),
             "needs_tool_agent": routing_decision.get("use_tool", False),
             "needs_reasoning": routing_decision.get("use_reasoning", False),
@@ -178,12 +175,152 @@ class RouterAgent(BaseAgent):
         else:
             return {"type": "unknown", "confidence": 0.0, "intents": []}
     
+    def _decompose_query(self, query: str, intent: Dict[str, Any]) -> Dict[str, str]:
+        """
+        🔥 GIẢI PHÁP 1: Tách query thành sub-queries theo intent
+        Ví dụ: "hình ảnh cá hồi và doanh thu theo tháng" 
+        → {"product_search": "hình ảnh cá hồi", "sales_statistics": "doanh thu cá hồi theo tháng"}
+        """
+        if not query:
+            return {}
+        
+        intent_type = intent.get("type", "unknown")
+        
+        # Nếu không phải multi-intent, trả về query gốc cho intent chính
+        if intent_type != "multi_intent":
+            return {intent_type: query}
+        
+        # Multi-intent: tách query
+        primary_intent = intent.get("primary_intent", "unknown")
+        secondary_intents = intent.get("secondary_intents", [])
+        
+        sub_queries = {}
+        query_lower = query.lower()
+        
+        # Extract product query (loại bỏ phần doanh thu/thống kê)
+        product_keywords = []
+        stats_keywords = []
+        
+        # Từ khóa liên quan đến product search
+        product_patterns = [
+            r"\b(hình\s*ảnh|ảnh|hình|image|picture)\b",
+            r"\b(lấy|hiển thị|show|display|tìm|tìm kiếm)\b",
+            r"\b(sản phẩm|món|rau|củ|trái cây|thịt|cá|gà|tôm)\b",
+        ]
+        
+        # Từ khóa liên quan đến sales statistics
+        stats_patterns = [
+            r"\b(doanh\s*thu|doanh\s*số|revenue|sales)\b",
+            r"\b(theo\s*tháng|monthly|thống\s*kê|statistics)\b",
+            r"\b(năm|year)\s*\d{4}\b",
+        ]
+        
+        # Tách query thành 2 phần
+        import re
+        
+        # Tìm phần product query (trước "và" hoặc "của")
+        product_part = query
+        if " và " in query_lower:
+            parts = query.split(" và ", 1)
+            product_part = parts[0].strip()
+            stats_part = parts[1].strip()
+        elif " của " in query_lower:
+            parts = query.split(" của ", 1)
+            product_part = parts[0].strip()
+            stats_part = parts[1].strip()
+        else:
+            # Nếu không có separator rõ ràng, extract keywords
+            words = query.split()
+            product_words = []
+            stats_words = []
+            
+            for word in words:
+                word_lower = word.lower()
+                is_stats = any(re.search(pattern, word_lower) for pattern in stats_patterns)
+                if is_stats:
+                    stats_words.append(word)
+                else:
+                    product_words.append(word)
+            
+            product_part = " ".join(product_words) if product_words else query
+            stats_part = " ".join(stats_words) if stats_words else ""
+        
+        # Normalize product query (loại bỏ stopwords không cần thiết)
+        product_query = self._normalize_product_query(product_part)
+        
+        # Normalize stats query
+        stats_query = self._normalize_stats_query(stats_part) if stats_part else ""
+        
+        # Gán sub-queries
+        if primary_intent in ["product_search", "product_info"]:
+            sub_queries["product_search"] = product_query
+        elif "product_search" in secondary_intents or "product_info" in secondary_intents:
+            sub_queries["product_search"] = product_query
+        
+        if primary_intent == "sales_statistics" or "sales_statistics" in secondary_intents:
+            if stats_query:
+                sub_queries["sales_statistics"] = stats_query
+            else:
+                # Nếu không extract được stats query, dùng query gốc
+                sub_queries["sales_statistics"] = query
+        
+        self.log(f"🔀 Decomposed query: {sub_queries}")
+        return sub_queries
+    
+    def _normalize_product_query(self, query: str) -> str:
+        """Normalize product query - loại bỏ từ khóa không liên quan đến product"""
+        import re
+        
+        # Loại bỏ từ khóa liên quan đến stats
+        stats_stopwords = [
+            r"\bdoanh\s*thu\b", r"\bdoanh\s*số\b", r"\btheo\s*tháng\b",
+            r"\bthống\s*kê\b", r"\bnăm\s*\d{4}\b", r"\brevenue\b", r"\bsales\b"
+        ]
+        
+        normalized = query
+        for pattern in stats_stopwords:
+            normalized = re.sub(pattern, "", normalized, flags=re.IGNORECASE)
+        
+        # Clean up multiple spaces
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+        
+        return normalized if normalized else query
+    
+    def _normalize_stats_query(self, query: str) -> str:
+        """Normalize stats query - giữ lại từ khóa liên quan đến stats"""
+        import re
+        
+        # Extract keywords liên quan đến stats
+        stats_keywords = []
+        words = query.split()
+        
+        stats_patterns = [
+            r"\b(doanh\s*thu|doanh\s*số|revenue|sales)\b",
+            r"\b(theo\s*tháng|monthly|thống\s*kê|statistics)\b",
+            r"\b(năm|year)\s*\d{4}\b",
+        ]
+        
+        for word in words:
+            word_lower = word.lower()
+            if any(re.search(pattern, word_lower) for pattern in stats_patterns):
+                stats_keywords.append(word)
+        
+        # Thêm product name nếu có (để tool agent biết query cho sản phẩm nào)
+        # Extract product name từ query gốc
+        product_name_match = re.search(r'\b(cá\s*hồi|thịt\s*bò|rau\s*cải|gà|tôm)\b', query, re.IGNORECASE)
+        if product_name_match:
+            stats_keywords.append(product_name_match.group(0))
+        
+        normalized = " ".join(stats_keywords) if stats_keywords else query
+        return normalized.strip()
+    
     def _make_routing_decision(
         self,
         query_type: str,
         intent: Dict[str, Any],
         has_image: bool,
-        has_text: bool
+        has_text: bool,
+        sub_queries: Optional[Dict[str, str]] = None
     ) -> Dict[str, Any]:
         """Quyết định routing dựa trên query type và intent - HỖ TRỢ MULTI-INTENT"""
         
@@ -228,7 +365,8 @@ class RouterAgent(BaseAgent):
                 "use_reasoning": use_reasoning,
                 "priority": priority,
                 "is_multi_intent": True,
-                "intents": [primary_intent] + secondary_intents
+                "intents": [primary_intent] + secondary_intents,
+                "sub_queries": sub_queries or {}  # 🔥 Sub-queries cho từng intent
             }
         
         # Routing rules

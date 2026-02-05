@@ -5,9 +5,15 @@ import re
 from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 from contextlib import contextmanager
+from functools import lru_cache
 import pyodbc
+import hashlib
 
 logger = logging.getLogger(__name__)
+
+# ⚡ Cache cho function results (TTL: 5 phút)
+_function_cache: Dict[str, tuple] = {}  # key: (result, expiry_time)
+CACHE_TTL_SECONDS = 300  # 5 phút
 
 
 class FunctionHandler:
@@ -453,8 +459,36 @@ class FunctionHandler:
                 "error": f"Lỗi khi lấy thống kê doanh thu: {str(ex)}"
             }, ensure_ascii=False)
     
+    def _get_cache_key(self, function_name: str, args: Dict[str, Any]) -> str:
+        """Tạo cache key từ function name và arguments"""
+        # Sort args để đảm bảo cùng arguments tạo cùng key
+        sorted_args = json.dumps(args, sort_keys=True, ensure_ascii=False)
+        cache_str = f"{function_name}:{sorted_args}"
+        return hashlib.md5(cache_str.encode()).hexdigest()
+    
+    def _get_cached_result(self, cache_key: str) -> Optional[str]:
+        """Lấy kết quả từ cache nếu còn hiệu lực"""
+        global _function_cache
+        if cache_key in _function_cache:
+            result, expiry_time = _function_cache[cache_key]
+            if datetime.now() < expiry_time:
+                logger.debug(f"✅ Cache hit for key: {cache_key[:8]}...")
+                return result
+            else:
+                # Cache expired
+                del _function_cache[cache_key]
+                logger.debug(f"⏰ Cache expired for key: {cache_key[:8]}...")
+        return None
+    
+    def _set_cached_result(self, cache_key: str, result: str, ttl_seconds: int = CACHE_TTL_SECONDS):
+        """Lưu kết quả vào cache"""
+        global _function_cache
+        expiry_time = datetime.now() + timedelta(seconds=ttl_seconds)
+        _function_cache[cache_key] = (result, expiry_time)
+        logger.debug(f"💾 Cached result for key: {cache_key[:8]}... (TTL: {ttl_seconds}s)")
+    
     async def _get_product_monthly_revenue(self, args: Dict[str, Any]) -> str:
-        """Lấy doanh thu theo tháng của một sản phẩm cụ thể"""
+        """Lấy doanh thu theo tháng của một sản phẩm cụ thể (⚡ CACHED)"""
         try:
             product_id = args.get("productId")
             year = args.get("year")
@@ -468,6 +502,12 @@ class FunctionHandler:
                 year = datetime.now().year
             elif not isinstance(year, int) or year < 2000 or year > 2100:
                 year = datetime.now().year
+            
+            # ⚡ Kiểm tra cache
+            cache_key = self._get_cache_key("getProductMonthlyRevenue", {"productId": product_id, "year": year})
+            cached_result = self._get_cached_result(cache_key)
+            if cached_result:
+                return cached_result
             
             with self._get_connection() as conn:
                 cursor = conn.cursor()
@@ -553,7 +593,12 @@ class FunctionHandler:
                 "message": f"Doanh thu của {product_name} năm {year}: {total_revenue:,.0f} VND"
             }
             
-            return json.dumps(result, ensure_ascii=False)
+            result_json = json.dumps(result, ensure_ascii=False)
+            
+            # ⚡ Lưu vào cache
+            self._set_cached_result(cache_key, result_json)
+            
+            return result_json
             
         except Exception as ex:
             logger.error(f"Error in _get_product_monthly_revenue: {str(ex)}", exc_info=True)

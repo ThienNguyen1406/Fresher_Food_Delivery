@@ -87,4 +87,18 @@ class Settings:
     # ========== App (Ứng dụng) ==========
     # Base URL của ứng dụng backend
     APP_BASE_URL = os.getenv("APP_BASE_URL", "https://localhost:7240")
+    
+    # ========== Performance Optimizations ==========
+    # Enable caching cho Entity Resolver và Knowledge Agent (mặc định: true)
+    ENABLE_AGENT_CACHE = os.getenv("ENABLE_AGENT_CACHE", "true").lower() == "true"
+    # Cache size cho LRU cache (mặc định: 1000)
+    AGENT_CACHE_SIZE = int(os.getenv("AGENT_CACHE_SIZE", "1000"))
+    # Enable Critic Agent (mặc định: false để tăng tốc)
+    ENABLE_CRITIC_AGENT = os.getenv("ENABLE_CRITIC_AGENT", "false").lower() == "true"
+    # Confidence threshold để bật Critic Agent (0.0-1.0, mặc định: 0.7)
+    CRITIC_CONFIDENCE_THRESHOLD = float(os.getenv("CRITIC_CONFIDENCE_THRESHOLD", "0.7"))
+    # Use merged Reasoning+Synthesis Agent thay vì 2 agents riêng (mặc định: true)
+    USE_MERGED_REASONING_SYNTHESIS = os.getenv("USE_MERGED_REASONING_SYNTHESIS", "true").lower() == "true"
+    # Enable parallel execution cho Tool Agent và Reasoning Agent (mặc định: true)
+    ENABLE_PARALLEL_AGENTS = os.getenv("ENABLE_PARALLEL_AGENTS", "true").lower() == "true"
 

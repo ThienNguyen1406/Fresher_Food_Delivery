@@ -19,17 +19,6 @@ class BaseAgent(ABC):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Process the current state and return updated state
-        
-        Args:
-            state: Current state dictionary containing:
-                - query: User query
-                - query_type: Type of query (text, image, hybrid, chat)
-                - image_data: Optional image data
-                - context: Optional context
-                - results: Optional results from previous agents
-                - reasoning: Optional reasoning steps
-                - final_answer: Optional final answer
-        
         Returns:
             Updated state dictionary
         """
