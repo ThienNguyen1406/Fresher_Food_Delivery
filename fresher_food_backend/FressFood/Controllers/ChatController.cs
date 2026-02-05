@@ -1022,10 +1022,333 @@ namespace FressFood.Controllers
                                         }
                                     }
                                     
-                                    // Kiểm tra nếu user yêu cầu ảnh sản phẩm
-                                    if (_chatbotService.IsImageRequest(capturedNoiDung))
+                                    // 🔥 KIỂM TRA MULTI-INTENT: Hình ảnh + Doanh thu/Thống kê
+                                    var questionLower = capturedNoiDung.ToLower();
+                                    var hasImageRequest = _chatbotService.IsImageRequest(capturedNoiDung);
+                                    var hasRevenueRequest = questionLower.Contains("doanh thu") || questionLower.Contains("doanh số") || 
+                                                           questionLower.Contains("thống kê") || questionLower.Contains("theo tháng");
+                                    
+                                    _logger.LogInformation($"[Task.Run] Intent detection - hasImageRequest: {hasImageRequest}, hasRevenueRequest: {hasRevenueRequest}, question: '{capturedNoiDung}'");
+                                    
+                                    // Nếu có CẢ hình ảnh VÀ doanh thu → dùng Multi-Agent API
+                                    if (hasImageRequest && hasRevenueRequest)
                                     {
-                                        _logger.LogInformation($"[Task.Run] User requested product image: '{capturedNoiDung}'");
+                                        _logger.LogInformation($"[Task.Run] ✅ Multi-intent detected: Image + Revenue. Using Multi-Agent API: '{capturedNoiDung}'");
+                                        
+                                        try
+                                        {
+                                            // Gọi Multi-Agent API
+                                            var multiAgentResponse = await _ragService.MultiAgentQueryAsync(
+                                                query: capturedNoiDung,
+                                                categoryId: null,
+                                                topK: 5,
+                                                enableCritic: true
+                                            );
+                                            
+                                            if (multiAgentResponse != null && !string.IsNullOrEmpty(multiAgentResponse.FinalAnswer))
+                                            {
+                                                _logger.LogInformation($"[Task.Run] Multi-Agent response received. FinalAnswer length: {multiAgentResponse.FinalAnswer.Length}, KnowledgeResults count: {multiAgentResponse.KnowledgeResults?.Count ?? 0}");
+                                                
+                                                // Fetch product images từ knowledge_results
+                                                var productsList = new List<object>();
+                                                
+                                                if (multiAgentResponse.KnowledgeResults != null && multiAgentResponse.KnowledgeResults.Count > 0)
+                                                {
+                                                    _logger.LogInformation($"[Task.Run] Processing {multiAgentResponse.KnowledgeResults.Count} knowledge results");
+                                                    
+                                                    // 🔥 TỐI ƯU: Dùng SearchProductsForChatAsync để fetch images (đã có logic sẵn)
+                                                    // Thay vì tự fetch từ database, dùng API đã có
+                                                    Dictionary<string, (string ImageData, string ImageMimeType)> productImages = new();
+                                                    
+                                                    // Fetch images từ SearchProductsForChatAsync cho từng product
+                                                    // Lưu ý: SearchProductsForChatAsync tìm theo product name, không phải productId
+                                                    // Nên cần dùng product_name từ knowledge_results
+                                                    foreach (var product in multiAgentResponse.KnowledgeResults)
+                                                    {
+                                                        var productId = product.ContainsKey("product_id") ? product["product_id"]?.ToString() : null;
+                                                        var productName = product.ContainsKey("product_name") ? product["product_name"]?.ToString() : null;
+                                                        
+                                                        if (string.IsNullOrEmpty(productId) || string.IsNullOrEmpty(productName))
+                                                        {
+                                                            continue;
+                                                        }
+                                                        
+                                                        try
+                                                        {
+                                                            _logger.LogInformation($"[Task.Run] Fetching image via SearchProductsForChatAsync for product {productId} (name: {productName})");
+                                                            // Dùng product name để search (API tìm theo name, không phải ID)
+                                                            var productsResponse = await _ragService.SearchProductsForChatAsync(productName, categoryId: null, topK: 5);
+                                                            
+                                                            if (productsResponse != null && productsResponse.Products != null)
+                                                            {
+                                                                // Tìm product có cùng productId hoặc productName
+                                                                var productWithImage = productsResponse.Products.FirstOrDefault(p => 
+                                                                    (p.ProductId == productId || p.ProductName.Contains(productName, StringComparison.OrdinalIgnoreCase)) 
+                                                                    && !string.IsNullOrEmpty(p.ImageData));
+                                                                
+                                                                if (productWithImage != null)
+                                                                {
+                                                                    productImages[productId] = (productWithImage.ImageData, productWithImage.ImageMimeType ?? "image/jpeg");
+                                                                    _logger.LogInformation($"[Task.Run] ✅ Fetched image for product {productId} via SearchProductsForChatAsync ({productWithImage.ImageData.Length} chars)");
+                                                                }
+                                                                else
+                                                                {
+                                                                    _logger.LogWarning($"[Task.Run] No image found for product {productId} ({productName}) via SearchProductsForChatAsync. Products found: {productsResponse.Products.Count}, HasImages: {productsResponse.HasImages}");
+                                                                    
+                                                                    // 🔥 FALLBACK: Nếu SearchProductsForChatAsync không có image, thử fetch trực tiếp từ database
+                                                                    try
+                                                                    {
+                                                                        _logger.LogInformation($"[Task.Run] Fallback: Fetching image directly from database for product {productId}");
+                                                                        using (var imgConnection = new SqlConnection(capturedConnectionString))
+                                                                        {
+                                                                            await imgConnection.OpenAsync();
+                                                                            var imgQuery = "SELECT Anh FROM SanPham WHERE MaSanPham = @ProductId AND (IsDeleted = 0 OR IsDeleted IS NULL)";
+                                                                            using (var imgCommand = new SqlCommand(imgQuery, imgConnection))
+                                                                            {
+                                                                                imgCommand.Parameters.AddWithValue("@ProductId", productId);
+                                                                                var imgResult = await imgCommand.ExecuteScalarAsync();
+                                                                                if (imgResult != null && imgResult != DBNull.Value)
+                                                                                {
+                                                                                    var imageUrl = imgResult.ToString();
+                                                                                    if (!string.IsNullOrEmpty(imageUrl) && Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri))
+                                                                                    {
+                                                                                        using (var httpClient = new HttpClient())
+                                                                                        {
+                                                                                            httpClient.Timeout = TimeSpan.FromSeconds(10);
+                                                                                            var imageResponse = await httpClient.GetAsync(uri);
+                                                                                            if (imageResponse.IsSuccessStatusCode)
+                                                                                            {
+                                                                                                var imageBytes = await imageResponse.Content.ReadAsByteArrayAsync();
+                                                                                                var imageDataBase64 = Convert.ToBase64String(imageBytes);
+                                                                                                var imageMimeType = imageResponse.Content.Headers.ContentType?.MediaType ?? "image/jpeg";
+                                                                                                productImages[productId] = (imageDataBase64, imageMimeType);
+                                                                                                _logger.LogInformation($"[Task.Run] ✅ Fallback: Successfully downloaded image from database URL for product {productId} ({imageBytes.Length} bytes)");
+                                                                                            }
+                                                                                            else
+                                                                                            {
+                                                                                                _logger.LogWarning($"[Task.Run] Fallback: Failed to download image from URL: HTTP {imageResponse.StatusCode}");
+                                                                                            }
+                                                                                        }
+                                                                                    }
+                                                                                    else
+                                                                                    {
+                                                                                        _logger.LogWarning($"[Task.Run] Fallback: Invalid image URL format: {imageUrl}");
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    }
+                                                                    catch (Exception fallbackEx)
+                                                                    {
+                                                                        _logger.LogWarning(fallbackEx, $"[Task.Run] Fallback database fetch failed for product {productId}: {fallbackEx.Message}");
+                                                                    }
+                                                                }
+                                                            }
+                                                            else
+                                                            {
+                                                                _logger.LogWarning($"[Task.Run] SearchProductsForChatAsync returned null for product {productId} ({productName})");
+                                                            }
+                                                        }
+                                                        catch (Exception imgEx)
+                                                        {
+                                                            _logger.LogWarning(imgEx, $"[Task.Run] Error fetching image for product {productId} via SearchProductsForChatAsync: {imgEx.Message}");
+                                                        }
+                                                    }
+                                                    
+                                                    // Build products list với images
+                                                    foreach (var product in multiAgentResponse.KnowledgeResults)
+                                                    {
+                                                        var productId = product.ContainsKey("product_id") ? product["product_id"]?.ToString() : null;
+                                                        var productName = product.ContainsKey("product_name") ? product["product_name"]?.ToString() : "N/A";
+                                                        var categoryId = product.ContainsKey("category_id") ? product["category_id"]?.ToString() : "";
+                                                        var categoryName = product.ContainsKey("category_name") ? product["category_name"]?.ToString() : null;
+                                                        var price = product.ContainsKey("price") && product["price"] != null ? 
+                                                                     (product["price"] is double d ? d : (product["price"] is System.Text.Json.JsonElement je && je.ValueKind == System.Text.Json.JsonValueKind.Number ? je.GetDouble() : (double?)null)) : 
+                                                                     (double?)null;
+                                                        var similarity = product.ContainsKey("similarity") && product["similarity"] != null ?
+                                                                         (product["similarity"] is double sim ? sim : (product["similarity"] is System.Text.Json.JsonElement simJe && simJe.ValueKind == System.Text.Json.JsonValueKind.Number ? simJe.GetDouble() : 0.0)) :
+                                                                         0.0;
+                                                        
+                                                        if (!string.IsNullOrEmpty(productId))
+                                                        {
+                                                            // Lấy image từ dictionary
+                                                            string? imageData = null;
+                                                            string? imageMimeType = null;
+                                                            
+                                                            if (productImages.ContainsKey(productId))
+                                                            {
+                                                                imageData = productImages[productId].ImageData;
+                                                                imageMimeType = productImages[productId].ImageMimeType;
+                                                            }
+                                                            
+                                                            _logger.LogInformation($"[Task.Run] Product {productId} - ImageData: {(string.IsNullOrEmpty(imageData) ? "NULL" : $"{imageData.Length} chars")}, MimeType: {imageMimeType ?? "NULL"}");
+                                                            
+                                                            productsList.Add(new
+                                                            {
+                                                                productId = productId,
+                                                                productName = productName,
+                                                                categoryId = categoryId,
+                                                                categoryName = categoryName,
+                                                                price = price,
+                                                                description = (string?)null,
+                                                                imageData = imageData,
+                                                                imageMimeType = imageMimeType,
+                                                                similarity = similarity
+                                                            });
+                                                        }
+                                                        else
+                                                        {
+                                                            _logger.LogWarning($"[Task.Run] Product ID is null or empty, skipping product: {productName}");
+                                                        }
+                                                    }
+                                                }
+                                                else
+                                                {
+                                                    _logger.LogWarning($"[Task.Run] No knowledge results found in Multi-Agent response");
+                                                }
+                                                
+                                                // 🔥 FALLBACK: Nếu không có image data, thử fetch từ SearchProductsForChatAsync
+                                                // Kiểm tra từng product và fetch image nếu thiếu
+                                                for (int i = 0; i < productsList.Count; i++)
+                                                {
+                                                    var product = productsList[i] as System.Collections.Generic.IDictionary<string, object>;
+                                                    if (product != null)
+                                                    {
+                                                        var hasImage = product.ContainsKey("imageData") && 
+                                                                       product["imageData"] != null && 
+                                                                       !string.IsNullOrEmpty(product["imageData"].ToString());
+                                                        
+                                                        if (!hasImage)
+                                                        {
+                                                            var productId = product.ContainsKey("productId") ? product["productId"]?.ToString() : null;
+                                                            var productName = product.ContainsKey("productName") ? product["productName"]?.ToString() : null;
+                                                            
+                                                            _logger.LogInformation($"[Task.Run] ⚠️ Product {productId} ({productName}) missing image, trying fallback...");
+                                                            
+                                                            try
+                                                            {
+                                                                // Thử fetch từ SearchProductsForChatAsync
+                                                                var searchQuery = productName ?? productId ?? capturedNoiDung;
+                                                                var productsResponse = await _ragService.SearchProductsForChatAsync(searchQuery, categoryId: null, topK: 5);
+                                                                
+                                                                if (productsResponse != null && productsResponse.Products != null)
+                                                                {
+                                                                    // Tìm product có cùng productId
+                                                                    var matchingProduct = productsResponse.Products.FirstOrDefault(p => 
+                                                                        p.ProductId == productId || 
+                                                                        (productName != null && p.ProductName.Contains(productName, StringComparison.OrdinalIgnoreCase)));
+                                                                    
+                                                                    if (matchingProduct != null && !string.IsNullOrEmpty(matchingProduct.ImageData))
+                                                                    {
+                                                                        product["imageData"] = matchingProduct.ImageData;
+                                                                        product["imageMimeType"] = matchingProduct.ImageMimeType;
+                                                                        _logger.LogInformation($"[Task.Run] ✅ Fallback: Successfully fetched image for product {productId} ({matchingProduct.ImageData.Length} chars)");
+                                                                    }
+                                                                    else if (productsResponse.Products.Count > 0)
+                                                                    {
+                                                                        // Nếu không tìm thấy exact match, dùng product đầu tiên có image
+                                                                        var productWithImage = productsResponse.Products.FirstOrDefault(p => !string.IsNullOrEmpty(p.ImageData));
+                                                                        if (productWithImage != null)
+                                                                        {
+                                                                            product["imageData"] = productWithImage.ImageData;
+                                                                            product["imageMimeType"] = productWithImage.ImageMimeType;
+                                                                            _logger.LogInformation($"[Task.Run] ✅ Fallback: Using image from similar product ({productWithImage.ImageData.Length} chars)");
+                                                                        }
+                                                                    }
+                                                                }
+                                                            }
+                                                            catch (Exception fallbackEx)
+                                                            {
+                                                                _logger.LogWarning(fallbackEx, $"[Task.Run] Fallback image fetch failed for product {productId}: {fallbackEx.Message}");
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                // Tạo tin nhắn bot với products + analytics
+                                                var hasImages = productsList.Any(p => 
+                                                {
+                                                    var dict = p as System.Collections.Generic.IDictionary<string, object>;
+                                                    if (dict != null && dict.ContainsKey("imageData"))
+                                                    {
+                                                        var imgData = dict["imageData"];
+                                                        return imgData != null && !string.IsNullOrEmpty(imgData.ToString());
+                                                    }
+                                                    return false;
+                                                });
+                                                
+                                                _logger.LogInformation($"[Task.Run] Products list: {productsList.Count} products, hasImages: {hasImages}");
+                                                
+                                                // Debug: Log từng product để kiểm tra imageData
+                                                foreach (var p in productsList)
+                                                {
+                                                    var dict = p as System.Collections.Generic.IDictionary<string, object>;
+                                                    if (dict != null)
+                                                    {
+                                                        var pid = dict.ContainsKey("productId") ? dict["productId"]?.ToString() : "N/A";
+                                                        var hasImg = dict.ContainsKey("imageData") && dict["imageData"] != null && !string.IsNullOrEmpty(dict["imageData"].ToString());
+                                                        var imgLen = dict.ContainsKey("imageData") && dict["imageData"] != null ? dict["imageData"].ToString()!.Length : 0;
+                                                        _logger.LogInformation($"[Task.Run] Product {pid}: hasImageData={hasImg}, imageDataLength={imgLen}");
+                                                    }
+                                                }
+                                                
+                                                var productsJson = System.Text.Json.JsonSerializer.Serialize(new
+                                                {
+                                                    message = multiAgentResponse.FinalAnswer,
+                                                    hasImages = hasImages,
+                                                    products = productsList
+                                                }, new System.Text.Json.JsonSerializerOptions 
+                                                { 
+                                                    DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.Never,
+                                                    WriteIndented = false
+                                                });
+                                                
+                                                _logger.LogInformation($"[Task.Run] Products JSON (first 500 chars): {productsJson.Substring(0, Math.Min(500, productsJson.Length))}...");
+                                                
+                                                var botMessageContent = $"{multiAgentResponse.FinalAnswer}\n\n[PRODUCTS_DATA]{productsJson}[/PRODUCTS_DATA]";
+                                                
+                                                _logger.LogInformation($"[Task.Run] Bot message content length: {botMessageContent.Length}, Products JSON length: {productsJson.Length}, hasImages in JSON: {hasImages}");
+                                                
+                                                // Lưu tin nhắn bot vào database
+                                                using (var botConnection = new SqlConnection(capturedConnectionString))
+                                                {
+                                                    await botConnection.OpenAsync();
+                                                    string insertBotMessageQuery = @"
+                                                        INSERT INTO Message (MaTinNhan, MaChat, MaNguoiGui, LoaiNguoiGui, NoiDung, DaDoc, NgayGui)
+                                                        VALUES (@MaTinNhan, @MaChat, @MaNguoiGui, @LoaiNguoiGui, @NoiDung, @DaDoc, @NgayGui)";
+                                                    
+                                                    using (var botCommand = new SqlCommand(insertBotMessageQuery, botConnection))
+                                                    {
+                                                        botCommand.Parameters.AddWithValue("@MaTinNhan", $"MSG-{Guid.NewGuid().ToString().Substring(0, 8)}");
+                                                        botCommand.Parameters.AddWithValue("@MaChat", capturedMaChat);
+                                                        botCommand.Parameters.AddWithValue("@MaNguoiGui", "BOT");
+                                                        botCommand.Parameters.AddWithValue("@LoaiNguoiGui", "Bot");
+                                                        botCommand.Parameters.AddWithValue("@NoiDung", botMessageContent);
+                                                        botCommand.Parameters.AddWithValue("@DaDoc", false);
+                                                        botCommand.Parameters.AddWithValue("@NgayGui", DateTime.Now);
+                                                        await botCommand.ExecuteNonQueryAsync();
+                                                    }
+                                                }
+                                                
+                                                _logger.LogInformation($"[Task.Run] ✅ Multi-Agent response saved with {productsList.Count} products (hasImages: {hasImages})");
+                                                return; // Exit early
+                                            }
+                                            else
+                                            {
+                                                _logger.LogWarning($"[Task.Run] Multi-Agent response is null or empty. Response: {multiAgentResponse?.FinalAnswer ?? "NULL"}");
+                                            }
+                                        }
+                                        catch (Exception multiEx)
+                                        {
+                                            _logger.LogError(multiEx, $"[Task.Run] Error in Multi-Agent query: {multiEx.Message}");
+                                            // Fall through to normal processing
+                                        }
+                                    }
+                                    
+                                    // Kiểm tra nếu user chỉ yêu cầu ảnh sản phẩm (không có doanh thu)
+                                    if (hasImageRequest && !hasRevenueRequest)
+                                    {
+                                        _logger.LogInformation($"[Task.Run] User requested product image only: '{capturedNoiDung}'");
                                         
                                         try
                                         {

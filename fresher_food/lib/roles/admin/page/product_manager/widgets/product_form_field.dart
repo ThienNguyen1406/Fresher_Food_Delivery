@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ProductFormField extends StatelessWidget {
   final TextEditingController controller;
@@ -22,10 +23,21 @@ class ProductFormField extends StatelessWidget {
       controller: controller,
       keyboardType: maxLines > 1 ? TextInputType.multiline : (keyboardType ?? TextInputType.text),
       maxLines: maxLines,
+      minLines: maxLines > 1 ? 3 : 1,
       enableInteractiveSelection: true,
-      enableSuggestions: (keyboardType == TextInputType.text || keyboardType == null) && maxLines == 1,
-      autocorrect: (keyboardType == TextInputType.text || keyboardType == null) && maxLines == 1,
+      // 🔥 FIX: Bật suggestions và autocorrect cho tiếng Việt
+      enableSuggestions: true,
+      autocorrect: true,
+      // 🔥 FIX: Không giới hạn text input, cho phép tất cả ký tự Unicode (bao gồm tiếng Việt)
+      inputFormatters: keyboardType == TextInputType.number 
+          ? [FilteringTextInputFormatter.digitsOnly]
+          : null, // Không filter cho text input, cho phép tiếng Việt
       textInputAction: maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+      // 🔥 FIX: Không capitalize tự động để giữ nguyên tiếng Việt
+      textCapitalization: TextCapitalization.none,
+      // 🔥 FIX: Bật smart dashes và quotes cho tiếng Việt
+      smartDashesType: SmartDashesType.enabled,
+      smartQuotesType: SmartQuotesType.enabled,
       decoration: InputDecoration(
         labelText: label,
         prefixIcon: Icon(icon, color: const Color(0xFF2E7D32)),
