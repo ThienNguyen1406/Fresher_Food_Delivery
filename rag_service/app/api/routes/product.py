@@ -24,6 +24,56 @@ from app.services.embedding import EmbeddingService
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+def _split_multi_entity(query: str) -> List[str]:
+    if not query:
+        return []
+    import re
+    parts = re.split(r"\s+(?:và|va|,|&|;)\s+|,|;|&", query, flags=re.IGNORECASE)
+    cleaned = [p.strip() for p in parts if p and p.strip()]
+    # De-dup while preserving order
+    seen = set()
+    result = []
+    for p in cleaned:
+        key = p.lower()
+        if key not in seen:
+            seen.add(key)
+            result.append(p)
+    return result
+
+def _build_chat_message(products: List[Dict], query: str) -> str:
+    if products:
+        if len(products) == 1:
+            product = products[0]
+            description = product.get('description', '')
+            if description:
+                description_short = description[:200] + ('...' if len(description) > 150 else '')
+                return f"Tôi tìm thấy  sản phẩm: {product['product_name']}.\n\n{description_short}"
+            return f"Tôi tìm thấy sản phẩm: {product['product_name']}."
+        if len(products) == 2:
+            product1 = products[0]
+            product2 = products[1]
+            desc1 = product1.get('description', '')[:100] + ('...' if len(product1.get('description', '')) > 100 else '') if product1.get('description') else ''
+            desc2 = product2.get('description', '')[:100] + ('...' if len(product2.get('description', '')) > 100 else '') if product2.get('description') else ''
+            
+            message = f"Tôi tìm thấy 2 sản phẩm:\n\n1. {product1['product_name']}"
+            if desc1:
+                message += f"\n   {desc1}"
+            message += f"\n\n2. {product2['product_name']}"
+            if desc2:
+                message += f"\n   {desc2}"
+            return message
+        product_names = [p['product_name'] for p in products[:3]]
+        message = f"Tôi tìm thấy {len(products)} sản phẩm: {', '.join(product_names)}"
+        if len(products) > 3:
+            message += f" và {len(products) - 3} sản phẩm khác."
+        
+        # Thêm description cho sản phẩm đầu tiên
+        if products[0].get('description'):
+            desc = products[0]['description'][:100] + ('...' if len(products[0]['description']) > 100 else '')
+            message += f"\n\n{products[0]['product_name']}: {desc}"
+        return message
+    return f"Xin lỗi, tôi không tìm thấy sản phẩm nào liên quan đến '{query}'. Bạn có thể thử tìm kiếm với từ khóa khác."
+
 # Models
 class ProductData(BaseModel):
     product_id: Optional[str] = None
@@ -378,6 +428,59 @@ async def search_products_for_chat(
     ),
     text_embedding_service: EmbeddingService = Depends(get_embedding_service),
     vector_store: ImageVectorStore = Depends(get_image_vector_store)
+):
+    # Tách multi-entity (ví dụ: "thịt bò và cá hồi") và search từng phần
+    parts = _split_multi_entity(query)
+    if len(parts) > 1:
+        merged = {}
+        extras = []
+        has_images = False
+        missing_parts = []
+        for part in parts:
+            resp = await _search_products_for_chat_single(
+                query=part,
+                category_id=category_id,
+                top_k=top_k,
+                min_similarity=min_similarity,
+                text_embedding_service=text_embedding_service,
+                vector_store=vector_store
+            )
+            has_images = has_images or resp.has_images
+            if not resp.products:
+                missing_parts.append(part)
+            for p in resp.products:
+                pid = p.get("product_id")
+                if pid:
+                    if pid not in merged:
+                        merged[pid] = p
+                else:
+                    extras.append(p)
+        products = list(merged.values()) + extras
+        message = _build_chat_message(products, " và ".join(parts))
+        if missing_parts:
+            missing_text = ", ".join(missing_parts)
+            if products:
+                message += f"\n\nHiện tại tôi chưa tìm thấy sản phẩm cho: {missing_text}."
+            else:
+                message = f"Xin lỗi, tôi không tìm thấy sản phẩm nào liên quan đến '{missing_text}'. Bạn có thể thử từ khóa khác."
+        return ChatProductResponse(products=products, message=message, has_images=has_images)
+    
+    return await _search_products_for_chat_single(
+        query=query,
+        category_id=category_id,
+        top_k=top_k,
+        min_similarity=min_similarity,
+        text_embedding_service=text_embedding_service,
+        vector_store=vector_store
+    )
+
+async def _search_products_for_chat_single(
+    query: str,
+    category_id: Optional[str],
+    top_k: int,
+    min_similarity: Optional[float],
+    text_embedding_service: EmbeddingService,
+    vector_store: ImageVectorStore
 ):
     """
     Search products - Trả về products với image URLs
@@ -820,40 +923,7 @@ async def search_products_for_chat(
         logger.info(f"✅ Chat search tìm thấy {len(products)} products trong {elapsed_time:.2f} giây")
         
         # Tạo message cho chatbot (tự nhiên, đúng ngữ cảnh Việt Nam) - thêm description
-        if products:
-            if len(products) == 1:
-                product = products[0]
-                description = product.get('description', '')
-                # Giới hạn description tối đa 150 ký tự
-                if description:
-                    description_short = description[:150] + ('...' if len(description) > 150 else '')
-                    message = f"Tôi tìm thấy 1 sản phẩm: {product['product_name']}.\n\n{description_short}"
-                else:
-                    message = f"Tôi tìm thấy 1 sản phẩm: {product['product_name']}."
-            elif len(products) == 2:
-                product1 = products[0]
-                product2 = products[1]
-                desc1 = product1.get('description', '')[:100] + ('...' if len(product1.get('description', '')) > 100 else '') if product1.get('description') else ''
-                desc2 = product2.get('description', '')[:100] + ('...' if len(product2.get('description', '')) > 100 else '') if product2.get('description') else ''
-                
-                message = f"Tôi tìm thấy 2 sản phẩm:\n\n1. {product1['product_name']}"
-                if desc1:
-                    message += f"\n   {desc1}"
-                message += f"\n\n2. {product2['product_name']}"
-                if desc2:
-                    message += f"\n   {desc2}"
-            else:
-                product_names = [p['product_name'] for p in products[:3]]
-                message = f"Tôi tìm thấy {len(products)} sản phẩm: {', '.join(product_names)}"
-                if len(products) > 3:
-                    message += f" và {len(products) - 3} sản phẩm khác."
-                
-                # Thêm description cho sản phẩm đầu tiên
-                if products[0].get('description'):
-                    desc = products[0]['description'][:100] + ('...' if len(products[0]['description']) > 100 else '')
-                    message += f"\n\n{products[0]['product_name']}: {desc}"
-        else:
-            message = f"Xin lỗi, tôi không tìm thấy sản phẩm nào liên quan đến '{query}'. Bạn có thể thử tìm kiếm với từ khóa khác."
+        message = _build_chat_message(products, query)
         
         return ChatProductResponse(
             products=products,

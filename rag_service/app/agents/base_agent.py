@@ -1,6 +1,3 @@
-"""
-Base Agent class - Abstract base class for all agents
-"""
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 import logging

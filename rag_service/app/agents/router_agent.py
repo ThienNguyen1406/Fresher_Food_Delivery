@@ -46,7 +46,7 @@ class RouterAgent(BaseAgent):
         original_query = query or user_description
         intent = self._analyze_intent(original_query)
         
-        # 🔥 GIẢI PHÁP 1: Decompose query thành sub-queries theo intent
+        # Decompose query thành sub-queries theo intent
         sub_queries = self._decompose_query(original_query, intent)
         
         # Quyết định routing
@@ -177,9 +177,7 @@ class RouterAgent(BaseAgent):
     
     def _decompose_query(self, query: str, intent: Dict[str, Any]) -> Dict[str, str]:
         """
-        🔥 GIẢI PHÁP 1: Tách query thành sub-queries theo intent
-        Ví dụ: "hình ảnh cá hồi và doanh thu theo tháng" 
-        → {"product_search": "hình ảnh cá hồi", "sales_statistics": "doanh thu cá hồi theo tháng"}
+         Tách query thành sub-queries theo intent
         """
         if not query:
             return {}
@@ -197,7 +195,7 @@ class RouterAgent(BaseAgent):
         sub_queries = {}
         query_lower = query.lower()
         
-        # Extract product query (loại bỏ phần doanh thu/thống kê)
+        # Extract product query 
         product_keywords = []
         stats_keywords = []
         

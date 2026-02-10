@@ -13,10 +13,7 @@ logger = logging.getLogger(__name__)
 
 class EntityResolverAgent(BaseAgent):
     """
-    Entity Resolver Agent:
-    - Extract entity (tên sản phẩm) từ query
-    - Normalize entity (synonym mapping)
-    - Validate entity có tồn tại trong DB không
+    Entity Resolver Agents
     """
     
     def __init__(self):
@@ -77,7 +74,6 @@ class EntityResolverAgent(BaseAgent):
     def _extract_entity_impl(self, query: str) -> str:
         """
         Extract entity (tên sản phẩm) từ query
-        Ví dụ: "hình ảnh cá hồi" → "cá hồi"
         """
         if not query:
             return ""
@@ -124,7 +120,6 @@ class EntityResolverAgent(BaseAgent):
     def _normalize_entity_impl(self, entity: str) -> str:
         """
         Normalize entity bằng synonym map
-        Ví dụ: "salmon" → "cá hồi"
         """
         if not entity:
             return entity

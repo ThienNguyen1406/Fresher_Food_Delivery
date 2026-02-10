@@ -25,12 +25,6 @@ class ReasoningAgent(BaseAgent):
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
         Thực hiện reasoning và lập kế hoạch
-        
-        Returns:
-            Updated state with:
-                - reasoning_plan: Kế hoạch xử lý
-                - reasoning_steps: Các bước suy luận
-                - reasoning_context: Context cho synthesis
         """
         query = state.get("query", "").strip()
         intent = state.get("intent", {})

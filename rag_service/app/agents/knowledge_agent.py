@@ -18,9 +18,6 @@ logger = logging.getLogger(__name__)
 class KnowledgeAgent(BaseAgent):
     """
     Knowledge Agent thực hiện RAG search:
-    - Text search: Tạo text embedding và search trong vector store
-    - Image search: Tạo image embedding và search trong vector store
-    - Hybrid search: Kết hợp cả hai
     """
     
     def __init__(
@@ -76,10 +73,10 @@ class KnowledgeAgent(BaseAgent):
                 # Text search
                 search_text = query or user_description
                 if search_text:
-                    # 🔥 GIẢI PHÁP 2: Normalize query - loại bỏ từ khóa không liên quan đến product
+                    # Normalize query - loại bỏ từ khóa không liên quan đến product
                     normalized_query = self._normalize_product_query_for_search(search_text)
                     
-                    # 🔥 PERFORMANCE: Check cache first
+                    #  PERFORMANCE: Check cache first
                     cache_key = self._get_cache_key(normalized_query, category_id, top_k)
                     if self._search_cache is not None and cache_key in self._search_cache:
                         self.log(f"⚡ Cache hit for query: '{normalized_query}'")
@@ -88,7 +85,7 @@ class KnowledgeAgent(BaseAgent):
                     else:
                         self.log(f"🔍 Performing text search: '{normalized_query}' (original: '{search_text}')...")
                         
-                        # 🔥 FIX 2: Progressive fallback strategy
+                        # Progressive fallback strategy
                         # Priority: SQL exact > SQL fuzzy > Vector search
                         sql_exact_results = await self._search_by_sql_exact_match(normalized_query, category_id, top_k)
                         text_results = []  # Initialize to avoid undefined error
@@ -123,7 +120,7 @@ class KnowledgeAgent(BaseAgent):
                             self._search_cache[cache_key] = knowledge_results.copy()
 
                     
-                    # 🔥 GIẢI PHÁP 4: Fallback retry nếu không tìm được (chỉ khi không có SQL results)
+                    #  Fallback retry nếu không tìm được (chỉ khi không có SQL results)
                     if not sql_exact_results and not text_results and search_text:
                         extracted_product = self._extract_product_name_from_query(search_text)
                         if extracted_product and extracted_product != normalized_query:
@@ -152,12 +149,12 @@ class KnowledgeAgent(BaseAgent):
             if len(similarity_filtered) < len(knowledge_results):
                 self.log(f"⚠️ Filtered {len(knowledge_results) - len(similarity_filtered)} results with similarity < {SIMILARITY_THRESHOLD:.0%}")
             
-            # 🔥 GIẢI PHÁP 3: Lexical filter chỉ để rerank, không phải gate
+            #  Lexical filter chỉ để rerank, không phải gate
             # Lưu original vector results để fallback nếu lexical filter loại hết
             original_vector_results = similarity_filtered.copy()
             filtered_results = similarity_filtered
             
-            # 🔥 BỔ SUNG: Kiểm tra keyword matching nếu có query text (dùng fuzzy match)
+            # Kiểm tra keyword matching nếu có query text (dùng fuzzy match)
             # Nếu user hỏi "cá hồi" nhưng result là "thịt bò" → loại bỏ
             if query and filtered_results:
                 query_lower = query.lower()
@@ -170,7 +167,7 @@ class KnowledgeAgent(BaseAgent):
                                  if w and w not in stopwords and len(w) > 2]
                 
                 if query_keywords:
-                    # 🔥 GIẢI PHÁP 2: Whole-word matching + synonym + fuzzy match
+                    # Whole-word matching + synonym + fuzzy match
                     truly_matched = []
                     for result in filtered_results:
                         product_name = result.get("product_name", "").lower()
@@ -230,7 +227,7 @@ class KnowledgeAgent(BaseAgent):
                     if truly_matched:
                         filtered_results = truly_matched
                     else:
-                        # 🔥 HARD GUARD: Nếu lexical filter loại hết → KHÔNG fallback về vector results
+                        #  Nếu lexical filter loại hết → KHÔNG fallback về vector results
                         # Lý do: Nếu vector search trả về sai entity (ví dụ: "Thịt bò" khi hỏi "cá hồi")
                         # thì không nên fallback về đó, mà nên return empty để hard guard xử lý
                         self.log(f"⚠️ Lexical filter removed all results. NOT falling back to vector results to avoid wrong entity.")
@@ -386,7 +383,7 @@ class KnowledgeAgent(BaseAgent):
     
     def _normalize_product_query_for_search(self, query: str) -> str:
         """
-        🔥 GIẢI PHÁP 2: Normalize query cho product search - loại bỏ từ khóa không liên quan
+        Normalize query cho product search - loại bỏ từ khóa không liên quan
         Ví dụ: "hình ảnh cá hồi và doanh thu theo tháng" → "cá hồi"
         Mục tiêu: Chỉ giữ lại tên sản phẩm để vector embedding match tốt hơn
         """
@@ -514,7 +511,7 @@ class KnowledgeAgent(BaseAgent):
     
     def _build_odbc_connection_with_fallback(self, connection_string: str) -> Optional[Any]:
         """
-        🔥 FIX: Build ODBC connection với fallback driver logic (giống /api/products/search/chat)
+        Build ODBC connection với fallback driver logic (giống /api/products/search/chat)
         Thử nhiều driver khác nhau để tìm driver phù hợp
         """
         import pyodbc
@@ -569,7 +566,7 @@ class KnowledgeAgent(BaseAgent):
         top_k: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        🔥 FIX 2: SQL exact match TRƯỚC vector search
+        SQL exact match TRƯỚC vector search
         Tìm sản phẩm bằng SQL LIKE để đảm bảo entity match chính xác
         """
         try:
@@ -580,7 +577,7 @@ class KnowledgeAgent(BaseAgent):
             
             import asyncio
             
-            # 🔥 FIX: Sử dụng fallback driver logic
+            # Sử dụng fallback driver logic
             # Test connection với fallback driver
             test_conn = self._build_odbc_connection_with_fallback(connection_string)
             if not test_conn:
