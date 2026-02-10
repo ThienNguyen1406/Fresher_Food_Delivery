@@ -27,6 +27,6 @@ __all__ = [
     "ReasoningAgent",
     "SynthesisAgent",
     "CriticAgent",
-    "MultiAgentOrchestrator",
+    "MultiAgentOrrchestrator",
 ]
 
