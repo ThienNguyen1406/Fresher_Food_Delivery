@@ -6,6 +6,7 @@ class Order {
   final String trangThai;
   final String? diaChiGiaoHang;
   final String? soDienThoai;
+  final String? tenNguoiDung;
   final String? ghiChu;
   final String? phuongThucThanhToan;
   final String trangThaiThanhToan;
@@ -19,6 +20,7 @@ class Order {
     required this.trangThai,
     this.diaChiGiaoHang,
     this.soDienThoai,
+    this.tenNguoiDung,
     this.ghiChu,
     this.phuongThucThanhToan,
     required this.trangThaiThanhToan,
@@ -27,6 +29,10 @@ class Order {
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
+    final dynamic nguoiDung = json['nguoiDung'] ?? json['user'] ?? json['taiKhoan'];
+    final Map<String, dynamic>? nguoiDungMap =
+        nguoiDung is Map<String, dynamic> ? nguoiDung : null;
+
     return Order(
       maDonHang: json['maDonHang'] ?? '',
       maTaiKhoan: json['maTaiKhoan'] ?? '',
@@ -34,6 +40,14 @@ class Order {
       trangThai: json['trangThai'] ?? '',
       diaChiGiaoHang: json['diaChiGiaoHang'],
       soDienThoai: json['soDienThoai'],
+      tenNguoiDung: json['tenNguoiDung'] ??
+          json['hoTen'] ??
+          json['username'] ??
+          json['userName'] ??
+          json['tenTaiKhoan'] ??
+          nguoiDungMap?['tenNguoiDung'] ??
+          nguoiDungMap?['hoTen'] ??
+          nguoiDungMap?['tenTaiKhoan'],
       ghiChu: json['ghiChu'],
       phuongThucThanhToan: json['phuongThucThanhToan'],
       trangThaiThanhToan: json['trangThaiThanhToan'] ?? '',
@@ -50,6 +64,7 @@ class Order {
       'trangThai': trangThai,
       'diaChiGiaoHang': diaChiGiaoHang,
       'soDienThoai': soDienThoai,
+      'tenNguoiDung': tenNguoiDung,
       'ghiChu': ghiChu,
       'phuongThucThanhToan': phuongThucThanhToan,
       'trangThaiThanhToan': trangThaiThanhToan,

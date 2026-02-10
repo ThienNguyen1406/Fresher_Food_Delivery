@@ -116,6 +116,7 @@ class _QuanLyDonHangScreenState extends State<QuanLyDonHangScreen> {
               trangThai: newStatus,
               diaChiGiaoHang: oldOrder.diaChiGiaoHang,
               soDienThoai: oldOrder.soDienThoai,
+              tenNguoiDung: oldOrder.tenNguoiDung,
               ghiChu: oldOrder.ghiChu,
               phuongThucThanhToan: oldOrder.phuongThucThanhToan,
               trangThaiThanhToan: oldOrder.trangThaiThanhToan,

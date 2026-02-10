@@ -449,8 +449,7 @@ class KnowledgeAgent(BaseAgent):
         query_clean = re.sub(r'[^\w\s]', ' ', query_lower)
         words = [w for w in query_clean.split() if w and w not in stopwords and len(w) > 2]
         
-        # 🔥 CẢI THIỆN: Tìm cụm từ phổ biến cho tên sản phẩm thực phẩm
-        # Ví dụ: "cá hồi", "thịt bò", "rau cải", "gà nướng"
+        #  Tìm cụm từ phổ biến cho tên sản phẩm thực phẩm
         common_product_patterns = [
             r"cá\s+\w+",  # "cá hồi", "cá thu"
             r"thịt\s+\w+",  # "thịt bò", "thịt heo"
