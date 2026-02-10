@@ -34,7 +34,8 @@ class OrderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final statusText = statusMap[order.trangThai] ?? 'Không xác định';
     final statusColor = statusColorMap[order.trangThai] ?? Colors.grey;
-    final canEdit = order.trangThai != 'completed' && order.trangThai != 'cancelled';
+    final canEdit =
+        order.trangThai != 'completed' && order.trangThai != 'cancelled';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -84,7 +85,8 @@ class OrderCard extends StatelessWidget {
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(20),
@@ -111,7 +113,8 @@ class OrderCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   'Mã TK: ${order.maTaiKhoan}',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                  style:
+                      TextStyle(color: textColor, fontWeight: FontWeight.w500),
                 ),
                 const SizedBox(width: 16),
                 Icon(Iconsax.call, size: 16, color: textLightColor),
@@ -138,7 +141,8 @@ class OrderCard extends StatelessWidget {
             ),
 
             // Địa chỉ giao hàng
-            if (order.diaChiGiaoHang != null && order.diaChiGiaoHang!.isNotEmpty) ...[
+            if (order.diaChiGiaoHang != null &&
+                order.diaChiGiaoHang!.isNotEmpty) ...[
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -226,4 +230,3 @@ class OrderCard extends StatelessWidget {
     );
   }
 }
-
