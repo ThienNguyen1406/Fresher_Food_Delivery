@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/models/Chat.dart';
+import 'package:fresher_food/models/Cart.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
+import 'package:fresher_food/services/api/chatbot_action_api.dart';
+import 'package:fresher_food/services/api/product_api.dart';
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 Uint8List? _decodeBase64InIsolate(String? base64String) {
   if (base64String == null || base64String.isEmpty) return null;
@@ -15,7 +20,451 @@ Uint8List? _decodeBase64InIsolate(String? base64String) {
   }
 }
 
+class _ProductActionButtons extends StatefulWidget {
+  final Map<String, dynamic> product;
+
+  const _ProductActionButtons({required this.product});
+
+  @override
+  State<_ProductActionButtons> createState() => _ProductActionButtonsState();
+}
+
+class _ProductActionButtonsState extends State<_ProductActionButtons> {
+  bool _isLoading = false;
+
+  String _formatPrice(num price) {
+    return price
+        .toString()
+        .replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+  }
+
+  Future<String?> _getUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('maTaiKhoan') ?? prefs.getString('userId');
+  }
+
+  void _showSnack(String message, {Color? color}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color ?? Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _addToCart() async {
+    final productId = _getProductId(widget.product);
+    final productName = _getProductName(widget.product);
+    final stock = _getProductStock(widget.product);
+
+    if (productId.isEmpty) {
+      _showSnack('Không tìm thấy mã sản phẩm');
+      return;
+    }
+
+    if (stock != null && stock <= 0) {
+      _showSnack('Sản phẩm đã hết hàng');
+      return;
+    }
+
+    final userId = await _getUserId();
+    if (userId == null || userId.isEmpty) {
+      _showSnack('Vui lòng đăng nhập để thêm vào giỏ hàng');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final result = await ChatbotActionApi().addToCartFromChatbot(
+        userId: userId,
+        productId: productId,
+        quantity: 1,
+      );
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        _showSnack(
+          result['message'] ?? 'Đã thêm $productName vào giỏ hàng',
+          color: Colors.green,
+        );
+      } else {
+        _showSnack(result['message'] ?? 'Có lỗi xảy ra');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Lỗi: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _buyNow() async {
+    final productId = _getProductId(widget.product);
+    var productName = _getProductName(widget.product);
+    var stock = _getProductStock(widget.product);
+    var priceNum =
+        _getFirstNum(widget.product, ['price', 'gia', 'donGia', 'giaBan']);
+    var imageUrl = _getProductImageUrl(widget.product);
+    var categoryName = _getProductCategoryName(widget.product);
+
+    if (productId.isEmpty) {
+      _showSnack('Không tìm thấy mã sản phẩm');
+      return;
+    }
+
+    final userId = await _getUserId();
+    if (userId == null || userId.isEmpty) {
+      _showSnack('Vui lòng đăng nhập để mua hàng');
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      if (priceNum == null ||
+          productName.isEmpty ||
+          stock == null ||
+          imageUrl.isEmpty) {
+        final productDetail = await ProductApi().getProductById(productId);
+        if (productDetail != null) {
+          productName =
+              productName.isNotEmpty ? productName : productDetail.tenSanPham;
+          priceNum = priceNum ?? productDetail.giaBan;
+          stock = stock ?? productDetail.soLuongTon;
+          imageUrl = imageUrl.isNotEmpty ? imageUrl : productDetail.anh;
+          categoryName =
+              categoryName.isNotEmpty ? categoryName : productDetail.maDanhMuc;
+        }
+      }
+
+      if (priceNum == null) {
+        _showSnack('Không xác định được giá sản phẩm');
+        return;
+      }
+
+      if (stock != null && stock <= 0) {
+        _showSnack('Sản phẩm đã hết hàng');
+        return;
+      }
+
+      final price = priceNum.toDouble();
+      final item = CartItem(
+        maGioHang: '',
+        maSanPham: productId,
+        soLuong: 1,
+        tenSanPham:
+            productName.isNotEmpty ? productName : 'Sản phẩm #$productId',
+        giaBan: price,
+        anh: _isLikelyUrl(imageUrl) ? imageUrl : '',
+        soLuongTon: stock ?? 1,
+        tenDanhMuc: categoryName,
+        maTaiKhoan: userId,
+        thanhTien: price,
+        isSelected: true,
+      );
+
+      if (!mounted) return;
+      await AppRoute.toCheckout(
+        context,
+        [item],
+        item.thanhTien,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      _showSnack('Lỗi: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final productId = _getProductId(widget.product);
+    final productName = _getProductName(widget.product);
+    final priceNum =
+        _getFirstNum(widget.product, ['price', 'gia', 'donGia', 'giaBan']);
+    final stock = _getProductStock(widget.product);
+    final isOutOfStock = stock != null && stock <= 0;
+
+    if (productId.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            productName.isNotEmpty ? productName : 'Sản phẩm #$productId',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+          if (priceNum != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${_formatPrice(priceNum)}₫',
+              style: TextStyle(
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          if (stock != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              stock <= 0 ? 'Hết hàng' : 'Còn: $stock',
+              style: TextStyle(
+                color: stock <= 0 ? Colors.red.shade600 : Colors.green.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed:
+                      (_isLoading || isOutOfStock) ? null : _addToCart,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.shopping_cart_outlined, size: 18),
+                  label: const Text('Thêm vào giỏ'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green.shade700,
+                    side: BorderSide(color: Colors.green.shade700),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: (_isLoading || isOutOfStock) ? null : _buyNow,
+                  icon: _isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.flash_on, size: 18),
+                  label: const Text('Mua ngay'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// Widget hiển thị message bubble trong chat
+String _getFirstString(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value != null && value.toString().trim().isNotEmpty) {
+      return value.toString();
+    }
+  }
+  return '';
+}
+
+num? _getFirstNum(Map<String, dynamic> map, List<String> keys) {
+  for (final key in keys) {
+    final value = map[key];
+    if (value is num) return value;
+    if (value is String && value.trim().isNotEmpty) {
+      final parsed = num.tryParse(value);
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
+}
+
+bool _isLikelyUrl(String value) {
+  final v = value.toLowerCase().trim();
+  return v.startsWith('http://') || v.startsWith('https://');
+}
+
+String _getProductId(Map<String, dynamic> product) {
+  return _getFirstString(product, [
+    'product_id',
+    'productId',
+    'maSanPham',
+    'id',
+  ]);
+}
+
+String _getProductName(Map<String, dynamic> product) {
+  return _getFirstString(product, [
+    'product_name',
+    'productName',
+    'tenSanPham',
+    'name',
+  ]);
+}
+
+int? _getProductStock(Map<String, dynamic> product) {
+  final stock = _getFirstNum(product, [
+    'soLuongTon',
+    'soLuongTonKho',
+    'tonKho',
+    'stock',
+    'quantity',
+  ]);
+  return stock?.toInt();
+}
+
+String _getProductImageValue(Map<String, dynamic> product) {
+  return _getFirstString(product, [
+    'imageData',
+    'image_base64',
+    'imageBase64',
+    'image',
+    'imageUrl',
+    'image_url',
+    'imageLink',
+    'image_link',
+    'url',
+    'anh',
+  ]);
+}
+
+String _getProductImageUrl(Map<String, dynamic> product) {
+  final url = _getFirstString(product, [
+    'anh',
+    'imageUrl',
+    'image_url',
+    'imageLink',
+    'image_link',
+    'image',
+    'url',
+  ]);
+  return _isLikelyUrl(url) ? url : '';
+}
+
+String _getProductCategoryName(Map<String, dynamic> product) {
+  return _getFirstString(product, [
+    'tenDanhMuc',
+    'categoryName',
+    'category_name',
+  ]);
+}
+
+String? _extractBase64FromDataUrl(String value) {
+  final trimmed = value.trim();
+  if (trimmed.startsWith('data:image')) {
+    final parts = trimmed.split(',');
+    if (parts.length == 2 && parts[1].isNotEmpty) {
+      return parts[1];
+    }
+  }
+  return null;
+}
+
+Widget _buildProductImageWidget(String rawValue) {
+  final trimmed = rawValue.trim();
+  if (trimmed.isEmpty) return const SizedBox.shrink();
+
+  if (_isLikelyUrl(trimmed)) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        trimmed,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          color: Colors.grey.shade200,
+          child: const Icon(Icons.image, color: Colors.grey),
+        ),
+      ),
+    );
+  }
+
+  final base64Str = _extractBase64FromDataUrl(trimmed) ?? trimmed;
+  if (base64Str.isEmpty) return const SizedBox.shrink();
+
+  return FutureBuilder<Uint8List?>(
+    future: compute(_decodeBase64InIsolate, base64Str),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return Container(
+          color: Colors.grey.shade200,
+          child: const Center(
+            child: SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        );
+      }
+      if (snapshot.hasData && snapshot.data != null) {
+        return Image.memory(
+          snapshot.data!,
+          fit: BoxFit.cover,
+          cacheWidth: 120,
+          cacheHeight: 120,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              color: Colors.grey.shade200,
+              child: const Icon(Icons.image, color: Colors.grey),
+            );
+          },
+        );
+      }
+      return Container(
+        color: Colors.grey.shade200,
+        child: const Icon(Icons.image, color: Colors.grey),
+      );
+    },
+  );
+}
+
 class MessageBubble extends StatelessWidget {
   final Message message;
   final double screenWidth;
@@ -58,16 +507,18 @@ class MessageBubble extends StatelessWidget {
       }
     }
     
-    List<dynamic> productsWithImages = [];
+    List<Map<String, dynamic>> products = [];
+    List<Map<String, dynamic>> productsWithImages = [];
     if (productsDataMatch != null) {
       try {
         final jsonStr = productsDataMatch.group(1)?.trim() ?? '';
         final productsData = jsonDecode(jsonStr) as Map<String, dynamic>;
-        final products = productsData['products'] as List<dynamic>? ?? [];
-        
+        final parsedProducts = productsData['products'] as List<dynamic>? ?? [];
+        products = parsedProducts.whereType<Map<String, dynamic>>().toList();
+
         productsWithImages = products.where((p) {
-          final imageData = p['imageData'] as String?;
-          return imageData != null && imageData.isNotEmpty;
+          final imageValue = _getProductImageValue(p);
+          return imageValue.isNotEmpty;
         }).toList();
       } catch (e) {
         print('Error parsing products data: $e');
@@ -178,76 +629,28 @@ class MessageBubble extends StatelessWidget {
             spacing: 8,
             runSpacing: 8,
             children: productsWithImages.map((product) {
-              final imageData = product['imageData'] as String?;
-              
-              if (imageData != null && imageData.isNotEmpty) {
-                try {
-                  return RepaintBoundary(
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade300),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: FutureBuilder<Uint8List?>(
-                          // 🔥 TỐI ƯU: Decode base64 trong isolate để không block UI thread
-                          future: compute(_decodeBase64InIsolate, imageData),
-                          builder: (context, snapshot) {
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              return Container(
-                                width: 120,
-                                height: 120,
-                                color: Colors.grey.shade200,
-                                child: const Center(
-                                  child: SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  ),
-                                ),
-                              );
-                            }
-                            if (snapshot.hasData && snapshot.data != null) {
-                              return Image.memory(
-                                snapshot.data!,
-                                fit: BoxFit.cover,
-                                // 🔥 TỐI ƯU: Cache image để tránh decode lại
-                                cacheWidth: 120,
-                                cacheHeight: 120,
-                                errorBuilder: (context, error, stackTrace) {
-                                  print('Error decoding image: $error');
-                                  return Container(
-                                    color: Colors.grey.shade200,
-                                    child: const Icon(Icons.image, color: Colors.grey),
-                                  );
-                                },
-                              );
-                            }
-                            return Container(
-                              color: Colors.grey.shade200,
-                              child: const Icon(Icons.image, color: Colors.grey),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  print('Error displaying image: $e');
-                  return Container(
-                    width: 120,
-                    height: 120,
-                    color: Colors.grey.shade200,
-                    child: const Icon(Icons.image, color: Colors.grey),
-                  );
-                }
-              }
-              return const SizedBox.shrink();
+              final imageValue = _getProductImageValue(product);
+              if (imageValue.isEmpty) return const SizedBox.shrink();
+              return RepaintBoundary(
+                child: Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _buildProductImageWidget(imageValue),
+                  ),
+                ),
+              );
             }).toList(),
           ),
+        ],
+        if (!isFromUser && products.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ...products.map((product) => _ProductActionButtons(product: product)),
         ],
       ],
     );
