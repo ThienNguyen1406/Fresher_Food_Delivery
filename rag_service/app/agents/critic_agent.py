@@ -1,6 +1,3 @@
-"""
-Critic Agent - Kiểm tra hallucination và chất lượng câu trả lời
-"""
 from typing import Dict, Any, Optional
 import logging
 from app.agents.base_agent import BaseAgent

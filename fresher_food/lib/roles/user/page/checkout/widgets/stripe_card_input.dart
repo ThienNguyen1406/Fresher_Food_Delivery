@@ -13,10 +13,12 @@ class StripeCardInput extends StatefulWidget {
   final Color textPrimary;
   final Color textSecondary;
   final Color primaryColor;
-  final Function(bool)? onCardComplete; // Callback để track card complete status
+  final Function(bool)?
+      onCardComplete; // Callback để track card complete status
   final VoidCallback? onCardConfirmed; // Callback khi thẻ được xác nhận
   final VoidCallback? onClose; // Callback khi đóng form
-  final TextEditingController? cardholderController; // Controller cho tên chủ thẻ (tùy chọn)
+  final TextEditingController?
+      cardholderController; // Controller cho tên chủ thẻ (tùy chọn)
 
   const StripeCardInput({
     super.key,
@@ -39,12 +41,13 @@ class _StripeCardInputState extends State<StripeCardInput> {
   String? _expiryMonth;
   String? _expiryYear;
   String? _brand;
-  
+
   @override
   void initState() {
     super.initState();
     // Sử dụng controller từ bên ngoài nếu có, nếu không thì tạo mới
-    _cardholderController = widget.cardholderController ?? TextEditingController();
+    _cardholderController =
+        widget.cardholderController ?? TextEditingController();
   }
 
   @override
@@ -79,93 +82,97 @@ class _StripeCardInputState extends State<StripeCardInput> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-          // ✅ Flow đơn giản: Không hiển thị header và nút đóng
-          // Form nhập thẻ được hiển thị trực tiếp trong checkout page
-          const SizedBox(height: 12),
-          // Card Preview
-          CardPreview(
-            cardNumber: null, // Không hiển thị số thẻ đầy đủ vì CardFormField không cung cấp
-            cardholderName: _cardholderController.text.isNotEmpty ? _cardholderController.text : null,
-            expiryMonth: _expiryMonth,
-            expiryYear: _expiryYear,
-            brand: _brand,
-          ),
-          const SizedBox(height: 16),
-          // Cardholder name input
-          TextField(
-            controller: _cardholderController,
-            decoration: InputDecoration(
-              labelText: 'Tên chủ thẻ',
-              hintText: 'Nhập tên chủ thẻ',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: widget.textSecondary.withOpacity(0.3),
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: widget.textSecondary.withOpacity(0.3),
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: widget.primaryColor,
-                  width: 2,
-                ),
-              ),
-              labelStyle: TextStyle(color: widget.textSecondary),
-              hintStyle: TextStyle(color: widget.textSecondary.withOpacity(0.5)),
+            // ✅ Flow đơn giản: Không hiển thị header và nút đóng
+            // Form nhập thẻ được hiển thị trực tiếp trong checkout page
+            const SizedBox(height: 12),
+            // Card Preview
+            CardPreview(
+              cardNumber:
+                  null, // Không hiển thị số thẻ đầy đủ vì CardFormField không cung cấp
+              cardholderName: _cardholderController.text.isNotEmpty
+                  ? _cardholderController.text
+                  : null,
+              expiryMonth: _expiryMonth,
+              expiryYear: _expiryYear,
+              brand: _brand,
             ),
-            style: TextStyle(color: widget.textPrimary),
-            textCapitalization: TextCapitalization.characters,
-            onChanged: (value) {
-              setState(() {});
-            },
-          ),
-          const SizedBox(height: 16),
-          // Stripe CardFormField
-          CardFormField(
-            onCardChanged: (details) {
-              final isComplete = details?.complete ?? false;
-              
-              // Cố gắng lấy thông tin từ details (nếu có)
-              // Lưu ý: CardFormField không cung cấp số thẻ đầy đủ vì lý do bảo mật
-              // Chỉ có thể lấy last4, brand, expMonth, expYear
-              if (details != null) {
-                setState(() {
-                  // Không thể lấy số thẻ đầy đủ từ CardFormField
-                  // Chỉ hiển thị placeholder hoặc last4 nếu có
-                  _expiryMonth = details.expiryMonth?.toString().padLeft(2, '0');
-                  _expiryYear = details.expiryYear?.toString().substring(2);
-                  _brand = details.brand;
-                });
-              }
-              
-              // Track card complete status in provider (nếu có)
-              try {
-                final provider = Provider.of<CheckoutProvider>(context, listen: false);
-                provider.setStripeCardComplete(isComplete);
-              } catch (e) {
-                // Không có CheckoutProvider (dùng trong add card page)
-                // Dùng callback nếu có
-              }
-              // Gọi callback nếu có
-              widget.onCardComplete?.call(isComplete);
-            },
-            style: CardFormStyle(
-              borderColor: widget.textSecondary.withOpacity(0.3),
-              borderWidth: 1,
-              borderRadius: 8,
-              textColor: widget.textPrimary,
-              placeholderColor: widget.textSecondary,
-              backgroundColor: widget.surfaceColor,
+            const SizedBox(height: 16),
+            // Cardholder name input
+            TextField(
+              controller: _cardholderController,
+              decoration: InputDecoration(
+                labelText: 'Tên chủ thẻ',
+                hintText: 'Nhập tên chủ thẻ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: widget.textSecondary.withOpacity(0.3),
+                  ),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: widget.textSecondary.withOpacity(0.3),
+                  ),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide(
+                    color: widget.primaryColor,
+                    width: 2,
+                  ),
+                ),
+                labelStyle: TextStyle(color: widget.textSecondary),
+                hintStyle:
+                    TextStyle(color: widget.textSecondary.withOpacity(0.5)),
+              ),
+              style: TextStyle(color: widget.textPrimary),
+              textCapitalization: TextCapitalization.characters,
+              onChanged: (value) {
+                setState(() {});
+              },
             ),
-          ),
-          // ✅ Flow đơn giản: Không hiển thị button "Lưu thẻ" hoặc "Xác nhận thẻ"
-          // User chỉ cần nhập thẻ và bấm "Đặt hàng" ở checkout page
+            const SizedBox(height: 16),
+            // Stripe CardFormField
+            CardFormField(
+              onCardChanged: (details) {
+                final isComplete = details?.complete ?? false;
+
+                // Cố gắng lấy thông tin từ details (nếu có)
+                // Lưu ý: CardFormField không cung cấp số thẻ đầy đủ vì lý do bảo mật
+                // Chỉ có thể lấy last4, brand, expMonth, expYear
+                if (details != null) {
+                  setState(() {
+                    // Không thể lấy số thẻ đầy đủ từ CardFormField
+                    // Chỉ hiển thị placeholder hoặc last4 nếu có
+                    _expiryMonth =
+                        details.expiryMonth?.toString().padLeft(2, '0');
+                    _expiryYear = details.expiryYear?.toString().substring(2);
+                    _brand = details.brand;
+                  });
+                }
+
+                // Track card complete status in provider (nếu có)
+                try {
+                  final provider =
+                      Provider.of<CheckoutProvider>(context, listen: false);
+                  provider.setStripeCardComplete(isComplete);
+                } catch (e) {
+                  // Không có CheckoutProvider (dùng trong add card page)
+                  // Dùng callback nếu có
+                }
+                // Gọi callback nếu có
+                widget.onCardComplete?.call(isComplete);
+              },
+              style: CardFormStyle(
+                borderColor: widget.textSecondary.withOpacity(0.3),
+                borderWidth: 1,
+                borderRadius: 8,
+                textColor: widget.textPrimary,
+                placeholderColor: widget.textSecondary,
+                backgroundColor: widget.surfaceColor,
+              ),
+            ),
           ],
         ),
       ),
@@ -180,5 +187,4 @@ class _StripeCardInputState extends State<StripeCardInput> {
     }
     super.dispose();
   }
-
 }

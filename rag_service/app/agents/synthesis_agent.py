@@ -39,7 +39,7 @@ class SynthesisAgent(BaseAgent):
         answer_confidence = 0.0
         
         try:
-            # 🔥 LOG STATE TRƯỚC KHI SYNTHESIS (debug)
+            #  LOG STATE TRƯỚC KHI SYNTHESIS (debug)
             import json
             state_summary = {
                 "knowledge_results_count": len(knowledge_results),
@@ -50,12 +50,12 @@ class SynthesisAgent(BaseAgent):
             }
             self.log(f"📊 STATE BEFORE SYNTHESIS: {json.dumps(state_summary, ensure_ascii=False, indent=2)}")
             
-            # 🔥 XÁC ĐỊNH FACT TỪ STATE (không để LLM đoán)
+            #  XÁC ĐỊNH FACT TỪ STATE (không để LLM đoán)
             has_products = len(knowledge_results) > 0
             has_sales_data = bool(tool_context) and ("doanh" in tool_context.lower() or "thống kê" in tool_context.lower() or "revenue" in tool_context.lower())
             product_names = [r.get("product_name", "") for r in knowledge_results[:3] if r.get("product_name")]
             
-            # 🔥 FIX: Phát hiện nếu user hỏi về sản phẩm cụ thể nhưng không tìm thấy
+            # FIX: Phát hiện nếu user hỏi về sản phẩm cụ thể nhưng không tìm thấy
             query_lower = query.lower()
             product_keywords = ["cá", "thịt", "rau", "gà", "tôm", "sản phẩm", "món"]
             asked_about_specific_product = any(kw in query_lower for kw in product_keywords)
@@ -69,7 +69,7 @@ class SynthesisAgent(BaseAgent):
                 tool_context=tool_context,
                 reasoning_context=reasoning_context,
                 knowledge_results=knowledge_results,
-                knowledge_error=knowledge_error  # 🔥 BONUS FIX: Truyền error vào prompt
+                knowledge_error=knowledge_error  # Truyền error vào prompt
             )
             
             # Gọi LLM để tổng hợp
@@ -123,7 +123,7 @@ Hãy trả lời một cách thân thiện, chính xác và hữu ích."""
             "answer_confidence": answer_confidence
         })
         
-        # 🔥 VALIDATION: Đảm bảo knowledge_results không bị mất
+        # VALIDATION: Đảm bảo knowledge_results không bị mất
         if "knowledge_results" not in state or len(state.get("knowledge_results", [])) == 0:
             # Nếu knowledge_results bị mất, log warning nhưng không restore (vì có thể thực sự không có)
             if len(knowledge_results) > 0:

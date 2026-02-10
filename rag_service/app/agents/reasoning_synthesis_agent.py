@@ -10,10 +10,6 @@ logger = logging.getLogger(__name__)
 class ReasoningSynthesisAgent(BaseAgent):
     """
     Reasoning + Synthesis Agent gộp:
-    - Phân tích query và kết quả từ các agents khác
-    - Lập kế hoạch xử lý
-    - Tổng hợp và tạo câu trả lời cuối cùng
-    Tất cả trong 1 lần gọi LLM thay vì 2 lần
     """
     
     def __init__(self, llm_provider: Optional[LLMProvider] = None):
@@ -40,7 +36,7 @@ class ReasoningSynthesisAgent(BaseAgent):
         answer_confidence = 0.0
         
         try:
-            # 🔥 LOG STATE TRƯỚC KHI SYNTHESIS (debug)
+            # LOG STATE TRƯỚC KHI SYNTHESIS (debug)
             import json
             state_summary = {
                 "knowledge_results_count": len(knowledge_results),
@@ -62,10 +58,10 @@ class ReasoningSynthesisAgent(BaseAgent):
             
             # Gọi LLM 1 lần duy nhất cho cả reasoning + synthesis
             self.log("🧠📝 Performing reasoning + synthesis in one LLM call...")
-            # 🔥 XÁC ĐỊNH FACT TỪ STATE (không để LLM đoán)
+            #  XÁC ĐỊNH FACT TỪ STATE (không để LLM đoán)
             has_products = len(knowledge_results) > 0
             
-            # 🔥 QUAN TRỌNG: Nếu có doanh thu (tool_results có product_id) → chắc chắn có sản phẩm
+            # Nếu có doanh thu (tool_results có product_id) → chắc chắn có sản phẩm
             # Ngay cả khi knowledge_results rỗng (có thể bị mất), nhưng có doanh thu → có sản phẩm
             tool_results = state.get("tool_results", [])
             has_product_id_in_tool = False

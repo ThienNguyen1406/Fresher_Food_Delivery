@@ -63,7 +63,7 @@ class MultiAgentOrchestrator:
         """
         Xử lý query qua Multi-Agent pipeline
         """
-        # 🔥 PERFORMANCE: Determine if Critic should run (confidence-based or env var)
+        # PERFORMANCE: Determine if Critic should run (confidence-based or env var)
         if enable_critic is None:
             enable_critic = Settings.ENABLE_CRITIC_AGENT
         
@@ -84,7 +84,7 @@ class MultiAgentOrchestrator:
             self.logger.info("📍 Step 1: Router Agent")
             state = await self.router_agent.process(state)
             
-            # 🔥 BƯỚC 1: Entity Resolver Agent (nếu cần product search)
+            #  BƯỚC 1: Entity Resolver Agent (nếu cần product search)
             if state.get("needs_knowledge_agent", True):
                 self.logger.info("🔍 Step 1.5: Entity Resolver Agent")
                 state = await self.entity_resolver_agent.process(state)
@@ -101,7 +101,7 @@ class MultiAgentOrchestrator:
             if state.get("needs_knowledge_agent", True):
                 self.logger.info("📚 Step 2: Knowledge Agent")
                 
-                # 🔥 GIẢI PHÁP 1: Sử dụng entity từ Entity Resolver hoặc sub-query
+                #  Sử dụng entity từ Entity Resolver hoặc sub-query
                 entity_query = state.get("entity_query")  # Từ Entity Resolver (đã normalize)
                 sub_queries = state.get("sub_queries", {})
                 product_query = entity_query or sub_queries.get("product_search") or sub_queries.get("product_info")
@@ -113,7 +113,7 @@ class MultiAgentOrchestrator:
                     state["query"] = product_query
                     state["_original_query"] = original_query  # Backup để restore sau
                 
-                # 🔥 BONUS FIX: Error handling để không crash silent
+                # Error handling để không crash silent
                 knowledge_error = None
                 try:
                     state = await self.knowledge_agent.process(state)
@@ -126,7 +126,7 @@ class MultiAgentOrchestrator:
                     state["knowledge_context"] = ""
                     knowledge_results_count = 0
                 
-                # 🔥 GIẢI PHÁP 4: Fallback retry nếu không tìm được (và không có error)
+                #  Fallback retry nếu không tìm được (và không có error)
                 if knowledge_results_count == 0 and product_query and not knowledge_error:
                     self.logger.warning(f"⚠️ Knowledge Agent returned 0 results. Retrying with extracted keywords...")
                     # Extract keywords từ original query
@@ -150,7 +150,7 @@ class MultiAgentOrchestrator:
                 
                 self.logger.info(f"📚 Knowledge Agent results: {knowledge_results_count} products found")
                 
-                # 🔥 VALIDATION: Đảm bảo knowledge_results không bị mất
+                # Đảm bảo knowledge_results không bị mất
                 if knowledge_results_count > 0:
                     product_names = [r.get("product_name", "N/A") for r in state.get('knowledge_results', [])[:3]]
                     self.logger.info(f"📚 Products found: {', '.join(product_names)}")
@@ -160,7 +160,7 @@ class MultiAgentOrchestrator:
                     else:
                         self.logger.warning(f"⚠️ Knowledge Agent returned 0 results for query: {state.get('query', '')[:50]}")
                     
-                    # 🔥 HARD GUARD: Nếu user hỏi về sản phẩm cụ thể nhưng không tìm được → return early
+                    #  Nếu user hỏi về sản phẩm cụ thể nhưng không tìm được → return early
                     original_query = state.get("_original_query") or state.get("query", "")
                     resolved_entity = state.get("entity_normalized")
                     if resolved_entity:
@@ -216,10 +216,10 @@ Hoặc bạn muốn:
                             state["entity_not_found"] = True
                             state["entity_query"] = original_query
             
-            # 🔥 BACKUP knowledge_results trước khi Tool Agent chạy
+            #  BACKUP knowledge_results trước khi Tool Agent chạy
             knowledge_results_backup = state.get("knowledge_results", [])
             
-            # 🔥 PERFORMANCE: Parallel execution nếu Tool và Reasoning không phụ thuộc chặt
+            # PERFORMANCE: Parallel execution nếu Tool và Reasoning không phụ thuộc chặt
             if needs_tool and needs_reasoning and Settings.ENABLE_PARALLEL_AGENTS and not is_multi_intent:
                 # Tool Agent và Reasoning Agent có thể chạy song song (nếu không phải multi-intent)
                 self.logger.info("⚡ Running Tool Agent and Reasoning Agent in parallel...")
@@ -247,7 +247,7 @@ Hoặc bạn muốn:
                     state = await self.tool_agent.process(state)
                     self.logger.info(f"🔧 Tool Agent executed. Results: {len(state.get('tool_results', []))} functions called")
                     
-                    # 🔥 VALIDATION: Nếu có tool_results với product_id nhưng knowledge_results bị mất → restore
+                    #  VALIDATION: Nếu có tool_results với product_id nhưng knowledge_results bị mất → restore
                     tool_results = state.get("tool_results", [])
                     if tool_results and len(knowledge_results_backup) > 0:
                         for tool_result in tool_results:
@@ -272,7 +272,7 @@ Hoặc bạn muốn:
                 else:
                     self.logger.info("⏭️  Skipping Reasoning Agent")
             
-            # 🔥 HARD GUARD: Nếu có early return flag → skip synthesis và return ngay
+            #  HARD GUARD: Nếu có early return flag → skip synthesis và return ngay
             if state.get("early_return", False):
                 self.logger.info("🛡️ Hard guard triggered: Skipping synthesis due to missing entity data")
                 state["final_answer"] = state.get("early_return_message", "Xin lỗi, không tìm thấy thông tin phù hợp.")
@@ -280,8 +280,8 @@ Hoặc bạn muốn:
                 self.logger.info("✅ Multi-Agent pipeline completed (early return)")
                 return state
             
-            # 🔥 PERFORMANCE: Sử dụng merged ReasoningSynthesisAgent hoặc separate agents
-            # 🔥 LOG STATE TRƯỚC KHI SYNTHESIS (debug mâu thuẫn)
+            #  PERFORMANCE: Sử dụng merged ReasoningSynthesisAgent hoặc separate agents
+            #  LOG STATE TRƯỚC KHI SYNTHESIS (debug mâu thuẫn)
             import json
             knowledge_results_before = state.get("knowledge_results", [])
             state_before_synthesis = {
@@ -301,7 +301,7 @@ Hoặc bạn muốn:
             }
             self.logger.info(f"📊 STATE BEFORE SYNTHESIS: {json.dumps(state_before_synthesis, ensure_ascii=False, indent=2)}")
             
-            # 🔥 VALIDATION: Đảm bảo knowledge_results không bị mất trước khi synthesis
+            #  VALIDATION: Đảm bảo knowledge_results không bị mất trước khi synthesis
             if len(knowledge_results_before) > 0:
                 self.logger.info(f"✅ Knowledge results available: {len(knowledge_results_before)} products")
                 product_names = [r.get("product_name", "N/A") for r in knowledge_results_before[:3]]
@@ -309,7 +309,7 @@ Hoặc bạn muốn:
             else:
                 self.logger.warning(f"⚠️ No knowledge results before synthesis for query: {state.get('query', '')[:50]}")
             
-            # 🔥 PERFORMANCE: Sử dụng merged agent nếu có
+            #  PERFORMANCE: Sử dụng merged agent nếu có
             if self.reasoning_synthesis_agent:
                 self.logger.info("🧠📝 Step 4-5: ReasoningSynthesisAgent (merged - 1 LLM call)")
                 state = await self.reasoning_synthesis_agent.process(state)
@@ -322,7 +322,7 @@ Hoặc bạn muốn:
                 self.logger.info("📝 Step 5: Synthesis Agent")
                 state = await self.synthesis_agent.process(state)
             
-            # 🔥 VALIDATION: Kiểm tra knowledge_results sau synthesis
+            #  VALIDATION: Kiểm tra knowledge_results sau synthesis
             knowledge_results_after = state.get("knowledge_results", [])
             if len(knowledge_results_before) > 0 and len(knowledge_results_after) == 0:
                 self.logger.error(f"❌ CRITICAL: knowledge_results bị mất sau synthesis! Trước: {len(knowledge_results_before)}, Sau: {len(knowledge_results_after)}")
@@ -330,7 +330,7 @@ Hoặc bạn muốn:
                 state["knowledge_results"] = knowledge_results_before
                 self.logger.info(f"✅ Restored {len(knowledge_results_before)} knowledge results")
             
-            # 🔥 PERFORMANCE: Critic Agent chỉ chạy nếu enable và confidence thấp
+            #  PERFORMANCE: Critic Agent chỉ chạy nếu enable và confidence thấp
             answer_confidence = state.get("answer_confidence", 1.0)
             should_run_critic = enable_critic and (
                 answer_confidence < Settings.CRITIC_CONFIDENCE_THRESHOLD or
@@ -394,8 +394,8 @@ Hoặc bạn muốn:
     
     def _validate_product_entity(self, user_query: str, knowledge_results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        🔥 FIX 3: Hard constraint validation - reject products không match entity
-        🔥 BONUS: Guardrail chống nhầm sản phẩm
+        Hard constraint validation - reject products không match entity
+        Guardrail chống nhầm sản phẩm
         """
         if not user_query or not knowledge_results:
             return knowledge_results
@@ -416,7 +416,7 @@ Hoặc bạn muốn:
             # Không extract được keywords → accept tất cả (fallback)
             return knowledge_results
         
-        # 🔥 BONUS: Synonym map cho entity matching
+        # Synonym map cho entity matching
         synonym_map = {
             "cá hồi": ["cá hồi", "salmon", "cá hồi na uy", "cá hồi tươi"],
             "thịt bò": ["thịt bò", "beef", "thịt bò tươi"],
