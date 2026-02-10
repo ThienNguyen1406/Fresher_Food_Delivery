@@ -4,7 +4,6 @@ Knowledge Agent - RAG search từ vector store
 from typing import Dict, Any, List, Optional
 import asyncio
 import logging
-import hashlib
 from app.agents.base_agent import BaseAgent
 from app.api.deps import get_image_vector_store, get_image_embedding_service, get_embedding_service
 from app.infrastructure.vector_store.image_vector_store import ImageVectorStore
@@ -18,6 +17,9 @@ logger = logging.getLogger(__name__)
 class KnowledgeAgent(BaseAgent):
     """
     Knowledge Agent thực hiện RAG search:
+    - Text search: Tạo text embedding và search trong vector store
+    - Image search: Tạo image embedding và search trong vector store
+    - Hybrid search: Kết hợp cả hai
     """
     
     def __init__(
@@ -30,10 +32,6 @@ class KnowledgeAgent(BaseAgent):
         self.vector_store = vector_store
         self.image_embedding_service = image_embedding_service
         self.text_embedding_service = text_embedding_service
-        
-        # 🔥 PERFORMANCE: Simple in-memory cache for search results
-        self._search_cache = {} if Settings.ENABLE_AGENT_CACHE else None
-        self._cache_max_size = Settings.AGENT_CACHE_SIZE if Settings.ENABLE_AGENT_CACHE else 0
     
     async def process(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -73,54 +71,38 @@ class KnowledgeAgent(BaseAgent):
                 # Text search
                 search_text = query or user_description
                 if search_text:
-                    # Normalize query - loại bỏ từ khóa không liên quan đến product
+                    # 🔥 GIẢI PHÁP 2: Normalize query - loại bỏ từ khóa không liên quan đến product
                     normalized_query = self._normalize_product_query_for_search(search_text)
+                    self.log(f"🔍 Performing text search: '{normalized_query}' (original: '{search_text}')...")
                     
-                    #  PERFORMANCE: Check cache first
-                    cache_key = self._get_cache_key(normalized_query, category_id, top_k)
-                    if self._search_cache is not None and cache_key in self._search_cache:
-                        self.log(f"⚡ Cache hit for query: '{normalized_query}'")
-                        cached_results = self._search_cache[cache_key]
-                        knowledge_results.extend(cached_results)
+                    # 🔥 FIX 2: Progressive fallback strategy
+                    # Priority: SQL exact > SQL fuzzy > Vector search
+                    sql_exact_results = await self._search_by_sql_exact_match(normalized_query, category_id, top_k)
+                    text_results = []  # Initialize to avoid undefined error
+                    
+                    if sql_exact_results:
+                        self.log(f"✅ SQL exact match found: {len(sql_exact_results)} products. Using SQL results.")
+                        knowledge_results.extend(sql_exact_results)
                     else:
-                        self.log(f"🔍 Performing text search: '{normalized_query}' (original: '{search_text}')...")
+                        # Try fuzzy SQL search
+                        self.log(f"⚠️ SQL exact match found 0 results. Trying fuzzy SQL search...")
+                        sql_fuzzy_results = await self._search_by_sql_fuzzy_match(normalized_query, category_id, top_k)
                         
-                        # Progressive fallback strategy
-                        # Priority: SQL exact > SQL fuzzy > Vector search
-                        sql_exact_results = await self._search_by_sql_exact_match(normalized_query, category_id, top_k)
-                        text_results = []  # Initialize to avoid undefined error
-                        
-                        if sql_exact_results:
-                            self.log(f"✅ SQL exact match found: {len(sql_exact_results)} products. Using SQL results.")
-                            knowledge_results.extend(sql_exact_results)
+                        if sql_fuzzy_results:
+                            self.log(f"✅ SQL fuzzy match found: {len(sql_fuzzy_results)} products. Using fuzzy SQL results.")
+                            knowledge_results.extend(sql_fuzzy_results)
                         else:
-                            # Try fuzzy SQL search
-                            self.log(f"⚠️ SQL exact match found 0 results. Trying fuzzy SQL search...")
-                            sql_fuzzy_results = await self._search_by_sql_fuzzy_match(normalized_query, category_id, top_k)
-                            
-                            if sql_fuzzy_results:
-                                self.log(f"✅ SQL fuzzy match found: {len(sql_fuzzy_results)} products. Using fuzzy SQL results.")
-                                knowledge_results.extend(sql_fuzzy_results)
-                            else:
-                                # Last resort: vector search
-                                self.log(f"⚠️ SQL fuzzy match found 0 results. Falling back to vector search...")
-                                text_results = await self._search_by_text(
-                                    query=normalized_query,
-                                    category_id=category_id,
-                                    top_k=top_k
-                                )
-                                knowledge_results.extend(text_results)
-                        
-                        # 🔥 PERFORMANCE: Cache results
-                        if self._search_cache is not None:
-                            if len(self._search_cache) >= self._cache_max_size:
-                                # Remove oldest entry (simple FIFO)
-                                oldest_key = next(iter(self._search_cache))
-                                del self._search_cache[oldest_key]
-                            self._search_cache[cache_key] = knowledge_results.copy()
+                            # Last resort: vector search
+                            self.log(f"⚠️ SQL fuzzy match found 0 results. Falling back to vector search...")
+                            text_results = await self._search_by_text(
+                                query=normalized_query,
+                                category_id=category_id,
+                                top_k=top_k
+                            )
+                            knowledge_results.extend(text_results)
 
                     
-                    #  Fallback retry nếu không tìm được (chỉ khi không có SQL results)
+                    # 🔥 GIẢI PHÁP 4: Fallback retry nếu không tìm được (chỉ khi không có SQL results)
                     if not sql_exact_results and not text_results and search_text:
                         extracted_product = self._extract_product_name_from_query(search_text)
                         if extracted_product and extracted_product != normalized_query:
@@ -138,8 +120,6 @@ class KnowledgeAgent(BaseAgent):
             knowledge_results = self._merge_results(knowledge_results)
             
             # ⚡ FILTER: Chỉ giữ lại results có similarity >= 0.5 (50%)
-            # Tránh trả về sản phẩm không liên quan (ví dụ: "cá hồi" → "thịt bò")
-            # Threshold 50% đảm bảo chỉ trả về sản phẩm thực sự liên quan
             SIMILARITY_THRESHOLD = 0.5
             similarity_filtered = [
                 r for r in knowledge_results 
@@ -149,12 +129,12 @@ class KnowledgeAgent(BaseAgent):
             if len(similarity_filtered) < len(knowledge_results):
                 self.log(f"⚠️ Filtered {len(knowledge_results) - len(similarity_filtered)} results with similarity < {SIMILARITY_THRESHOLD:.0%}")
             
-            #  Lexical filter chỉ để rerank, không phải gate
+            # 🔥 GIẢI PHÁP 3: Lexical filter chỉ để rerank, không phải gate
             # Lưu original vector results để fallback nếu lexical filter loại hết
             original_vector_results = similarity_filtered.copy()
             filtered_results = similarity_filtered
             
-            # Kiểm tra keyword matching nếu có query text (dùng fuzzy match)
+            # 🔥 BỔ SUNG: Kiểm tra keyword matching nếu có query text (dùng fuzzy match)
             # Nếu user hỏi "cá hồi" nhưng result là "thịt bò" → loại bỏ
             if query and filtered_results:
                 query_lower = query.lower()
@@ -167,7 +147,7 @@ class KnowledgeAgent(BaseAgent):
                                  if w and w not in stopwords and len(w) > 2]
                 
                 if query_keywords:
-                    # Whole-word matching + synonym + fuzzy match
+                    # 🔥 GIẢI PHÁP 2: Whole-word matching + synonym + fuzzy match
                     truly_matched = []
                     for result in filtered_results:
                         product_name = result.get("product_name", "").lower()
@@ -227,12 +207,13 @@ class KnowledgeAgent(BaseAgent):
                     if truly_matched:
                         filtered_results = truly_matched
                     else:
-                        #  Nếu lexical filter loại hết → KHÔNG fallback về vector results
-                        # Lý do: Nếu vector search trả về sai entity (ví dụ: "Thịt bò" khi hỏi "cá hồi")
-                        # thì không nên fallback về đó, mà nên return empty để hard guard xử lý
-                        self.log(f"⚠️ Lexical filter removed all results. NOT falling back to vector results to avoid wrong entity.")
-                        self.log(f"⚠️ This will trigger hard guard in Orchestrator to ask user for clarification.")
-                        filtered_results = []  # Return empty để hard guard xử lý
+                        # 🔥 GIẢI PHÁP 1: Fallback khi lexical filter loại hết
+                        # Nếu vector search đã tìm được kết quả có similarity cao, không nên loại hết
+                        self.log(f"⚠️ Lexical filter removed all results. Falling back to top vector results (similarity >= {SIMILARITY_THRESHOLD:.0%})")
+                        # Trả về top results từ vector search (đã filter similarity)
+                        filtered_results = original_vector_results[:5]  # Top 5 từ vector search
+                        if filtered_results:
+                            self.log(f"✅ Fallback: Using {len(filtered_results)} top vector results")
             
             knowledge_results = filtered_results
             
@@ -383,7 +364,7 @@ class KnowledgeAgent(BaseAgent):
     
     def _normalize_product_query_for_search(self, query: str) -> str:
         """
-        Normalize query cho product search - loại bỏ từ khóa không liên quan
+        🔥 GIẢI PHÁP 2: Normalize query cho product search - loại bỏ từ khóa không liên quan
         Ví dụ: "hình ảnh cá hồi và doanh thu theo tháng" → "cá hồi"
         Mục tiêu: Chỉ giữ lại tên sản phẩm để vector embedding match tốt hơn
         """
@@ -449,7 +430,8 @@ class KnowledgeAgent(BaseAgent):
         query_clean = re.sub(r'[^\w\s]', ' ', query_lower)
         words = [w for w in query_clean.split() if w and w not in stopwords and len(w) > 2]
         
-        #  Tìm cụm từ phổ biến cho tên sản phẩm thực phẩm
+        # 🔥 CẢI THIỆN: Tìm cụm từ phổ biến cho tên sản phẩm thực phẩm
+        # Ví dụ: "cá hồi", "thịt bò", "rau cải", "gà nướng"
         common_product_patterns = [
             r"cá\s+\w+",  # "cá hồi", "cá thu"
             r"thịt\s+\w+",  # "thịt bò", "thịt heo"
@@ -508,56 +490,6 @@ class KnowledgeAgent(BaseAgent):
         
         return "\n".join(context_parts)
     
-    def _build_odbc_connection_with_fallback(self, connection_string: str) -> Optional[Any]:
-        """
-        Build ODBC connection với fallback driver logic (giống /api/products/search/chat)
-        Thử nhiều driver khác nhau để tìm driver phù hợp
-        """
-        import pyodbc
-        import re
-        
-        if not connection_string:
-            return None
-        
-        # Build ODBC connection string nếu chưa có DRIVER
-        conn_str = connection_string
-        if "DRIVER=" not in conn_str.upper():
-            params = {}
-            parts = [p.strip() for p in conn_str.split(';') if p.strip()]
-            for part in parts:
-                if '=' in part:
-                    key, value = part.split('=', 1)
-                    params[key.strip().lower()] = value.strip()
-
-            server = params.get('server', '')
-            database = params.get('database', '')
-            user_id = params.get('user id', params.get('uid', ''))
-            password = params.get('password', params.get('pwd', ''))
-            trust_cert = params.get('trustservercertificate', 'True').lower() == 'true'
-
-            driver = "ODBC Driver 18 for SQL Server"
-            odbc_conn_str = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database};"
-            if user_id:
-                odbc_conn_str += f"UID={user_id};PWD={password};"
-            if trust_cert:
-                odbc_conn_str += "TrustServerCertificate=yes;"
-            conn_str = odbc_conn_str
-
-        # 🔥 FALLBACK: Thử nhiều driver khác nhau
-        conn = None
-        for driver_name in ["ODBC Driver 18 for SQL Server", "ODBC Driver 17 for SQL Server", "SQL Server Native Client 11.0"]:
-            try:
-                test_conn_str = conn_str
-                if driver_name not in test_conn_str:
-                    test_conn_str = re.sub(r'DRIVER=\{[^}]+\}', f'DRIVER={{{driver_name}}}', test_conn_str, count=1)
-                conn = pyodbc.connect(test_conn_str, timeout=5)
-                self.log(f"✅ Connected to DB using driver: {driver_name}")
-                break
-            except Exception as e:
-                continue
-        
-        return conn
-    
     async def _search_by_sql_exact_match(
         self,
         query: str,
@@ -565,7 +497,7 @@ class KnowledgeAgent(BaseAgent):
         top_k: int = 5
     ) -> List[Dict[str, Any]]:
         """
-        SQL exact match TRƯỚC vector search
+        🔥 FIX 2: SQL exact match TRƯỚC vector search
         Tìm sản phẩm bằng SQL LIKE để đảm bảo entity match chính xác
         """
         try:
@@ -574,15 +506,20 @@ class KnowledgeAgent(BaseAgent):
                 self.log("⚠️ DATABASE_CONNECTION_STRING not found. Skipping SQL exact match.")
                 return []
             
+            import pyodbc
             import asyncio
             
-            # Sử dụng fallback driver logic
-            # Test connection với fallback driver
-            test_conn = self._build_odbc_connection_with_fallback(connection_string)
-            if not test_conn:
-                self.log("⚠️ Could not establish DB connection with any driver. Skipping SQL exact match.")
-                return []
-            test_conn.close()
+            # 🔥 FIX: Kiểm tra driver có sẵn không
+            try:
+                # Test connection trước
+                test_conn = pyodbc.connect(connection_string, timeout=2)
+                test_conn.close()
+            except pyodbc.Error as e:
+                error_code = str(e)
+                if "IM002" in error_code or "driver" in error_code.lower():
+                    self.log(f"⚠️ ODBC Driver not found or connection failed: {error_code}. Skipping SQL exact match.")
+                    return []
+                raise
             
             # Extract keywords từ query để search
             keywords = query.split()
@@ -597,22 +534,12 @@ class KnowledgeAgent(BaseAgent):
                 """Sync function để chạy trong thread pool"""
                 conn = None
                 try:
-                    # Sử dụng fallback driver logic
-                    conn = self._build_odbc_connection_with_fallback(connection_string)
-                    if not conn:
-                        return []
+                    conn = pyodbc.connect(connection_string)
                     cursor = conn.cursor()
                     
                     # Search với keyword đầu tiên (dài nhất)
                     keyword = keywords_sorted[0]
                     like_pattern = f"%{keyword}%"
-                    
-                    # 🔥 FIX: Thêm filter category_id nếu có
-                    category_filter = ""
-                    query_params = [like_pattern]
-                    if category_id:
-                        category_filter = " AND s.MaDanhMuc = ?"
-                        query_params.append(category_id)
                     
                     db_query = f"""
                         SELECT TOP {top_k}
@@ -627,14 +554,13 @@ class KnowledgeAgent(BaseAgent):
                         FROM SanPham s
                         LEFT JOIN DanhMuc dm ON s.MaDanhMuc = dm.MaDanhMuc
                         WHERE (s.IsDeleted = 0 OR s.IsDeleted IS NULL)
-                          AND s.TenSanPham LIKE ?{category_filter}
+                          AND s.TenSanPham LIKE ?
                         ORDER BY
                             CASE WHEN s.TenSanPham LIKE ? THEN 0 ELSE 1 END,
                             s.TenSanPham
                     """
                     
-                    query_params.append(like_pattern)  # For ORDER BY CASE
-                    cursor.execute(db_query, *query_params)
+                    cursor.execute(db_query, like_pattern, like_pattern)
                     rows = cursor.fetchall()
                     
                     products = []
@@ -741,14 +667,19 @@ class KnowledgeAgent(BaseAgent):
                 self.log("⚠️ DATABASE_CONNECTION_STRING not found. Skipping fuzzy SQL search.")
                 return []
             
+            import pyodbc
             import asyncio
             
-            # 🔥 FIX: Sử dụng fallback driver logic
-            test_conn = self._build_odbc_connection_with_fallback(connection_string)
-            if not test_conn:
-                self.log("⚠️ Could not establish DB connection with any driver. Skipping fuzzy SQL search.")
-                return []
-            test_conn.close()
+            # Check driver availability
+            try:
+                test_conn = pyodbc.connect(connection_string, timeout=2)
+                test_conn.close()
+            except pyodbc.Error as e:
+                error_code = str(e)
+                if "IM002" in error_code or "driver" in error_code.lower():
+                    self.log(f"⚠️ ODBC Driver not available: {error_code}. Skipping fuzzy SQL search.")
+                    return []
+                raise
             
             # Extract keywords
             keywords = query.split()
@@ -761,10 +692,7 @@ class KnowledgeAgent(BaseAgent):
                 """Fuzzy search with relevance scoring"""
                 conn = None
                 try:
-                    # Sử dụng fallback driver logic
-                    conn = self._build_odbc_connection_with_fallback(connection_string)
-                    if not conn:
-                        return []
+                    conn = pyodbc.connect(connection_string)
                     cursor = conn.cursor()
                     
                     # Build search patterns
@@ -773,13 +701,6 @@ class KnowledgeAgent(BaseAgent):
                     
                     # Fuzzy patterns (remove last char for typo tolerance)
                     fuzzy_pattern = f"%{keyword[:-1]}%" if len(keyword) > 2 else exact_pattern
-                    
-                    # 🔥 FIX: Thêm filter category_id nếu có
-                    category_filter = ""
-                    query_params = []
-                    if category_id:
-                        category_filter = " AND s.MaDanhMuc = ?"
-                        query_params.append(category_id)
                     
                     # Search in both name and description
                     db_query = f"""
@@ -806,19 +727,15 @@ class KnowledgeAgent(BaseAgent):
                               s.TenSanPham LIKE ?
                               OR s.TenSanPham LIKE ?
                               OR s.MoTa LIKE ?
-                          ){category_filter}
+                          )
                         ORDER BY relevance_score DESC, s.TenSanPham
                     """
                     
-                    # Build query parameters: CASE scoring + WHERE clause + category filter
-                    all_params = [
+                    cursor.execute(
+                        db_query, 
                         exact_pattern, fuzzy_pattern, exact_pattern,  # For CASE scoring
                         exact_pattern, fuzzy_pattern, exact_pattern   # For WHERE clause
-                    ]
-                    if category_id:
-                        all_params.insert(-3, category_id)  # Insert before WHERE clause params
-                    
-                    cursor.execute(db_query, *all_params)
+                    )
                     rows = cursor.fetchall()
                     
                     products = []
@@ -905,8 +822,4 @@ class KnowledgeAgent(BaseAgent):
         except Exception as e:
             self.log(f"Error in fuzzy SQL search: {str(e)}", level="error")
             return []
-    
-    def _get_cache_key(self, query: str, category_id: Optional[str], top_k: int) -> str:
-        """Generate cache key for search results"""
-        key_str = f"{query.lower().strip()}:{category_id or 'all'}:{top_k}"
-        return hashlib.md5(key_str.encode()).hexdigest()
+

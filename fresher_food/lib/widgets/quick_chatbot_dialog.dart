@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:fresher_food/services/api/rag_api.dart';
+import 'package:fresher_food/services/api/chatbot_action_api.dart';
+import 'package:fresher_food/services/api/product_api.dart';
 import 'package:fresher_food/utils/constant.dart';
+import 'package:fresher_food/models/Cart.dart';
+import 'package:fresher_food/roles/user/route/app_route.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -16,9 +21,148 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
   final TextEditingController _questionController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final RagApi _ragApi = RagApi();
+  final ChatbotActionApi _chatbotActionApi = ChatbotActionApi();
   final List<ChatMessage> _messages = [];
+  final Map<String, bool> _loadingStates = {};
   bool _isLoading = false;
   bool _isWaitingForResponse = false;
+
+  String _getFirstString(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString();
+      }
+    }
+    return '';
+  }
+
+  String? _getFirstNullableString(Map<String, dynamic> map, List<String> keys) {
+    final value = _getFirstString(map, keys);
+    return value.isEmpty ? null : value;
+  }
+
+  num? _getFirstNum(Map<String, dynamic> map, List<String> keys) {
+    for (final key in keys) {
+      final value = map[key];
+      if (value is num) return value;
+      if (value is String && value.trim().isNotEmpty) {
+        final parsed = num.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  String _getProductId(Map<String, dynamic> product) {
+    return _getFirstString(product, [
+      'product_id',
+      'productId',
+      'maSanPham',
+      'id',
+    ]);
+  }
+
+  String _getProductName(Map<String, dynamic> product) {
+    return _getFirstString(product, [
+      'product_name',
+      'productName',
+      'tenSanPham',
+      'name',
+    ]);
+  }
+
+  int? _getProductStock(Map<String, dynamic> product) {
+    final stock = _getFirstNum(product, [
+      'soLuongTon',
+      'soLuongTonKho',
+      'tonKho',
+      'stock',
+      'quantity',
+    ]);
+    return stock?.toInt();
+  }
+
+  String _getProductImageUrl(Map<String, dynamic> product) {
+    final url = _getFirstString(product, [
+      'anh',
+      'imageUrl',
+      'image_url',
+      'imageLink',
+      'image_link',
+      'image',
+      'url',
+    ]);
+    return _isLikelyUrl(url) ? url : '';
+  }
+
+  String _getProductCategoryName(Map<String, dynamic> product) {
+    return _getFirstString(product, [
+      'tenDanhMuc',
+      'categoryName',
+      'category_name',
+    ]);
+  }
+
+  bool _isLikelyUrl(String value) {
+    final v = value.toLowerCase().trim();
+    return v.startsWith('http://') || v.startsWith('https://');
+  }
+
+  Widget _buildImageFromString(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return const SizedBox.shrink();
+
+    if (_isLikelyUrl(trimmed)) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.network(
+          trimmed,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+        ),
+      );
+    }
+
+    // Support data URLs: data:image/png;base64,xxxx
+    if (trimmed.startsWith('data:image')) {
+      final parts = trimmed.split(',');
+      if (parts.length == 2) {
+        try {
+          final bytes = base64Decode(parts[1]);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.memory(
+              bytes,
+              width: 120,
+              height: 120,
+              fit: BoxFit.cover,
+            ),
+          );
+        } catch (_) {
+          return const SizedBox.shrink();
+        }
+      }
+    }
+
+    // Fallback: assume raw base64 string
+    try {
+      final bytes = base64Decode(trimmed);
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Image.memory(
+          bytes,
+          width: 120,
+          height: 120,
+          fit: BoxFit.cover,
+        ),
+      );
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+  }
 
   @override
   void initState() {
@@ -76,9 +220,21 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
           // Lấy danh sách ảnh sản phẩm nếu có
           final products = response['products'] as List<dynamic>? ?? [];
           final images = products
-              .map((p) => (p as Map<String, dynamic>)['imageData'] as String?)
+              .map((p) => p as Map<String, dynamic>)
+              .map((p) => _getFirstNullableString(p, [
+                    'imageData',
+                    'image_base64',
+                    'imageBase64',
+                    'image',
+                    'imageUrl',
+                    'image_url',
+                    'imageLink',
+                    'image_link',
+                    'url',
+                  ]))
               .where((s) => s != null && s.isNotEmpty)
               .cast<String>()
+              .toSet()
               .toList();
 
           _messages.add(ChatMessage(
@@ -86,6 +242,7 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
             isFromBot: true,
             timestamp: DateTime.now(),
             imageDataList: images,
+            products: products.cast<Map<String, dynamic>>(),
           ));
         } else {
           _messages.add(ChatMessage(
@@ -436,23 +593,8 @@ class _QuickChatbotDialogState extends State<QuickChatbotDialog> {
       ),
     );
   }
-}
 
-class ChatMessage {
-  final String text;
-  final bool isFromBot;
-  final DateTime timestamp;
-  final List<String> imageDataList;
-
-  ChatMessage({
-    required this.text,
-    required this.isFromBot,
-    required this.timestamp,
-    this.imageDataList = const [],
-  });
-}
-
-  /// Hiển thị text + ảnh (nếu quick chatbot trả về sản phẩm có imageData)
+    /// Hiển thị text + ảnh (nếu quick chatbot trả về sản phẩm có image data/url)
   Widget _buildMessageContent(ChatMessage message) {
     final textWidget = Text(
       message.text,
@@ -463,7 +605,8 @@ class ChatMessage {
       ),
     );
 
-    if (message.imageDataList.isEmpty) {
+    // Nếu không có ảnh và không có sản phẩm, chỉ hiển thị text
+    if (message.imageDataList.isEmpty && message.products.isEmpty) {
       return textWidget;
     }
 
@@ -472,40 +615,361 @@ class ChatMessage {
       mainAxisSize: MainAxisSize.min,
       children: [
         textWidget,
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: message.imageDataList.map((base64Str) {
-            try {
-              return Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.memory(
-                    base64Decode(base64Str),
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              );
-            } catch (_) {
-              return Container(
-                width: 120,
-                height: 120,
-                color: Colors.grey.shade200,
-                child: const Icon(Icons.image, color: Colors.grey),
-              );
-            }
-          }).toList(),
-        ),
+        if (message.imageDataList.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: message.imageDataList.map((base64Str) {
+              return _buildImageFromString(base64Str);
+            }).toList(),
+          ),
+        ],
+        // 🔥 NEW: Action buttons cho từng sản phẩm
+        if (message.products.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          ...message.products
+              .map((product) => _buildProductActionButtons(product)),
+        ],
       ],
     );
   }
+
+  Widget _buildProductActionButtons(Map<String, dynamic> product) {
+    final productId = _getProductId(product);
+    final productName = _getProductName(product);
+    final price = _getFirstNum(product, [
+      'price',
+      'gia',
+      'donGia',
+    ]);
+    final stock = _getProductStock(product);
+    final isOutOfStock = stock != null && stock <= 0;
+    final isLoading = _loadingStates[productId] ?? false;
+
+    if (productId.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            productName,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+          if (price != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${price.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.')}₫',
+              style: TextStyle(
+                color: Colors.green.shade700,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+              ),
+            ),
+          ],
+          if (stock != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              stock <= 0 ? 'Hết hàng' : 'Còn: $stock',
+              style: TextStyle(
+                color: stock <= 0 ? Colors.red.shade600 : Colors.green.shade700,
+                fontWeight: FontWeight.w500,
+                fontSize: 12,
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed:
+                      (isLoading || isOutOfStock) ? null : () => _addToCart(product),
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.shopping_cart_outlined, size: 18),
+                  label: const Text('Thêm vào giỏ'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.green.shade700,
+                    side: BorderSide(color: Colors.green.shade700),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed:
+                      (isLoading || isOutOfStock) ? null : () => _buyNow(product),
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.flash_on, size: 18),
+                  label: const Text('Mua ngay'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addToCart(Map<String, dynamic> product) async {
+    final productId = _getProductId(product);
+    final productName = _getProductName(product);
+    final stock = _getProductStock(product);
+
+    // Get user ID from SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('maTaiKhoan') ?? prefs.getString('userId');
+
+    if (productId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã sản phẩm'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (stock != null && stock <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sản phẩm đã hết hàng'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (userId == null || userId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng đăng nhập để thêm vào giỏ hàng'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    // Set loading state
+    setState(() {
+      _loadingStates[productId] = true;
+    });
+
+    try {
+      // Call backend API
+      final result = await _chatbotActionApi.addToCartFromChatbot(
+        userId: userId,
+        productId: productId,
+        quantity: 1,
+      );
+
+      if (!mounted) return;
+
+      // Clear loading state
+      setState(() {
+        _loadingStates[productId] = false;
+      });
+
+      if (result['success'] == true) {
+        // Success - close dialog and show success message
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text(result['message'] ?? 'Đã thêm $productName vào giỏ hàng'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } else {
+        // Error - show error message but keep dialog open
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Có lỗi xảy ra'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadingStates[productId] = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Lỗi: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _buyNow(Map<String, dynamic> product) async {
+    final productId = _getProductId(product);
+    var productName = _getProductName(product);
+    var stock = _getProductStock(product);
+    var priceNum = _getFirstNum(product, ['price', 'gia', 'donGia', 'giaBan']);
+    var imageUrl = _getProductImageUrl(product);
+    var categoryName = _getProductCategoryName(product);
+
+    // Get user ID
+    final prefs = await SharedPreferences.getInstance();
+    final userId = prefs.getString('maTaiKhoan') ?? prefs.getString('userId');
+
+    if (productId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không tìm thấy mã sản phẩm'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (priceNum == null || productName.isEmpty || stock == null || imageUrl.isEmpty) {
+      try {
+        final productDetail = await ProductApi().getProductById(productId);
+        if (productDetail != null) {
+          productName = productName.isNotEmpty ? productName : productDetail.tenSanPham;
+          priceNum = priceNum ?? productDetail.giaBan;
+          stock = stock ?? productDetail.soLuongTon;
+          imageUrl = imageUrl.isNotEmpty ? imageUrl : productDetail.anh;
+          categoryName = categoryName.isNotEmpty ? categoryName : productDetail.maDanhMuc;
+        }
+      } catch (_) {
+        // Ignore and fallback to existing data
+      }
+    }
+
+    if (priceNum == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Không xác định được giá sản phẩm'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (stock != null && stock <= 0) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sản phẩm đã hết hàng'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    if (userId == null || userId.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vui lòng đăng nhập để mua hàng'),
+          backgroundColor: Colors.red,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
+    final price = priceNum.toDouble();
+    final item = CartItem(
+      maGioHang: '',
+      maSanPham: productId,
+      soLuong: 1,
+      tenSanPham: productName.isNotEmpty ? productName : 'Sản phẩm #$productId',
+      giaBan: price,
+      anh: _isLikelyUrl(imageUrl) ? imageUrl : '',
+      soLuongTon: stock ?? 1,
+      tenDanhMuc: categoryName,
+      maTaiKhoan: userId,
+      thanhTien: price,
+      isSelected: true,
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context);
+    await Future.delayed(const Duration(milliseconds: 100));
+    if (!mounted) return;
+
+    await AppRoute.toCheckout(
+      context,
+      [item],
+      item.thanhTien,
+    );
+  }
+}
+
+class ChatMessage {
+  final String text;
+  final bool isFromBot;
+  final DateTime timestamp;
+  final List<String> imageDataList;
+  final List<Map<String, dynamic>> products;
+
+  ChatMessage({
+    required this.text,
+    required this.isFromBot,
+    required this.timestamp,
+    this.imageDataList = const [],
+    this.products = const [],
+  });
+}
 
 class _TypingDot extends StatefulWidget {
   final int delay;
